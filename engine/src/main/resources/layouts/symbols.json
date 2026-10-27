@@ -1,0 +1,46 @@
+{
+  "rows": [
+    {"keys": [
+      {"label": "1", "popup": ["¹", "½", "⅓", "¼"]},
+      {"label": "2", "popup": ["²", "⅔"]},
+      {"label": "3", "popup": ["³", "¾"]},
+      {"label": "4"},
+      {"label": "5"},
+      {"label": "6"},
+      {"label": "7"},
+      {"label": "8"},
+      {"label": "9"},
+      {"label": "0", "popup": ["∅", "ⁿ"]}
+    ]},
+    {"keys": [
+      {"label": "@"},
+      {"label": "#"},
+      {"label": "$", "popup": ["₹", "€", "£", "¥", "¢"]},
+      {"label": "_"},
+      {"label": "&"},
+      {"label": "-", "popup": ["–", "—", "·"]},
+      {"label": "+", "popup": ["±"]},
+      {"label": "("},
+      {"label": ")"},
+      {"label": "/"}
+    ]},
+    {"keys": [
+      {"type": "layer", "label": "=\\<", "layer": "symbols2", "width": 1.5},
+      {"label": "*"},
+      {"label": "\"", "popup": ["“", "”", "«", "»"]},
+      {"label": "'", "popup": ["‘", "’"]},
+      {"label": ":"},
+      {"label": ";"},
+      {"label": "!", "popup": ["¡"]},
+      {"label": "?", "popup": ["¿"]},
+      {"type": "backspace", "width": 1.5}
+    ]},
+    {"keys": [
+      {"type": "layer", "label": "ABC", "layer": "qwerty", "width": 1.5},
+      {"label": ",", "special": true},
+      {"type": "space", "label": "English", "width": 5},
+      {"label": ".", "special": true, "popup": ["…"]},
+      {"type": "enter", "width": 1.5}
+    ]}
+  ]
+}

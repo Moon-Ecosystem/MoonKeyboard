@@ -1,0 +1,45 @@
+{
+  "rows": [
+    {"keys": [
+      {"label": "q", "hint": "1", "popup": ["1"]},
+      {"label": "w", "hint": "2", "popup": ["2"]},
+      {"label": "e", "hint": "3", "popup": ["3", "é", "è", "ê", "ë", "ē", "ė", "ę"]},
+      {"label": "r", "hint": "4", "popup": ["4"]},
+      {"label": "t", "hint": "5", "popup": ["5"]},
+      {"label": "y", "hint": "6", "popup": ["6", "ý", "ÿ"]},
+      {"label": "u", "hint": "7", "popup": ["7", "ú", "ù", "û", "ü", "ū"]},
+      {"label": "i", "hint": "8", "popup": ["8", "í", "ì", "î", "ï", "ī"]},
+      {"label": "o", "hint": "9", "popup": ["9", "ó", "ò", "ô", "ö", "õ", "ø", "œ", "ō"]},
+      {"label": "p", "hint": "0", "popup": ["0"]}
+    ]},
+    {"keys": [
+      {"label": "a", "popup": ["à", "á", "â", "ä", "æ", "ã", "å", "ā"]},
+      {"label": "s", "popup": ["ß", "ś", "š"]},
+      {"label": "d"},
+      {"label": "f"},
+      {"label": "g"},
+      {"label": "h"},
+      {"label": "j"},
+      {"label": "k"},
+      {"label": "l"}
+    ]},
+    {"keys": [
+      {"type": "shift", "width": 1.5},
+      {"label": "z", "popup": ["ž", "ź", "ż"]},
+      {"label": "x"},
+      {"label": "c", "popup": ["ç", "ć", "č"]},
+      {"label": "v"},
+      {"label": "b"},
+      {"label": "n", "popup": ["ñ", "ń"]},
+      {"label": "m"},
+      {"type": "backspace", "width": 1.5}
+    ]},
+    {"keys": [
+      {"type": "layer", "label": "?123", "layer": "symbols", "width": 1.5},
+      {"label": ",", "special": true},
+      {"type": "space", "label": "English", "width": 5},
+      {"label": ".", "special": true, "popup": ["?", "!", ",", "'", "\"", ":", ";", "-"]},
+      {"type": "enter", "width": 1.5}
+    ]}
+  ]
+}

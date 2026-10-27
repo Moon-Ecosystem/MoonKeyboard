@@ -1,0 +1,46 @@
+{
+  "rows": [
+    {"keys": [
+      {"label": "~"},
+      {"label": "`"},
+      {"label": "|"},
+      {"label": "•"},
+      {"label": "√"},
+      {"label": "π"},
+      {"label": "÷"},
+      {"label": "×"},
+      {"label": "¶"},
+      {"label": "∆"}
+    ]},
+    {"keys": [
+      {"label": "£"},
+      {"label": "¢"},
+      {"label": "€"},
+      {"label": "¥"},
+      {"label": "₹"},
+      {"label": "^"},
+      {"label": "°"},
+      {"label": "="},
+      {"label": "{"},
+      {"label": "}"}
+    ]},
+    {"keys": [
+      {"type": "layer", "label": "?123", "layer": "symbols", "width": 1.5},
+      {"label": "\\"},
+      {"label": "©"},
+      {"label": "®"},
+      {"label": "™"},
+      {"label": "℅"},
+      {"label": "["},
+      {"label": "]"},
+      {"type": "backspace", "width": 1.5}
+    ]},
+    {"keys": [
+      {"type": "layer", "label": "ABC", "layer": "qwerty", "width": 1.5},
+      {"label": "<", "special": true},
+      {"type": "space", "label": "English", "width": 5},
+      {"label": ">", "special": true},
+      {"type": "enter", "width": 1.5}
+    ]}
+  ]
+}

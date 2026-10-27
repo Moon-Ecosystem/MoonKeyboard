@@ -1,0 +1,190 @@
+package com.moonkeyboard.ime
+
+import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.moonkeyboard.engine.input.ShiftState
+import com.moonkeyboard.engine.layout.KeyBounds
+import com.moonkeyboard.engine.layout.KeyType
+import com.moonkeyboard.engine.layout.KeyboardGeometry
+
+private val KeyHeight = 46.dp
+private val HGap = 6.dp
+private val VGap = 10.dp
+private val SidePadding = 4.dp
+// Reserved for the suggestion strip (milestone 2); popups for the top row also open into it
+private val StripHeight = 48.dp
+private val TopPadding = 6.dp
+private val BottomPadding = 8.dp
+private val KeyRadius = 8.dp
+
+private val ShiftIcon = icon("M12 4l8 8h-5v8H9v-8H4z")
+private val BackspaceIcon = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM12 9l6 6M18 9l-6 6")
+private val EnterIcon = icon("M20 5v7a2 2 0 0 1-2 2H5M9 10l-4 4 4 4")
+
+private fun icon(d: String): Path = PathParser().parsePathString(d).toPath()
+
+/** The whole key area is one Canvas: a key press or popup redraws once instead of recomposing ~40 keys. */
+@Composable
+fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
+  val colors = if (isSystemInDarkTheme()) KeyboardColors.Dark else KeyboardColors.Light
+  val density = LocalDensity.current
+  val view = LocalView.current
+  val scope = rememberCoroutineScope()
+  val measurer = rememberTextMeasurer(cacheSize = 64)
+  val layout = controller.layout
+
+  BoxWithConstraints(
+    Modifier.fillMaxWidth().background(colors.background).windowInsetsPadding(WindowInsets.navigationBars)
+  ) {
+    val widthPx = constraints.maxWidth.toFloat()
+    val geometry = remember(layout, widthPx, density) {
+      with(density) {
+        KeyboardGeometry.compute(
+          layout, widthPx, KeyHeight.toPx(), HGap.toPx(), VGap.toPx(), SidePadding.toPx(),
+          topPadding = (StripHeight + TopPadding).toPx(),
+        )
+      }
+    }
+    val touches = remember(geometry) {
+      with(density) {
+        TouchTracker(controller, geometry, scope, popupGap = 8.dp.toPx(), sidePadding = SidePadding.toPx(), recorder) {
+          view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        }
+      }
+    }
+    if (recorder != null) SideEffect { recorder.attach(controller.layerId, geometry) }
+    val height = with(density) { geometry.height.toDp() } + BottomPadding
+
+    Canvas(Modifier.fillMaxWidth().height(height).pointerInput(touches) { touches.track(this) }) {
+      val pressed = touches.pressed.values.mapTo(HashSet()) { it.key }
+      for (bounds in geometry.keys) drawKey(bounds, bounds.key in pressed, controller, colors, measurer)
+      if (recorder != null && recorder.showPaths) drawTouchPaths(recorder, colors)
+      touches.popup?.let { drawPopup(it, controller, colors, measurer) }
+    }
+  }
+}
+
+private fun DrawScope.drawKey(
+  bounds: KeyBounds,
+  isPressed: Boolean,
+  controller: InputController,
+  colors: KeyboardColors,
+  measurer: TextMeasurer,
+) {
+  val key = bounds.key
+  val functional = key.special || key.type == KeyType.SHIFT || key.type == KeyType.BACKSPACE || key.type == KeyType.LAYER
+  val fill = when {
+    key.type == KeyType.ENTER -> colors.accent
+    isPressed -> colors.pressed
+    functional -> colors.special
+    else -> colors.key
+  }
+  val topLeft = Offset(bounds.left, bounds.top)
+  val size = Size(bounds.width, bounds.height)
+  val radius = CornerRadius(KeyRadius.toPx())
+  drawRoundRect(colors.shadow, topLeft + Offset(0f, 1.dp.toPx()), size, radius)
+  drawRoundRect(fill, topLeft, size, radius)
+
+  val center = Offset(bounds.centerX, bounds.centerY)
+  when (key.type) {
+    KeyType.SHIFT -> {
+      val on = controller.shift != ShiftState.OFF
+      drawIcon(ShiftIcon, center, 22.dp.toPx(), if (controller.shift == ShiftState.LOCKED) colors.accent else colors.text, filled = on)
+      if (controller.shift == ShiftState.LOCKED) {
+        drawLine(colors.accent, center + Offset(-7.dp.toPx(), 14.dp.toPx()), center + Offset(7.dp.toPx(), 14.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
+      }
+    }
+    KeyType.BACKSPACE -> drawIcon(BackspaceIcon, center, 24.dp.toPx(), colors.text)
+    KeyType.ENTER -> drawIcon(EnterIcon, center, 22.dp.toPx(), colors.onAccent, strokeWidth = 2f)
+    KeyType.SPACE -> drawLabel(measurer, key.label, center, TextStyle(color = colors.muted, fontSize = 13.sp))
+    KeyType.LAYER -> drawLabel(measurer, key.label, center, TextStyle(color = colors.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold))
+    KeyType.CHAR -> {
+      drawLabel(measurer, controller.display(key.label), center, TextStyle(color = colors.text, fontSize = if (functional) 20.sp else 21.sp))
+      key.hint?.let { hint ->
+        val layout = measurer.measure(hint, TextStyle(color = colors.hint, fontSize = 10.sp, fontWeight = FontWeight.Medium))
+        drawText(layout, topLeft = Offset(bounds.right - 5.dp.toPx() - layout.size.width, bounds.top + 2.dp.toPx()))
+      }
+    }
+  }
+}
+
+private fun DrawScope.drawPopup(popup: Popup, controller: InputController, colors: KeyboardColors, measurer: TextMeasurer) {
+  val pad = 4.dp.toPx()
+  val topLeft = Offset(popup.left - pad, popup.top - pad)
+  val size = Size(popup.cellWidth * popup.items.size + 2 * pad, popup.cellHeight + 2 * pad)
+  drawRoundRect(Color.Black.copy(alpha = 0.18f), topLeft + Offset(0f, 3.dp.toPx()), size, CornerRadius(12.dp.toPx()))
+  drawRoundRect(colors.popup, topLeft, size, CornerRadius(12.dp.toPx()))
+  popup.items.forEachIndexed { i, item ->
+    val left = popup.left + i * popup.cellWidth
+    val selected = i == popup.selected
+    if (selected) {
+      drawRoundRect(colors.accent, Offset(left, popup.top), Size(popup.cellWidth, popup.cellHeight), CornerRadius(KeyRadius.toPx()))
+    }
+    val center = Offset(left + popup.cellWidth / 2, popup.top + popup.cellHeight / 2)
+    drawLabel(measurer, controller.display(item), center, TextStyle(color = if (selected) colors.onAccent else colors.text, fontSize = 20.sp))
+  }
+}
+
+/** Debug overlay: fingers currently down, or else the last finished trace, with every raw sample dotted. */
+private fun DrawScope.drawTouchPaths(recorder: GestureRecorder, colors: KeyboardColors) {
+  val paths = recorder.live.values.ifEmpty { listOfNotNull(recorder.traces.lastOrNull()?.points) }
+  for (points in paths) {
+    val path = Path()
+    points.forEachIndexed { i, p -> if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y) }
+    drawPath(path, colors.accent.copy(alpha = 0.7f), style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    for (p in points) drawCircle(colors.text, radius = 1.5.dp.toPx(), center = Offset(p.x, p.y))
+    points.firstOrNull()?.let { drawCircle(colors.accent, radius = 5.dp.toPx(), center = Offset(it.x, it.y)) }
+  }
+}
+
+private fun DrawScope.drawLabel(measurer: TextMeasurer, text: String, center: Offset, style: TextStyle) {
+  val layout = measurer.measure(text, style)
+  drawText(layout, topLeft = center - Offset(layout.size.width / 2f, layout.size.height / 2f))
+}
+
+/** Draws a 24×24 viewport stroke icon (the same paths as the design) centred at [center]. */
+private fun DrawScope.drawIcon(path: Path, center: Offset, size: Float, color: Color, filled: Boolean = false, strokeWidth: Float = 1.8f) {
+  val scale = size / 24f
+  withTransform({
+    translate(center.x - size / 2, center.y - size / 2)
+    scale(scale, scale, pivot = Offset.Zero)
+  }) {
+    if (filled) drawPath(path, color, style = Fill)
+    drawPath(path, color, style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
+  }
+}

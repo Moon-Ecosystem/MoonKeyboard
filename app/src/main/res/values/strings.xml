@@ -1,0 +1,23 @@
+<resources>
+  <string name="app_name">Moon Keyboard</string>
+  <string name="subtype_en_us">English (US)</string>
+
+  <string name="setup_tagline">An offline keyboard. Nothing you type leaves your phone.</string>
+  <string name="setup_step_enable">1. Turn on Moon Keyboard</string>
+  <string name="setup_step_enable_body">Allow Moon Keyboard in your phone\'s keyboard settings.</string>
+  <string name="setup_open_settings">Open keyboard settings</string>
+  <string name="setup_step_select">2. Switch to Moon Keyboard</string>
+  <string name="setup_step_select_body">Pick Moon Keyboard as the keyboard you type with.</string>
+  <string name="setup_choose">Choose keyboard</string>
+  <string name="setup_done">Done</string>
+  <string name="setup_try">Try it here</string>
+  <string name="setup_test_pad_body">Try the keyboard and see touch debug info without switching keyboards.</string>
+
+  <string name="test_pad">Test pad</string>
+  <string name="back">Back</string>
+  <string name="clear">Clear</string>
+  <string name="show_debug">Debug</string>
+  <string name="hide_debug">Hide debug</string>
+  <string name="touch_paths">Touch paths</string>
+  <string name="copy_traces">Copy %1$d traces</string>
+</resources>
