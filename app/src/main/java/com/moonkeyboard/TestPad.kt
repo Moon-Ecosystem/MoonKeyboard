@@ -53,7 +53,7 @@ import com.moonkeyboard.ime.KeyboardUi
 import com.moonkeyboard.ime.Language
 
 /** A text buffer the keyboard can type into without being the system keyboard. */
-private class TestPadHost(view: View) : KeyboardHost {
+internal class TestPadHost(view: View) : KeyboardHost {
   var text by mutableStateOf("")
     private set
 

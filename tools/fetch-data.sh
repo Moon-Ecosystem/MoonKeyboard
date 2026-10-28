@@ -13,3 +13,8 @@ curl -sSf "https://android.googlesource.com/platform/packages/inputmethods/Latin
 # Tatoeba English sentences, CC BY 2.0 FR
 curl -sSf -o eng_sentences.tsv.bz2 https://downloads.tatoeba.org/exports/per_language/eng/eng_sentences.tsv.bz2
 bunzip2 -f eng_sentences.tsv.bz2
+
+# Unicode emoji list for the emoji panel, Unicode License v3 (see BuildEmoji.kt for the command)
+curl -sSf -o emoji-test.txt https://unicode.org/Public/emoji/15.1/emoji-test.txt
+# CLDR emoji keywords for emoji search, Unicode License v3
+curl -sSf -o cldr-annotations-en.xml https://raw.githubusercontent.com/unicode-org/cldr/release-44/common/annotations/en.xml

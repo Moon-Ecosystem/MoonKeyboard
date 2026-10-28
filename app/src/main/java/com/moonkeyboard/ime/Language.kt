@@ -41,6 +41,7 @@ object Language {
       val lexicon = Lexicon.read(app.assets.open("dict/en.dict").use { it.readBytes() })
       val history = if (historyFile.exists()) UserHistory.parse(historyFile.readText()) else UserHistory()
       savedVersion = history.version
+      lexicon.blockOffensive = Prefs.blockOffensive.value
       loaded.value = SuggestionEngine(lexicon, history)
     }
   }

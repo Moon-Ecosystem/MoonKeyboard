@@ -13,3 +13,16 @@ fun lastGraphemeLength(text: CharSequence): Int {
   val start = it.preceding(s.length)
   return s.length - if (start == BreakIterator.DONE) 0 else start
 }
+
+/** The index one user-perceived character after (or before) [index] in [text], staying inside it. */
+fun graphemeStep(text: CharSequence, index: Int, forward: Boolean): Int {
+  val s = text.toString()
+  val i = index.coerceIn(0, s.length)
+  val it = BreakIterator.getCharacterInstance().apply { setText(s) }
+  val next = when {
+    forward && i < s.length -> it.following(i)
+    !forward && i > 0 -> it.preceding(i)
+    else -> BreakIterator.DONE
+  }
+  return if (next == BreakIterator.DONE) i else next
+}

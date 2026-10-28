@@ -39,7 +39,7 @@ Status: agreed, decisions at the bottom. Licence: MIT. Visual design: [Moon Keyb
 ### Modules
 
 ```
-:app      Android: IME service, keyboard UI, panels, settings, Room storage
+:app      Android: IME service, keyboard UI, panels, settings, clipboard storage
 :engine   Pure Kotlin (no Android): layouts, language packs, tap and glide decoding,
           language model, suggestion ranking
 :tools    JVM command line: compiles word lists and n-gram counts into language-pack binaries
@@ -59,7 +59,7 @@ Status: agreed, decisions at the bottom. Licence: MIT. Visual design: [Moon Keyb
    ├─ InputController
    │    composing text, shift state, autocorrect commit/undo, cursor tracking
    ├─ SuggestionService ──► :engine Decoder      background thread, latest request wins
-   ├─ ClipboardRepository (Room + files)
+   ├─ ClipboardStore (index file + image files)
    └─ UserHistory (one file)
 ```
 
@@ -100,12 +100,12 @@ All local, all deletable from settings.
 
 | Data | Where | Kept |
 | --- | --- | --- |
-| Settings | DataStore | — |
+| Settings | SharedPreferences | — |
 | Learned words and phrases | `filesDir/history.tsv`: word counts, word-pair counts, forgotten words (a word list doesn't need a database) | Until the user deletes them |
-| Clipboard text | Room `clip` table | Forever, until the user deletes it |
-| Clipboard images/GIFs | Files in `filesDir/clips/`, row in `clip` table | Auto-deleted after the chosen period unless pinned |
+| Clipboard text | `filesDir/clips/index.json` (a few hundred rows don't need a database) | Forever, until the user deletes it |
+| Clipboard images/GIFs | Files in `filesDir/clips/`, a row in `index.json` | Auto-deleted after the chosen period unless pinned |
 
-`clip(id, kind[text|image|gif], text, file, mime, width, height, hash, createdAt, lastUsedAt, pinned)`
+Each row: `id, kind (text|image|gif), content (the text, or the image's file name), mime, hash, createdAt, pinned`.
 
 - **Capture.** The service listens with `ClipboardManager.addPrimaryClipChangedListener`. Since Android 10 only the default keyboard (or the app in front) may read the clipboard, and the keyboard is the default.
   - Copied images arrive as `content://` URIs with short-lived permission, so their bytes are copied into `filesDir/clips/` right away.

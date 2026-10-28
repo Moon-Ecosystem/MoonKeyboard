@@ -39,18 +39,19 @@ class KeyboardGeometry(val keys: List<KeyBounds>, val width: Float, val height: 
       fun keyWidth(k: Key) = k.width * unit + (k.width - 1) * hGap
 
       val keys = ArrayList<KeyBounds>()
-      layout.rows.forEachIndexed { r, row ->
+      var top = topPadding
+      for (row in layout.rows) {
         val rowWidth = row.keys.sumOf { keyWidth(it).toDouble() }.toFloat() + (row.keys.size - 1) * hGap
         var x = (width - rowWidth) / 2
-        val top = topPadding + r * (keyHeight + vGap)
+        val h = keyHeight * row.height
         for (k in row.keys) {
           val w = keyWidth(k)
-          keys += KeyBounds(k, x, top, x + w, top + keyHeight)
+          keys += KeyBounds(k, x, top, x + w, top + h)
           x += w + hGap
         }
+        top += h + vGap
       }
-      val height = topPadding + layout.rows.size * keyHeight + (layout.rows.size - 1) * vGap
-      return KeyboardGeometry(keys, width, height)
+      return KeyboardGeometry(keys, width, top - vGap)
     }
   }
 }

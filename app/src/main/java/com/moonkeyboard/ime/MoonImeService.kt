@@ -1,5 +1,6 @@
 package com.moonkeyboard.ime
 
+import android.content.ClipboardManager
 import android.inputmethodservice.InputMethodService
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -30,8 +31,20 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
     savedStateController.performRestore(null)
     // Compose only recomposes while STARTED; the service lives exactly as long as the keyboard
     lifecycleRegistry.currentState = Lifecycle.State.RESUMED
+    Prefs.init(this)
+    ClipboardStore.init(this)
     controller = InputController(asKeyboardHost())
     Language.load(this)
+    Emoji.load(this)
+    clipboard.addPrimaryClipChangedListener(clipListener)
+  }
+
+  private val clipboard by lazy { getSystemService(ClipboardManager::class.java) }
+  private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { captureClip() }
+
+  // Only the focused app and the default keyboard may read the clipboard, and only while it shows
+  private fun captureClip() {
+    runCatching { clipboard.primaryClip }.getOrNull()?.let { ClipboardStore.capture(this, it) }
   }
 
   override fun onCreateInputView(): View {
@@ -45,11 +58,20 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
   override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
     super.onStartInputView(info, restarting)
     if (!restarting) controller.onStartInput(info)
+    // Picks up what was copied while the keyboard wasn't running
+    captureClip()
+    ClipboardStore.expireIfDue()
   }
 
   override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
     super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
     controller.onSelectionUpdate(newSelStart, newSelEnd, candidatesEnd)
+  }
+
+  override fun onFinishInputView(finishingInput: Boolean) {
+    // A copy is offered the first time the keyboard opens after it, not every time
+    ClipboardStore.fresh = null
+    super.onFinishInputView(finishingInput)
   }
 
   override fun onFinishInput() {
@@ -59,6 +81,7 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
   }
 
   override fun onDestroy() {
+    clipboard.removePrimaryClipChangedListener(clipListener)
     controller.close()
     Language.flush()
     lifecycleRegistry.currentState = Lifecycle.State.DESTROYED

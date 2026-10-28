@@ -1,5 +1,8 @@
 package com.moonkeyboard.engine.history
 
+/** A learned three-word phrase: [word] typed after [prev2] [prev], [count] times. */
+data class LearnedPhrase(val prev2: String, val prev: String, val word: String, val count: Int)
+
 /**
  * What this user types: word counts, what follows each word and each pair of words, and words
  * they asked us to forget. Kept until they delete it. Thread-safe: the decoder reads it off the
@@ -72,6 +75,35 @@ class UserHistory {
     blocked += word
     version++
   }
+
+  /** Stops predicting [word] after [prev2] [prev] (and after [prev] alone); the words themselves stay learned. */
+  @Synchronized
+  fun forgetPhrase(prev2: String, prev: String, word: String) {
+    val key = tripleKey(prev2, prev)
+    triples[key]?.let { next -> next.remove(word); if (next.isEmpty()) triples.remove(key) }
+    pairs[prev]?.let { next -> next.remove(word); if (next.isEmpty()) pairs.remove(prev) }
+    version++
+  }
+
+  /** Lets a forgotten word be suggested again. */
+  @Synchronized
+  fun unblock(word: String) {
+    if (blocked.remove(word)) version++
+  }
+
+  /** Every learned word with how often it was typed, most used first. */
+  @Synchronized
+  fun learnedWords(): List<Pair<String, Int>> = words.toList().sortedByDescending { it.second }
+
+  /** Three-word phrases used at least [minCount] times, most used first. */
+  @Synchronized
+  fun learnedPhrases(minCount: Int = 2): List<LearnedPhrase> = triples.flatMap { (key, next) ->
+    val (prev2, prev) = key.split(SEP)
+    next.filter { it.value >= minCount }.map { (word, count) -> LearnedPhrase(prev2, prev, word, count) }
+  }.sortedByDescending { it.count }
+
+  @Synchronized
+  fun blockedWords(): List<String> = blocked.sorted()
 
   @Synchronized
   fun clear() {

@@ -46,7 +46,14 @@ class Lexicon internal constructor(
   /** False for entries that only exist as a correction source, like "im" (→ "I'm"). */
   fun isWord(id: Int): Boolean = flags[id].toInt() and NOT_A_WORD == 0
 
-  fun isSuggestable(id: Int): Boolean = flags[id].toInt() and (NOT_A_WORD or NO_SUGGEST) == 0
+  /** Whether words AOSP marks as possibly offensive are kept out of suggestions, glide results and predictions. */
+  @Volatile
+  var blockOffensive = true
+
+  fun isSuggestable(id: Int): Boolean {
+    val f = flags[id].toInt()
+    return f and (NOT_A_WORD or NO_SUGGEST) == 0 && !(blockOffensive && f and OFFENSIVE != 0)
+  }
 
   fun unigramLogProb(id: Int): Float = (frequency(id) - 255) * LN_1_15
 
@@ -170,6 +177,8 @@ class Lexicon internal constructor(
     const val SENTENCE_START = -2
     const val NOT_A_WORD = 1
     const val NO_SUGGEST = 2
+    /** Possibly offensive: suggested only when the user turns blocking off. */
+    const val OFFENSIVE = 4
 
     /** Pair costs are stored as -ln P × 16 in one byte, so ln P down to -16. */
     internal const val COST_SCALE = 16f

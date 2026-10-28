@@ -62,7 +62,9 @@ private fun readAospWordList(file: File, builder: LexiconBuilder) {
         val f = a["f"]?.toIntOrNull() ?: continue
         var flags = 0
         if (a["not_a_word"] == "true") flags = flags or Lexicon.NOT_A_WORD
-        if (f == 0 || a["possibly_offensive"] == "true") flags = flags or Lexicon.NO_SUGGEST
+        if (f == 0) flags = flags or Lexicon.NO_SUGGEST
+        // Kept as real words (and in the word-pair model); the app decides whether to suggest them
+        if (a["possibly_offensive"] == "true") flags = flags or Lexicon.OFFENSIVE
         current = builder.addWord(word, f, flags)
       }
       line.startsWith("  shortcut=") && current >= 0 -> {

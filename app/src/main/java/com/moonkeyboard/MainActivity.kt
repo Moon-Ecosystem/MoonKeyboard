@@ -6,56 +6,72 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import com.moonkeyboard.ime.ClipboardStore
+import com.moonkeyboard.ime.Emoji
+import com.moonkeyboard.ime.Language
+import com.moonkeyboard.ime.Prefs
 
-/** Onboarding: turn the keyboard on, switch to it, try it. Settings will live here too. */
+/** The app: setup until the keyboard is on and selected, then its settings and the test pad. */
 class MainActivity : ComponentActivity() {
   private var enabled by mutableStateOf(false)
   private var selected by mutableStateOf(false)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    Prefs.init(this)
+    ClipboardStore.init(this)
+    Language.load(this)
+    Emoji.load(this)
     enableEdgeToEdge()
     setContent {
-      MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-        var testPad by rememberSaveable { mutableStateOf(false) }
-        if (testPad) {
-          TestPad(onBack = { testPad = false })
-        } else {
-          SetupScreen(
-            enabled = enabled,
-            selected = selected,
-            onEnable = { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) },
-            onSelect = { getSystemService(InputMethodManager::class.java).showInputMethodPicker() },
-            onTestPad = { testPad = true },
-          )
+      AppTheme {
+        val colors = LocalAppColors.current
+        var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
+        val home = { screen = Screen.HOME }
+        if (screen != Screen.HOME) BackHandler(onBack = home)
+        Box(Modifier.fillMaxSize().background(colors.background).statusBarsPadding()) {
+          // The look screen's keyboard preview pads itself for the navigation bar
+          val bars = if (screen == Screen.LOOK || screen == Screen.TEST_PAD) Modifier else Modifier.navigationBarsPadding().imePadding()
+          Box(bars) {
+            when (screen) {
+              Screen.HOME -> if (enabled && selected) {
+                HomeScreen { screen = it }
+              } else {
+                WelcomeScreen(
+                  enabled = enabled,
+                  onEnable = { startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) },
+                  onSelect = { getSystemService(InputMethodManager::class.java).showInputMethodPicker() },
+                  onTestPad = { screen = Screen.TEST_PAD },
+                )
+              }
+              Screen.LOOK -> LookScreen(home)
+              Screen.TYPING -> TypingScreen(home)
+              Screen.GLIDE -> GlideScreen(home)
+              Screen.EMOJI -> EmojiScreen(home)
+              Screen.CLIPBOARD -> ClipboardScreen(home)
+              Screen.LEARNED -> LearnedScreen(home)
+              Screen.TEST_PAD -> MaterialTheme(colorScheme = if (colors == AppColors.Dark) darkColorScheme() else lightColorScheme()) {
+                TestPad(onBack = home)
+              }
+            }
+          }
         }
       }
     }
@@ -77,46 +93,5 @@ class MainActivity : ComponentActivity() {
     enabled = imm.enabledInputMethodList.any { it.packageName == packageName }
     val current = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
     selected = current?.let { ComponentName.unflattenFromString(it)?.packageName } == packageName
-  }
-}
-
-@Composable
-private fun SetupScreen(enabled: Boolean, selected: Boolean, onEnable: () -> Unit, onSelect: () -> Unit, onTestPad: () -> Unit) {
-  Scaffold { padding ->
-    Column(
-      Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
-      verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-      Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
-      Text(stringResource(R.string.setup_tagline), style = MaterialTheme.typography.bodyLarge)
-      Step(R.string.setup_step_enable, R.string.setup_step_enable_body, R.string.setup_open_settings, done = enabled, actionEnabled = true, onEnable)
-      Step(R.string.setup_step_select, R.string.setup_step_select_body, R.string.setup_choose, done = selected, actionEnabled = enabled, onSelect)
-      if (enabled && selected) {
-        var text by rememberSaveable { mutableStateOf("") }
-        OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.setup_try)) })
-      }
-      Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Text(stringResource(R.string.test_pad), style = MaterialTheme.typography.titleMedium)
-          Text(stringResource(R.string.setup_test_pad_body), style = MaterialTheme.typography.bodyMedium)
-          OutlinedButton(onTestPad) { Text(stringResource(R.string.test_pad)) }
-        }
-      }
-    }
-  }
-}
-
-@Composable
-private fun Step(title: Int, body: Int, action: Int, done: Boolean, actionEnabled: Boolean, onAction: () -> Unit) {
-  Card(Modifier.fillMaxWidth()) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(stringResource(title), style = MaterialTheme.typography.titleMedium)
-      Text(stringResource(body), style = MaterialTheme.typography.bodyMedium)
-      if (done) {
-        Text(stringResource(R.string.setup_done), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-      } else {
-        Button(onAction, enabled = actionEnabled) { Text(stringResource(action)) }
-      }
-    }
   }
 }

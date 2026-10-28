@@ -9,7 +9,11 @@ import kotlinx.serialization.json.Json
 data class Layout(val rows: List<Row>)
 
 @Serializable
-data class Row(val keys: List<Key>)
+data class Row(
+  val keys: List<Key>,
+  /** Key height as a share of a normal row's. */
+  val height: Float = 1f,
+)
 
 @Serializable
 data class Key(
@@ -26,6 +30,8 @@ data class Key(
   val layer: String? = null,
   /** Drawn with the functional-key colour (e.g. comma and period). */
   val special: Boolean = false,
+  /** An action a long press runs instead of a popup ("emoji_search"). */
+  val longPress: String? = null,
 )
 
 @Serializable
@@ -51,4 +57,16 @@ object Layouts {
     }
     return layout
   }
+
+  /** [layout] with a slightly shorter row of digits on top; the digits leave the letters' hints and popups. */
+  fun withNumberRow(layout: Layout): Layout {
+    val digits = "1234567890".map { it.toString() }
+    val numbers = Row(digits.map { Key(label = it) }, height = NUMBER_ROW_HEIGHT)
+    val rows = layout.rows.map { row ->
+      row.copy(keys = row.keys.map { k -> if (k.hint in digits) k.copy(hint = null, popup = k.popup - k.hint!!) else k })
+    }
+    return Layout(listOf(numbers) + rows)
+  }
+
+  private const val NUMBER_ROW_HEIGHT = 0.87f
 }

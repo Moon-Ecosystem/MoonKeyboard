@@ -3,16 +3,89 @@
   <string name="subtype_en_us">English (US)</string>
   <string name="forget_word">Don\'t suggest this word</string>
 
-  <string name="setup_tagline">An offline keyboard. Nothing you type leaves your phone.</string>
-  <string name="setup_step_enable">1. Turn on Moon Keyboard</string>
+  <string name="welcome_pitch">A fast keyboard with glide typing and smart suggestions. It works fully offline, so nothing you type leaves your phone.</string>
+  <string name="welcome_privacy">The app has no internet permission. Learned words and your clipboard stay on this phone.</string>
+  <string name="try_without_switching">Try it without switching</string>
+  <string name="setup_step_enable">Turn on Moon Keyboard</string>
   <string name="setup_step_enable_body">Allow Moon Keyboard in your phone\'s keyboard settings.</string>
   <string name="setup_open_settings">Open keyboard settings</string>
-  <string name="setup_step_select">2. Switch to Moon Keyboard</string>
+  <string name="setup_step_select">Switch to it</string>
   <string name="setup_step_select_body">Pick Moon Keyboard as the keyboard you type with.</string>
   <string name="setup_choose">Choose keyboard</string>
   <string name="setup_done">Done</string>
-  <string name="setup_try">Try it here</string>
-  <string name="setup_test_pad_body">Try the keyboard and see touch debug info without switching keyboards.</string>
+  <string name="setup_try">Try it</string>
+  <string name="try_placeholder">Tap here to try the keyboard</string>
+
+  <string name="active">Active</string>
+  <string name="home_privacy">Offline. Nothing you type leaves this phone.</string>
+  <string name="with_borders">key borders</string>
+  <string name="borderless">borderless</string>
+  <string name="autocorrect_on">Autocorrect</string>
+  <string name="autocorrect_off">No autocorrect</string>
+  <string name="vibration">vibration</string>
+  <string name="no_vibration">silent</string>
+  <string name="on">On</string>
+  <string name="glide_on_trail">On, trail shown</string>
+  <string name="learned_counts">%1$d words, %2$d phrases</string>
+  <string name="emoji_suggestions_on">Suggestions while typing</string>
+  <string name="emoji_suggestions_off">No suggestions while typing</string>
+  <string name="test_pad_detail">Try it with touch debug info</string>
+  <string name="one_handed_short">One-handed</string>
+  <string name="look_preview_note">Changes show in the keyboard below as you make them.</string>
+  <string name="autocorrect">Autocorrect</string>
+  <string name="autocorrect_detail">Fixes typos when you press space. Backspace undoes a fix.</string>
+  <string name="block_offensive">Block offensive words</string>
+  <string name="block_offensive_detail">Never suggest or swipe-type swear words</string>
+  <string name="glide_typing">Glide typing</string>
+  <string name="glide_detail">Slide across the letters of a word</string>
+  <string name="emoji_suggestions">Emoji suggestions</string>
+  <string name="emoji_suggestions_detail">Type \"pizza\" and 🍕 shows in the strip</string>
+  <string name="emoji_search_tip">Hold the comma key to search emoji from anywhere on the keyboard.</string>
+  <string name="clear_recent_emoji">Clear recent emoji</string>
+  <string name="expiry_note">Text is kept until you delete it. Pinned items are never deleted automatically.</string>
+  <string name="offer_copied">Offer what I copy</string>
+  <string name="offer_copied_detail">In the suggestion strip, once</string>
+  <string name="tap_again_to_clear">Tap again to clear</string>
+  <string name="learned_words_explain">Learned from what you type, so suggestions fit how you write. Nothing is learned in password or incognito fields.</string>
+  <string name="search_learned">Search learned words</string>
+  <string name="loading">Loading…</string>
+  <string name="nothing_learned">Nothing learned yet.</string>
+  <string name="forget_item">Forget %1$s</string>
+  <string name="never_suggested">Never suggested</string>
+  <string name="allow">Allow</string>
+  <string name="tap_again_to_delete">Tap again to delete everything</string>
+  <plurals name="clip_images">
+    <item quantity="one">%d image</item>
+    <item quantity="other">%d images</item>
+  </plurals>
+  <plurals name="clip_gifs">
+    <item quantity="one">%d GIF</item>
+    <item quantity="other">%d GIFs</item>
+  </plurals>
+  <plurals name="clip_texts">
+    <item quantity="one">%d text</item>
+    <item quantity="other">%d texts</item>
+  </plurals>
+  <plurals name="used_by_items">
+    <item quantity="one">used by %d item</item>
+    <item quantity="other">used by %d items</item>
+  </plurals>
+  <plurals name="words_label">
+    <item quantity="one">word</item>
+    <item quantity="other">words</item>
+  </plurals>
+  <plurals name="phrases_label">
+    <item quantity="one">phrase</item>
+    <item quantity="other">phrases</item>
+  </plurals>
+  <plurals name="typed_times">
+    <item quantity="one">Typed once</item>
+    <item quantity="other">Typed %d times</item>
+  </plurals>
+  <plurals name="phrase_used">
+    <item quantity="one">Phrase, used once</item>
+    <item quantity="other">Phrase, used %d times</item>
+  </plurals>
 
   <string name="test_pad">Test pad</string>
   <string name="back">Back</string>
@@ -21,4 +94,65 @@
   <string name="hide_debug">Hide debug</string>
   <string name="touch_paths">Touch paths</string>
   <string name="copy_traces">Copy %1$d traces</string>
+
+  <string name="open_toolbar">Open toolbar</string>
+  <string name="close_toolbar">Close toolbar</string>
+  <string name="clipboard">Clipboard</string>
+  <string name="emoji">Emoji</string>
+  <string name="text_editing">Text editing</string>
+  <string name="one_handed">One-handed mode</string>
+  <string name="theme">Theme</string>
+  <string name="settings">Settings</string>
+  <string name="full_width">Full-width keyboard</string>
+  <string name="other_side">Move to the other side</string>
+  <string name="back_to_keyboard">Back to keyboard</string>
+
+  <string name="clear_unpinned">Clear unpinned items</string>
+  <string name="paste_copied">Paste what you copied</string>
+  <string name="copied_image">Copied image</string>
+  <string name="copied_gif">Copied GIF</string>
+  <string name="clipboard_empty">Text and images you copy show up here.</string>
+  <string name="pinned">Pinned</string>
+  <string name="pin">Pin</string>
+  <string name="unpin">Unpin</string>
+  <string name="delete">Delete</string>
+  <string name="recent_emoji">Recent</string>
+  <string name="search_emoji">Search emoji</string>
+  <string name="back_to_emoji">Back to emoji</string>
+
+  <string name="line_start">Home</string>
+  <string name="line_end">End</string>
+  <string name="up">Up</string>
+  <string name="down">Down</string>
+  <string name="left">Left</string>
+  <string name="right">Right</string>
+  <string name="select">Select</string>
+  <string name="select_all">Select all</string>
+  <string name="copy">Copy</string>
+  <string name="cut">Cut</string>
+  <string name="paste">Paste</string>
+  <string name="abc">ABC</string>
+
+  <string name="look">Look</string>
+  <string name="theme_system">Follow system</string>
+  <string name="theme_light">Light</string>
+  <string name="theme_dark">Dark</string>
+  <string name="key_borders">Key borders</string>
+  <string name="number_row">Number row</string>
+  <string name="key_height">Key height</string>
+  <string name="key_short">Short</string>
+  <string name="key_normal">Normal</string>
+  <string name="key_tall">Tall</string>
+  <string name="off">Off</string>
+  <string name="typing">Typing</string>
+  <string name="haptics">Vibrate on key press</string>
+  <string name="key_sound">Sound on key press</string>
+  <string name="glide_trail">Show glide trail</string>
+  <string name="image_expiry">Delete unpinned images and GIFs after</string>
+  <string name="expiry_week">1 week</string>
+  <string name="expiry_month">1 month</string>
+  <string name="expiry_never">Never</string>
+  <string name="clipboard_storage">%1$d items, %2$s</string>
+  <string name="learned_words">Learned words</string>
+  <string name="delete_learned_words">Delete all learned words</string>
 </resources>

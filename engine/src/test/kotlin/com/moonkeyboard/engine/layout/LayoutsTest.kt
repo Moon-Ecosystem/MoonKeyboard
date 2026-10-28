@@ -43,6 +43,20 @@ class LayoutsTest {
     assertTrue(shift.right > a.centerX)
   }
 
+  @Test
+  fun numberRowTakesTheDigitsOffTheLetters() {
+    val layout = Layouts.withNumberRow(Layouts.load("qwerty"))
+    assertEquals("1234567890", layout.rows[0].keys.joinToString("") { it.label })
+    val e = layout.rows[1].keys.first { it.label == "e" }
+    assertEquals(null, e.hint)
+    assertTrue("accents stay", "é" in e.popup && "3" !in e.popup)
+    val g = geometry(layout)
+    val one = g.keys.first { it.key.label == "1" }
+    val q = g.keys.first { it.key.label == "q" }
+    assertTrue("shorter number row", one.height < q.height)
+    assertEquals(one.bottom + 10f, q.top, 0.01f)
+  }
+
   private fun geometry(layout: Layout) =
     KeyboardGeometry.compute(layout, width = 390f, keyHeight = 46f, hGap = 6f, vGap = 10f, sidePadding = 4f)
 }

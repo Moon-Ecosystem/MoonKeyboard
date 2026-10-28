@@ -18,4 +18,14 @@ class GraphemesTest {
 
   @Test
   fun zwjFamilyEmoji() = assertEquals(8, lastGraphemeLength("👩‍👧‍👦"))
+
+  @Test
+  fun stepsOverWholeCharactersAndStopsAtTheEnds() {
+    val s = "a👍🏽b"
+    assertEquals(1, graphemeStep(s, 0, forward = true))
+    assertEquals(5, graphemeStep(s, 1, forward = true))
+    assertEquals(1, graphemeStep(s, 5, forward = false))
+    assertEquals(6, graphemeStep(s, 6, forward = true))
+    assertEquals(0, graphemeStep(s, 0, forward = false))
+  }
 }

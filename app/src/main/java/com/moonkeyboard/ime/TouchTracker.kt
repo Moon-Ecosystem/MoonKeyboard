@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import android.view.KeyEvent
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerId
@@ -40,7 +41,8 @@ class TouchTracker(
   private val sidePadding: Float,
   private val glideThreshold: Float,
   private val recorder: GestureRecorder?,
-  private val haptic: () -> Unit,
+  /** Haptics and sound for a key going down. */
+  private val feedback: (KeyType) -> Unit,
 ) {
   val pressed = mutableStateMapOf<PointerId, KeyBounds>()
   var popup by mutableStateOf<Popup?>(null)
@@ -57,6 +59,10 @@ class TouchTracker(
   private val downAt = HashMap<PointerId, Offset>()
   private val downTime = HashMap<PointerId, Long>()
   private var glideOwner: PointerId? = null
+  /** The finger sliding along the space bar to move the cursor, and where it last moved it. */
+  private var cursorOwner: PointerId? = null
+  private var cursorAnchorX = 0f
+  private val keyWidth = geometry.keys.minOf { it.width }
   private val glidePath = ArrayList<TracePoint>()
   private var lastPreviewMs = 0L
 
@@ -105,7 +111,7 @@ class TouchTracker(
     pressed[id] = bounds
     downAt[id] = at
     downTime[id] = nowMs
-    haptic()
+    feedback(key.type)
     when {
       key.type == KeyType.SHIFT -> controller.onKey(key, nowMs)
       key.type == KeyType.BACKSPACE -> {
@@ -118,6 +124,12 @@ class TouchTracker(
           }
         }
       }
+      key.longPress != null -> holds[id] = scope.launch {
+        delay(LONG_PRESS_MS)
+        // The hold did its job: lifting the finger mustn't also type the key
+        pressed.remove(id)
+        controller.onLongPress(key.longPress!!)
+      }
       key.popup.isNotEmpty() -> holds[id] = scope.launch {
         delay(LONG_PRESS_MS)
         popup = popupFor(bounds)
@@ -128,6 +140,10 @@ class TouchTracker(
 
   private fun move(id: PointerId, samples: List<Pair<Offset, Long>>) {
     val (at, nowMs) = samples.last()
+    if (cursorOwner == id || pressed[id]?.key?.type == KeyType.SPACE) {
+      slideCursor(id, at.x)
+      return
+    }
     val p = popup
     if (p != null && popupOwner == id) {
       p.selected = ((at.x - p.left) / p.cellWidth).toInt().coerceIn(0, p.items.lastIndex)
@@ -157,9 +173,33 @@ class TouchTracker(
     }
   }
 
+  /**
+   * Holding space and sliding moves the cursor a character per step. It starts once
+   * the finger has clearly slid, so a slightly wobbly tap still types a space.
+   */
+  private fun slideCursor(id: PointerId, x: Float) {
+    if (cursorOwner != id) {
+      val start = downAt[id]?.x ?: return
+      if (kotlin.math.abs(x - start) < keyWidth * CURSOR_SLOP) return
+      cursorOwner = id
+      cursorAnchorX = start
+    }
+    val step = keyWidth * CURSOR_STEP
+    while (x - cursorAnchorX >= step) {
+      controller.moveCursor(KeyEvent.KEYCODE_DPAD_RIGHT, select = false)
+      cursorAnchorX += step
+      feedback(KeyType.SPACE)
+    }
+    while (cursorAnchorX - x >= step) {
+      controller.moveCursor(KeyEvent.KEYCODE_DPAD_LEFT, select = false)
+      cursorAnchorX -= step
+      feedback(KeyType.SPACE)
+    }
+  }
+
   /** Only a single finger that started on a letter, and only once it has clearly left the key. */
   private fun startsGlide(id: PointerId, at: Offset): Boolean {
-    if (pressed.size != 1) return false
+    if (!Prefs.glideTyping.value || pressed.size != 1) return false
     val key = pressed[id]?.key ?: return false
     if (key.type != KeyType.CHAR || key.label.singleOrNull()?.isLetter() != true) return false
     val start = downAt[id] ?: return false
@@ -168,6 +208,15 @@ class TouchTracker(
 
   private fun up(id: PointerId, at: Offset, nowMs: Long) {
     holds.remove(id)?.cancel()
+    if (cursorOwner == id) {
+      // The slide moved the cursor; it doesn't also type a space
+      cursorOwner = null
+      pressed.remove(id)
+      downAt.remove(id)
+      downTime.remove(id)
+      recorder?.up(id, at.x, at.y, nowMs, "cursor")
+      return
+    }
     if (glideOwner == id) {
       glideOwner = null
       pressed.remove(id)
@@ -206,6 +255,7 @@ class TouchTracker(
       glideOwner = null
       clearTrail()
     }
+    if (cursorOwner == id) cursorOwner = null
     if (popupOwner == id) {
       popup = null
       popupOwner = null
@@ -231,5 +281,8 @@ class TouchTracker(
     const val BACKSPACE_REPEAT_MS = 50L
     const val PREVIEW_INTERVAL_MS = 80L
     const val TRAIL_POINTS = 48
+    // In key widths: how far to slide before space becomes a cursor, and the slide per character
+    const val CURSOR_SLOP = 0.5f
+    const val CURSOR_STEP = 0.35f
   }
 }
