@@ -11,6 +11,7 @@ import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import com.moonkeyboard.engine.layout.KeyBounds
 import com.moonkeyboard.engine.layout.KeyType
 import com.moonkeyboard.engine.layout.KeyboardGeometry
@@ -64,10 +65,17 @@ class TouchTracker(
     try {
       while (true) {
         val event = awaitPointerEvent()
+        // Every finger still down is in every event; state for any other finger is a leftover
+        // from a touch that never reported its end, and would block glides from then on
+        val present = event.changes.mapTo(HashSet()) { it.id }
+        (pressed.keys + downAt.keys + listOfNotNull(glideOwner, popupOwner)).filter { it !in present }.forEach(::cancel)
         for (change in event.changes) {
           when {
             change.changedToDown() -> down(change.id, change.position, change.uptimeMillis)
             change.changedToUp() -> up(change.id, change.position, change.uptimeMillis)
+            // The system took the touch over (e.g. a navigation gesture from the screen edge):
+            // Compose reports that as an already-consumed lift. Forget the finger, type nothing
+            change.changedToUpIgnoreConsumed() -> cancel(change.id)
             change.pressed -> {
               // Android batches touch samples per frame; the in-between ones matter for glide paths
               val samples = change.historical.map { it.position to it.uptimeMillis } + (change.position to change.uptimeMillis)
@@ -186,6 +194,23 @@ class TouchTracker(
       recorder?.up(id, at.x, at.y, nowMs, if (bounds.key.type == KeyType.CHAR) controller.display(bounds.key.label) else keyName(bounds))
       if (acts) controller.onKey(bounds.key, nowMs, start.x, start.y)
     }
+  }
+
+  /** Drops everything about a finger without acting on it. */
+  private fun cancel(id: PointerId) {
+    holds.remove(id)?.cancel()
+    pressed.remove(id)
+    downAt.remove(id)
+    downTime.remove(id)
+    if (glideOwner == id) {
+      glideOwner = null
+      clearTrail()
+    }
+    if (popupOwner == id) {
+      popup = null
+      popupOwner = null
+    }
+    recorder?.cancel(id)
   }
 
   private fun clearTrail() {

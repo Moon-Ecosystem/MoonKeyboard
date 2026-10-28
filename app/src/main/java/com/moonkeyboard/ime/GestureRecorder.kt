@@ -52,6 +52,13 @@ class GestureRecorder(private val maxTraces: Int = 50, private val maxLog: Int =
     log("up    ${typed ?: "-"}  ${trace.points.size} pts  ${trace.durationMs} ms  ${trace.lengthPx.toInt()} px")
   }
 
+  /** The system took the touch over; it isn't a trace of anything the user meant. */
+  fun cancel(id: PointerId) {
+    downAt.remove(id) ?: return
+    live.remove(id)
+    log("cancel (taken over by the system)")
+  }
+
   fun clear() {
     traces.clear()
     log.clear()
