@@ -90,11 +90,14 @@ private val TOKEN = Regex("""[\p{L}\p{N}]+(?:['’][\p{L}]+)*|[.!?]|[,;:"()]""")
 
 /**
  * Counts which known word follows which (and which words start sentences), keeping the
- * [PER_WORD] most common successors seen at least [MIN_COUNT] times.
+ * [PER_WORD] most common successors seen at least [MIN_COUNT] times; and the same for pairs of
+ * words ([PER_CONTEXT] successors seen at least [MIN_TRIPLE] times).
  */
 private fun addPairs(file: File, builder: LexiconBuilder): List<String> {
   val pairs = LongCounter()
   val totals = HashMap<Int, Int>()
+  val triples = LongCounter()
+  val contextTotals = LongCounter()
   val heldOut = ArrayList<String>()
   var sentences = 0
   for (line in lines(file)) {
@@ -104,23 +107,31 @@ private fun addPairs(file: File, builder: LexiconBuilder): List<String> {
       if (heldOut.size < MAX_HELD_OUT) testSentence(builder, text)?.let { heldOut += it }
       continue
     }
+    var prev2: Int? = null
     var prev: Int? = Lexicon.SENTENCE_START
     for (m in TOKEN.findAll(text)) {
       val token = m.value.replace('’', '\'')
       when {
-        token in ".!?" -> { prev = Lexicon.SENTENCE_START; continue }
-        !token[0].isLetterOrDigit() -> { prev = null; continue }
+        token in ".!?" -> { prev2 = null; prev = Lexicon.SENTENCE_START; continue }
+        !token[0].isLetterOrDigit() -> { prev2 = null; prev = null; continue }
       }
       val id = lookup(builder, token)?.takeUnless { isName(builder, it) }
       val p = prev
       if (p != null) {
         totals[p] = (totals[p] ?: 0) + 1
         if (id != null) pairs.increment(key(p, id))
+        val p2 = prev2
+        if (p2 != null) {
+          contextTotals.increment(key(p2, p))
+          if (id != null) triples.increment(key3(p2, p, id))
+        }
       }
+      prev2 = prev
       prev = id
     }
     sentences++
   }
+  addTriples(builder, triples, contextTotals)
   val byPrev = HashMap<Int, MutableList<Pair<Int, Int>>>()
   pairs.forEach { k, count ->
     if (count >= MIN_COUNT) byPrev.getOrPut((k shr 32).toInt()) { ArrayList() } += k.toInt() to count
@@ -166,10 +177,36 @@ private fun isName(builder: LexiconBuilder, id: Int): Boolean {
   return word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
 }
 
+private fun addTriples(builder: LexiconBuilder, triples: LongCounter, contextTotals: LongCounter) {
+  val byContext = HashMap<Long, MutableList<Pair<Int, Int>>>()
+  triples.forEach { k, count ->
+    if (count >= MIN_TRIPLE) byContext.getOrPut(k ushr 21) { ArrayList() } += (k and MASK21).toInt() to count
+  }
+  var kept = 0
+  for ((context, next) in byContext) {
+    val w1 = unpack21((context ushr 21).toInt())
+    val w2 = unpack21((context and MASK21).toInt())
+    val total = contextTotals.get(key(w1, w2)).toDouble()
+    for ((id, count) in next.sortedByDescending { it.second }.take(PER_CONTEXT)) {
+      builder.trigram(w1, w2, id, ln(count / total).toFloat())
+      kept++
+    }
+  }
+  println("two-word contexts: ${byContext.size}, kept triples: $kept")
+}
+
 private fun key(prev: Int, next: Int): Long = (prev.toLong() shl 32) or (next.toLong() and 0xFFFFFFFFL)
+
+// Three word ids in one Long, 21 bits each (fine for < 2M words); sentence start gets the top value
+private const val MASK21 = (1L shl 21) - 1
+private fun pack21(id: Int): Long = if (id == Lexicon.SENTENCE_START) MASK21 else id.toLong()
+private fun unpack21(v: Int): Int = if (v.toLong() == MASK21) Lexicon.SENTENCE_START else v
+private fun key3(a: Int, b: Int, c: Int): Long = (pack21(a) shl 42) or (pack21(b) shl 21) or pack21(c)
 
 private const val MIN_COUNT = 2
 private const val PER_WORD = 40
+private const val MIN_TRIPLE = 3
+private const val PER_CONTEXT = 10
 private const val HOLD_OUT = 50
 private const val MAX_HELD_OUT = 3000
 
@@ -191,6 +228,8 @@ private class LongCounter {
     }
     counts[i]++
   }
+
+  fun get(k: Long): Int = slot(k).let { if (used[it]) counts[it] else 0 }
 
   fun forEach(action: (Long, Int) -> Unit) {
     for (i in keys.indices) if (used[i]) action(keys[i], counts[i])

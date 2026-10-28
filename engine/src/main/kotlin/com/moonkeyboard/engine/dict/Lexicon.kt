@@ -28,6 +28,12 @@ class Lexicon internal constructor(
   private val bigramStart: IntArray,
   private val bigramNext: IntArray,
   private val bigramCost: ByteArray,
+  /** Two-word contexts as sorted `(w1 << 32) | w2` keys; w1 may be [SENTENCE_START] (stored as wordCount). */
+  private val trigramKeys: LongArray,
+  /** Successors of context `k` are entries `trigramStart[k] until trigramStart[k + 1]`, sorted by id. */
+  private val trigramStart: IntArray,
+  private val trigramNext: IntArray,
+  private val trigramCost: ByteArray,
 ) {
   val wordCount: Int get() = freq.size
   val nodeCount: Int get() = nodeChar.size
@@ -87,6 +93,28 @@ class Lexicon internal constructor(
     return (bigramStart[p] until bigramStart[p + 1]).map { bigramNext[it] to bigramLogProbAt(it) }
   }
 
+  fun hasTrigrams(w1: Int, w2: Int): Boolean = trigramSlot(w1, w2) >= 0
+
+  /** ln P(next | w1 w2) from the two-word model, or null when that triple was never seen. */
+  fun trigramLogProb(w1: Int, w2: Int, next: Int): Float? {
+    val k = trigramSlot(w1, w2)
+    if (k < 0) return null
+    val i = trigramNext.binarySearch(next, trigramStart[k], trigramStart[k + 1])
+    return if (i >= 0) -(trigramCost[i].toInt() and 0xFF) / COST_SCALE else null
+  }
+
+  fun trigramSuccessors(w1: Int, w2: Int): List<Pair<Int, Float>> {
+    val k = trigramSlot(w1, w2)
+    if (k < 0) return emptyList()
+    return (trigramStart[k] until trigramStart[k + 1]).map { trigramNext[it] to -(trigramCost[it].toInt() and 0xFF) / COST_SCALE }
+  }
+
+  private fun trigramSlot(w1: Int, w2: Int): Int {
+    if (w2 < 0) return -1
+    val key = (bigramIndex(w1).toLong() shl 32) or w2.toLong()
+    return trigramKeys.binarySearch(key).let { if (it >= 0) it else -1 }
+  }
+
   internal fun child(node: Int, c: Char): Int {
     var lo = firstChild[node]
     var hi = firstChild[node + 1] - 1
@@ -129,6 +157,12 @@ class Lexicon internal constructor(
     bigramStart.forEach(d::writeInt)
     bigramNext.forEach(d::writeInt)
     d.write(bigramCost)
+    d.writeInt(trigramKeys.size)
+    d.writeInt(trigramNext.size)
+    trigramKeys.forEach(d::writeLong)
+    trigramStart.forEach(d::writeInt)
+    trigramNext.forEach(d::writeInt)
+    d.write(trigramCost)
     d.flush()
   }
 
@@ -141,7 +175,7 @@ class Lexicon internal constructor(
     internal const val COST_SCALE = 16f
     internal val LN_1_15 = ln(1.15f)
     private const val MAGIC = 0x4D4B4C58 // "MKLX"
-    private const val VERSION = 1
+    private const val VERSION = 2
 
     fun read(bytes: ByteArray): Lexicon {
       val b = ByteBuffer.wrap(bytes)
@@ -164,9 +198,16 @@ class Lexicon internal constructor(
       val bigramStart = b.ints(w + 2)
       val bigramNext = b.ints(pairs)
       val bigramCost = ByteArray(pairs).also { b.get(it) }
+      val contexts = b.int
+      val triples = b.int
+      val trigramKeys = LongArray(contexts).also { b.asLongBuffer().get(it); b.skip(contexts * 8) }
+      val trigramStart = b.ints(contexts + 1)
+      val trigramNext = b.ints(triples)
+      val trigramCost = ByteArray(triples).also { b.get(it) }
       return Lexicon(
         nodeChar, firstChild, nodeWord, subtreeBest, text, wordStart, freq, flags,
         whitelistFrom, whitelistTo, bigramStart, bigramNext, bigramCost,
+        trigramKeys, trigramStart, trigramNext, trigramCost,
       )
     }
 

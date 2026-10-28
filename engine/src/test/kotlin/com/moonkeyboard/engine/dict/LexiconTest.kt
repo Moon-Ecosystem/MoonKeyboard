@@ -20,6 +20,7 @@ class LexiconTest {
     b.whitelist(im, iam)
     b.bigram(thank, you, -0.2f)
     b.bigram(Lexicon.SENTENCE_START, the, -2f)
+    b.trigram(Lexicon.SENTENCE_START, thank, you, -0.1f)
     return b.build()
   }
 
@@ -50,5 +51,16 @@ class LexiconTest {
     assertEquals(-0.2f, l.bigramLogProb(l.find("thank"), l.find("you"))!!, 1f / 16)
     assertNull(l.bigramLogProb(l.find("you"), l.find("thank")))
     assertEquals(listOf(l.find("the")), l.successors(Lexicon.SENTENCE_START).map { it.first })
+  }
+
+  @Test
+  fun twoWordModel() {
+    val l = roundTrip(sample())
+    val thank = l.find("thank")
+    val you = l.find("you")
+    assertEquals(-0.1f, l.trigramLogProb(Lexicon.SENTENCE_START, thank, you)!!, 1f / 16)
+    assertNull(l.trigramLogProb(you, thank, you))
+    assertEquals(listOf(you), l.trigramSuccessors(Lexicon.SENTENCE_START, thank).map { it.first })
+    assertFalse(l.hasTrigrams(thank, you))
   }
 }

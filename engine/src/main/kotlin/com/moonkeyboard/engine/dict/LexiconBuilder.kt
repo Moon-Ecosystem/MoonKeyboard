@@ -11,6 +11,7 @@ class LexiconBuilder {
   private val flags = ArrayList<Int>()
   private val whitelist = TreeMap<Int, Int>()
   private val bigrams = HashMap<Int, MutableMap<Int, Float>>()
+  private val trigrams = HashMap<Pair<Int, Int>, MutableMap<Int, Float>>()
 
   val size: Int get() = words.size
 
@@ -42,6 +43,11 @@ class LexiconBuilder {
   /** ln P(next | prev); [prev] may be [Lexicon.SENTENCE_START]. */
   fun bigram(prev: Int, next: Int, logProb: Float) {
     bigrams.getOrPut(prev) { HashMap() }[next] = logProb
+  }
+
+  /** ln P(next | w1 w2); [w1] may be [Lexicon.SENTENCE_START]. */
+  fun trigram(w1: Int, w2: Int, next: Int, logProb: Float) {
+    trigrams.getOrPut(w1 to w2) { HashMap() }[next] = logProb
   }
 
   fun build(): Lexicon {
@@ -102,6 +108,20 @@ class LexiconBuilder {
     }
     bigramStart[words.size + 1] = next.size
 
+    fun contextKey(w1: Int, w2: Int) = ((if (w1 == Lexicon.SENTENCE_START) words.size else w1).toLong() shl 32) or w2.toLong()
+    val contexts = trigrams.entries.sortedBy { contextKey(it.key.first, it.key.second) }
+    val trigramStart = IntArray(contexts.size + 1)
+    val triNext = ArrayList<Int>()
+    val triCost = ArrayList<Byte>()
+    contexts.forEachIndexed { k, (_, successors) ->
+      trigramStart[k] = triNext.size
+      successors.toSortedMap().forEach { (id, lp) ->
+        triNext += id
+        triCost += (-lp * Lexicon.COST_SCALE).roundToInt().coerceIn(0, 255).toByte()
+      }
+    }
+    trigramStart[contexts.size] = triNext.size
+
     return Lexicon(
       nodeChar = CharArray(n) { charList[it] },
       firstChild = firstChild,
@@ -116,6 +136,10 @@ class LexiconBuilder {
       bigramStart = bigramStart,
       bigramNext = next.toIntArray(),
       bigramCost = cost.toByteArray(),
+      trigramKeys = LongArray(contexts.size) { contextKey(contexts[it].key.first, contexts[it].key.second) },
+      trigramStart = trigramStart,
+      trigramNext = triNext.toIntArray(),
+      trigramCost = triCost.toByteArray(),
     )
   }
 }

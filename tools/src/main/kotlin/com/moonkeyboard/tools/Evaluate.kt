@@ -26,6 +26,10 @@ fun main(args: Array<String>) {
   val geometry = KeyboardGeometry.compute(Layouts.load("qwerty"), 390f, 46f, 6f, 10f, 4f)
   val errors = opts["errors"]?.toInt() ?: 25
 
+  if (opts["learning-grid"] == "true") {
+    learningGrid(lexicon, sentences)
+    return
+  }
   if (opts["grid"] == "true") {
     grid(lexicon, sentences, geometry)
     return
@@ -78,7 +82,7 @@ fun report(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry
           shown++
           examples += "  %-12s typed %-12s → %-12s strip %s".format(target, typed, result, s.items)
         }
-        context = WordContext(target, false)
+        context = context.then(target)
       }
     }
     tapSum += committed.toDouble() / words
@@ -105,7 +109,7 @@ fun report(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry
           }
           if (s.items.any { it.equals(target, ignoreCase = true) }) strip++
         }
-        context = WordContext(target, false)
+        context = context.then(target)
       }
     }
     glideSum += top1.toDouble() / words
@@ -113,18 +117,87 @@ fun report(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry
     examples.forEach(out::appendLine)
   }
 
-  // Next word shown before typing a single letter
-  var words = 0; var predicted = 0
+  // Next word shown before typing a single letter, and once its first letter is typed exactly
+  val keys = TypingSimulator(geometry).keys
+  var words = 0; var predicted = 0; var long = 0; var afterOne = 0
   for (sentence in sentences) {
     var context = WordContext.START
     for (target in sentence.split(' ')) {
       words++
       if (engine.predict(context, capitalize = false).items.any { it.equals(target, ignoreCase = true) }) predicted++
-      context = WordContext(target, false)
+      if (target.length >= 3) {
+        long++
+        val first = target.substring(0, 1)
+        if (engine.suggest(first, first.map(keys::touchFor), keys, context, allowAutocorrect = false).items.any { it.equals(target, ignoreCase = true) }) afterOne++
+      }
+      context = context.then(target)
     }
   }
-  out.appendLine("next-word prediction: in strip %5.1f%%".format(pct(predicted, words)))
+  out.appendLine("next word: in strip before typing %5.1f%%, after its first letter %5.1f%% (words of 3+ letters)".format(pct(predicted, words), pct(afterOne, long)))
+  out.append(learningReport(lexicon, sentences, setup))
   return Report(tapSum / TAP_NOISE.size, harmSum / TAP_NOISE.size, glideSum / GLIDE_NOISE.size, predicted.toDouble() / words, out.toString())
+}
+
+/** Things one person types again and again; every fourth sentence of the learning run is one of these. */
+private val HABITS = listOf(
+  "On my way home", "See you at the gym", "Running late be there soon", "Call me when you are free",
+  "Did you feed the cat", "Can you pick up the kids", "Love you see you tonight", "Just landed will call you later",
+  "Meeting ran over will be late", "What time is dinner", "Thanks for the update", "Let me check and get back to you",
+  "I will send the report tomorrow", "Happy birthday have a great day", "Are we still on for lunch",
+  "Leaving the office now", "Can we move the call to four", "Good morning how did you sleep",
+  "Sounds good see you then", "Please review the pull request",
+)
+
+/**
+ * Prediction while learning: a simulated user types the held-out sentences in order, every fourth
+ * one replaced by one of their [HABITS]. Each word is predicted first, then recorded, as the app does.
+ * Reports habit sentences and ordinary sentences separately, with and without learning.
+ */
+private fun learningReport(lexicon: Lexicon, sentences: List<String>, setup: Setup): String {
+  val (habitStatic, otherStatic, habitLearned, otherLearned) = learning(lexicon, sentences, setup)
+  return "next word while learning: repeated phrases %5.1f%% → %5.1f%%, everything else %5.1f%% → %5.1f%%\n"
+    .format(habitStatic, habitLearned, otherStatic, otherLearned)
+}
+
+/** Sweeps only the user-model knobs (fast: predictions only), ranked by habit + everything-else accuracy. */
+fun learningGrid(lexicon: Lexicon, sentences: List<String>) {
+  val results = ArrayList<Pair<Double, String>>()
+  for (share in listOf(0.3f, 0.5f, 0.7f, 0.85f)) for (confidence in listOf(0.5f, 1f, 2f, 4f, 8f)) for (vocabulary in listOf(0f, 0.05f, 0.15f)) {
+    val engine = EngineConfig(userShare = share, userConfidence = confidence, userVocabularyShare = vocabulary)
+    val (_, _, habit, other) = learning(lexicon, sentences, Setup(engine = engine))
+    // Ordinary sentences weigh double: learning must not cost the everyday case much
+    results += (habit + 2 * other) to "share %.2f confidence %.1f vocabulary %.2f: habits %5.1f%%, other %5.1f%%".format(share, confidence, vocabulary, habit, other)
+  }
+  results.sortedByDescending { it.first }.take(10).forEach { println(it.second) }
+}
+
+private fun learning(lexicon: Lexicon, sentences: List<String>, setup: Setup): List<Double> {
+  val random = java.util.Random(3)
+  val stream = sentences.mapIndexed { i, s -> if (i % 4 == 3) HABITS[random.nextInt(HABITS.size)] to true else s to false }
+  fun run(learn: Boolean): Pair<Double, Double> {
+    val history = UserHistory()
+    val engine = SuggestionEngine(lexicon, history, setup.engine, setup.decoder, setup.glide)
+    val hits = IntArray(2)
+    val totals = IntArray(2)
+    for ((sentence, habit) in stream) {
+      val k = if (habit) 1 else 0
+      var context = WordContext.START
+      for (target in sentence.split(' ')) {
+        totals[k]++
+        if (engine.predict(context, capitalize = false).items.any { it.equals(target, ignoreCase = true) }) hits[k]++
+        if (learn) {
+          // Same as the app: a capital only there because the sentence started is dropped
+          val word = if (context.sentenceStart && lexicon.find(target) < 0) target.lowercase() else target
+          history.record(context.userKey, word, prev2 = context.userKey2)
+        }
+        context = context.then(target)
+      }
+    }
+    return 100.0 * hits[1] / totals[1] to 100.0 * hits[0] / totals[0]
+  }
+  val (habitStatic, otherStatic) = run(learn = false)
+  val (habitLearned, otherLearned) = run(learn = true)
+  return listOf(habitStatic, otherStatic, habitLearned, otherLearned)
 }
 
 /** Coordinate descent: try each value of each knob, keep whatever scores best, two passes. */
@@ -138,6 +211,11 @@ private fun grid(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGe
     "insertDelete" to listOf(1.6f, 2f, 2.4f, 3f).map { v -> { s: Setup -> s.copy(decoder = s.decoder.copy(insert = v, delete = v)) } },
     "transpose" to listOf(0.8f, 1.2f, 1.8f).map { v -> { s: Setup -> s.copy(decoder = s.decoder.copy(transpose = v)) } },
     "completion" to listOf(0.5f, 1f, 1.5f, 2.5f).map { v -> { s: Setup -> s.copy(decoder = s.decoder.copy(completion = v)) } },
+    "userShare" to listOf(0.4f, 0.6f, 0.8f, 0.9f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(userShare = v)) } },
+    "userConfidence" to listOf(0.5f, 1f, 2f, 4f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(userConfidence = v)) } },
+    "userVocabularyShare" to listOf(0f, 0.05f, 0.15f, 0.3f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(userVocabularyShare = v)) } },
+    "trigramShare" to listOf(0.3f, 0.45f, 0.6f, 0.75f, 0.9f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(trigramShare = v)) } },
+    "bigramShare" to listOf(0.6f, 0.7f, 0.8f, 0.9f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(bigramShare = v)) } },
     "glideWeight" to listOf(3f, 4.5f, 6f, 8f, 11f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(glideWeight = v)) } },
     "nearRadius" to listOf(0.7f, 0.9f, 1.1f, 1.3f).map { v -> { s: Setup -> s.copy(glide = s.glide.copy(nearRadius = v)) } },
     "endRadius" to listOf(0.9f, 1.1f, 1.4f).map { v -> { s: Setup -> s.copy(glide = s.glide.copy(endRadius = v)) } },

@@ -54,6 +54,31 @@ class EnglishTest {
   }
 
   @Test
+  fun predictsFromTwoWordsOfContext() {
+    val ctx = WordContext.START.then("I").then("want")
+    assertTrue(engine.predict(ctx, capitalize = false).items.contains("to"))
+  }
+
+  @Test
+  fun learnsTheUsersPhrases() {
+    val history = UserHistory()
+    val e = SuggestionEngine(lexicon, history)
+    val afterThe = WordContext.START.then("See").then("you").then("at").then("the")
+    assertTrue("not predicted before learning", "gym" !in e.predict(afterThe, capitalize = false).items)
+    repeat(3) {
+      var c = WordContext.START
+      for (w in "see you at the gym".split(' ')) {
+        history.record(c.userKey, w, prev2 = c.userKey2)
+        c = c.then(w)
+      }
+    }
+    assertEquals("best prediction after three uses", "gym", e.predict(afterThe, capitalize = false).items[1])
+    // And once its first letter is typed
+    val g = "g"
+    assertTrue(e.suggest(g, g.map(keys::touchFor), keys, afterThe, allowAutocorrect = false).items.contains("gym"))
+  }
+
+  @Test
   fun learnedWordsAreSuggestedAndNotCorrected() {
     val history = UserHistory()
     val e = SuggestionEngine(lexicon, history)
@@ -82,7 +107,7 @@ class EnglishTest {
         words++
         if (result.equals(target, ignoreCase = true)) committed++
         else if (typed.equals(target, ignoreCase = true)) broke++
-        context = WordContext(target, false)
+        context = context.then(target)
       }
     }
     println("tap: committed %.1f%%, broke %.1f%% of %d words".format(100.0 * committed / words, 100.0 * broke / words, words))
@@ -123,7 +148,7 @@ class EnglishTest {
           words++
           if (engine.glide(sim.glide(target, 0.3f, 0.6f, 0.35f), sim.keys, context, false, false).typed.equals(target, ignoreCase = true)) right++
         }
-        context = WordContext(target, false)
+        context = context.then(target)
       }
     }
     println("glide: right %.1f%% of %d words".format(100.0 * right / words, words))

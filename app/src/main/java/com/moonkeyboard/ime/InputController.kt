@@ -192,7 +192,8 @@ class InputController(private val host: KeyboardHost) {
     val engine = Language.engine ?: return
     val keys = keyMap ?: return
     val ic = host.inputConnection ?: return
-    val context = if (composing.isNotEmpty()) WordContext(composing.toString(), false) else WordContext.from(ic.getTextBeforeCursor(CONTEXT_CHARS, 0) ?: "")
+    // A glide commits the word in progress first, so that word becomes the context
+    val context = if (composing.isNotEmpty()) contextBeforeWord(ic).then(composing.toString()) else WordContext.from(ic.getTextBeforeCursor(CONTEXT_CHARS, 0) ?: "")
     val firstUpper = shift != ShiftState.OFF
     val allUpper = shift == ShiftState.LOCKED
     decodeJob?.cancel()
@@ -438,7 +439,7 @@ class InputController(private val host: KeyboardHost) {
     // "The" at the start of a sentence is the word "the"; "I" and names keep their capital
     val lower = word.lowercase()
     val normalized = if (context.sentenceStart && word != lower && word.drop(1) == lower.drop(1) && engine.lexicon.find(word) < 0) lower else word
-    engine.history.record(context.prev, normalized, weight)
+    engine.history.record(context.userKey, normalized, weight, prev2 = context.userKey2)
     Language.historyChanged()
   }
 
