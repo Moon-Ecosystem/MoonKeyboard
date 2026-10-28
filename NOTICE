@@ -20,5 +20,5 @@ CC BY-NC-SA 4.0 (non-commercial); the code stays MIT.
 tools/fetch-data.sh downloads the sources; tools/ rebuilds the pack.
 
 The emoji list (app/src/main/assets/emoji.txt) is built from Unicode's emoji-test.txt
-  Copyright (c) 1991-2023 Unicode, Inc. Licensed under the Unicode License v3:
+  Copyright (c) 1991-2026 Unicode, Inc. Licensed under the Unicode License v3:
   https://www.unicode.org/license.txt

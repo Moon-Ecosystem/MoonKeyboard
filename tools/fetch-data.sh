@@ -17,9 +17,9 @@ curl -sSf -o eng_sentences.tsv.bz2 https://downloads.tatoeba.org/exports/per_lan
 bunzip2 -f eng_sentences.tsv.bz2
 
 # Unicode emoji list for the emoji panel, Unicode License v3 (see BuildEmoji.kt for the command)
-curl -sSf -o emoji-test.txt https://unicode.org/Public/emoji/15.1/emoji-test.txt
+curl -sSf -o emoji-test.txt https://www.unicode.org/Public/18.0.0/emoji/emoji-test.txt
 # CLDR emoji keywords for emoji search, Unicode License v3
-curl -sSf -o cldr-annotations-en.xml https://raw.githubusercontent.com/unicode-org/cldr/release-44/common/annotations/en.xml
+curl -sSf -o cldr-annotations-en.xml https://raw.githubusercontent.com/unicode-org/cldr/release-49/common/annotations/en.xml
 
 # L3Cube-HingCorpus, romanised Hinglish tweets, CC BY-NC-SA 4.0. The archive is 2.5 GB (4.9 GB
 # unpacked) and already shuffled, so only its first 15M lines are kept, streamed straight to gzip.
