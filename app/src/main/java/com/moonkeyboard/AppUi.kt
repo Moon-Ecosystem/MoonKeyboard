@@ -21,8 +21,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import kotlin.math.roundToInt
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -169,6 +172,26 @@ fun SwitchRow(label: Int, pref: Prefs.Pref<Boolean>, detail: String? = null) {
         checkedThumbColor = c.onAccent, checkedTrackColor = c.accent,
         uncheckedThumbColor = c.muted, uncheckedTrackColor = c.switchOff, uncheckedBorderColor = c.switchOff,
       ),
+    )
+  }
+}
+
+/** A whole-number setting on a slider; [valueText] names the current value, [onSettled] runs when the finger lifts. */
+@Composable
+fun SliderRow(label: Int, pref: Prefs.Pref<Int>, range: IntRange, valueText: String, onSettled: () -> Unit = {}) {
+  val c = LocalAppColors.current
+  Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Text(stringResource(label), Modifier.weight(1f), color = c.text, fontSize = 15.sp)
+      Text(valueText, color = c.muted, fontSize = 13.sp)
+    }
+    Slider(
+      pref.value.toFloat(),
+      { pref.value = it.roundToInt() },
+      valueRange = range.first.toFloat()..range.last.toFloat(),
+      steps = range.last - range.first - 1,
+      onValueChangeFinished = onSettled,
+      colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.switchOff, activeTickColor = c.onAccent, inactiveTickColor = c.muted),
     )
   }
 }

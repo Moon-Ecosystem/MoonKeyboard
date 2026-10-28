@@ -707,7 +707,7 @@ class InputController(private val host: KeyboardHost) {
   }
 
   private fun afterSeparator() {
-    if (field.autoCaps) {
+    if (field.autoCaps && Prefs.autoCaps.value) {
       host.inputConnection?.let { ic ->
         shiftController.autoCapitalize(ic.getCursorCapsMode(host.editorInfo.inputType) != 0)
       }

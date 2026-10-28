@@ -2,7 +2,6 @@ package com.moonkeyboard.ime
 
 import android.content.res.Configuration
 import android.media.AudioManager
-import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -167,7 +166,7 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
       with(density) {
         val keyWidth = geometry.keys.minOf { it.width }
         TouchTracker(controller, geometry, scope, popupGap = 8.dp.toPx(), sidePadding = SidePadding.toPx(), glideThreshold = keyWidth * 0.8f, recorder) { type ->
-          if (Prefs.haptics.value) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+          Haptics.tap(view)
           if (Prefs.sound.value) audio.playSoundEffect(soundFor(type), -1f)
         }
       }
@@ -335,7 +334,7 @@ internal fun ToolButton(icon: ImageVector, label: Int, colors: KeyboardColors, a
   val view = LocalView.current
   Box(
     Modifier.size(44.dp).clip(CircleShape).background(if (active) colors.special else Color.Transparent).clickable {
-      if (Prefs.haptics.value) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+      Haptics.tap(view)
       onClick()
     },
     contentAlignment = Alignment.Center,

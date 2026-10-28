@@ -52,6 +52,7 @@ import com.moonkeyboard.engine.history.LearnedPhrase
 import com.moonkeyboard.engine.suggest.WordContext
 import com.moonkeyboard.ime.ClipKind
 import com.moonkeyboard.ime.ClipboardStore
+import com.moonkeyboard.ime.Haptics
 import com.moonkeyboard.ime.Icons
 import com.moonkeyboard.ime.ImageExpiry
 import com.moonkeyboard.ime.InputController
@@ -268,10 +269,21 @@ fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
     Divider()
     SwitchRow(R.string.autocorrect, Prefs.autocorrect, stringResource(R.string.autocorrect_detail))
     Divider()
+    SwitchRow(R.string.auto_caps, Prefs.autoCaps, stringResource(R.string.auto_caps_detail))
+    Divider()
     SwitchRow(R.string.block_offensive, Prefs.blockOffensive, stringResource(R.string.block_offensive_detail))
   }
   Card {
     SwitchRow(R.string.haptics, Prefs.haptics)
+    if (Prefs.haptics.value) {
+      val view = LocalView.current
+      val strength = Prefs.hapticStrength.value
+      // Buzzes once at the new strength, so the choice can be felt
+      SliderRow(
+        R.string.vibration_strength, Prefs.hapticStrength, 0..Haptics.MAX_STRENGTH,
+        if (strength == 0) stringResource(R.string.vibration_system) else "$strength",
+      ) { Haptics.tap(view) }
+    }
     Divider()
     SwitchRow(R.string.key_sound, Prefs.sound)
   }

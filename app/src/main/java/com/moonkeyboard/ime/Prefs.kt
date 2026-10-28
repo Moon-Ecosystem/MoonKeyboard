@@ -59,6 +59,9 @@ object Prefs {
   val floatLandscape = Pref("float_landscape", FloatSpot.UNSET, FloatSpot::parse)
   val splitLandscape = Pref("split_landscape", false, String::toBoolean)
   val haptics = Pref("haptics", true, String::toBoolean)
+  /** 0: the system's keyboard tap; 1 to [Haptics.MAX_STRENGTH]: our own. */
+  val hapticStrength = Pref("haptic_strength", 0, String::toInt)
+  val autoCaps = Pref("auto_caps", true, String::toBoolean)
   val sound = Pref("sound", false, String::toBoolean)
   val glideTrail = Pref("glide_trail", true, String::toBoolean)
   val glideTyping = Pref("glide_typing", true, String::toBoolean)

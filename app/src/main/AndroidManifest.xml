@@ -4,6 +4,8 @@
 
   <!-- Fully offline: make sure no dependency sneaks the network permission in -->
   <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+  <!-- Key presses at the strength chosen in settings -->
+  <uses-permission android:name="android.permission.VIBRATE" />
 
   <application
       android:label="@string/app_name"

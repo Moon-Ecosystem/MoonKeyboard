@@ -3,7 +3,6 @@ package com.moonkeyboard.ime
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -520,7 +519,7 @@ private fun PanelKey(
     modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp))
       .background(if (active) colors.accent else if (special) colors.special else colors.key)
       .clickable {
-        if (Prefs.haptics.value) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        Haptics.tap(view)
         onClick()
       },
     contentAlignment = Alignment.Center,
