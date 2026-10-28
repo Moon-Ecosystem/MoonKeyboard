@@ -57,7 +57,7 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
 
   override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
     super.onStartInputView(info, restarting)
-    if (!restarting) controller.onStartInput(info)
+    controller.onStartInput(info, restarting)
     // Picks up what was copied while the keyboard wasn't running
     captureClip()
     ClipboardStore.expireIfDue()

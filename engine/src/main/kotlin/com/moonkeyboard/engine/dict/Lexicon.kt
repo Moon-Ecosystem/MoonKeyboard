@@ -43,16 +43,23 @@ class Lexicon internal constructor(
   /** 0–255 on a log scale: 255 is probability 1, each step down divides by 1.15 (the AOSP scale). */
   fun frequency(id: Int): Int = freq[id].toInt() and 0xFF
 
-  /** False for entries that only exist as a correction source, like "im" (→ "I'm"). */
-  fun isWord(id: Int): Boolean = flags[id].toInt() and NOT_A_WORD == 0
+  /** False for entries that only exist as a correction source, like "im" (→ "I'm"), and for Hinglish words while it's off. */
+  fun isWord(id: Int): Boolean {
+    val f = flags[id].toInt()
+    return f and NOT_A_WORD == 0 && (hinglish || f and HINGLISH == 0)
+  }
 
   /** Whether words AOSP marks as possibly offensive are kept out of suggestions, glide results and predictions. */
   @Volatile
   var blockOffensive = true
 
+  /** Whether Hinglish words are suggested and count as real words. */
+  @Volatile
+  var hinglish = true
+
   fun isSuggestable(id: Int): Boolean {
     val f = flags[id].toInt()
-    return f and (NOT_A_WORD or NO_SUGGEST) == 0 && !(blockOffensive && f and OFFENSIVE != 0)
+    return f and (NOT_A_WORD or NO_SUGGEST) == 0 && !(blockOffensive && f and OFFENSIVE != 0) && (hinglish || f and HINGLISH == 0)
   }
 
   fun unigramLogProb(id: Int): Float = (frequency(id) - 255) * LN_1_15
@@ -179,6 +186,8 @@ class Lexicon internal constructor(
     const val NO_SUGGEST = 2
     /** Possibly offensive: suggested only when the user turns blocking off. */
     const val OFFENSIVE = 4
+    /** Hindi typed in Latin letters; English words that are also Hindi ("main") don't carry it. */
+    const val HINGLISH = 8
 
     /** Pair costs are stored as -ln P × 16 in one byte, so ln P down to -16. */
     internal const val COST_SCALE = 16f

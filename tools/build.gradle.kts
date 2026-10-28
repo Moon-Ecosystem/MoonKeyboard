@@ -16,4 +16,7 @@ kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_11 } }
 // -PmainClass=com.moonkeyboard.tools.EvaluateKt runs the accuracy evaluation instead
 application { mainClass = providers.gradleProperty("mainClass").orElse("com.moonkeyboard.tools.BuildLexiconKt") }
 
+// Pair and triple counts over millions of tweets don't fit the default heap
+tasks.named<JavaExec>("run") { maxHeapSize = "3g" }
+
 dependencies { implementation(project(":engine")) }

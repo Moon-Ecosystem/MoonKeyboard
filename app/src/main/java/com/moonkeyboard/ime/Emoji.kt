@@ -64,9 +64,22 @@ object Emoji {
 
   @Volatile private var keywordIndex: Map<String, List<String>> = emptyMap()
 
-  /** Emoji tagged with exactly [word], for the suggestion strip. */
-  fun forWord(word: String): List<String> =
-    if (word.length < MIN_STRIP_WORD) emptyList() else keywordIndex[word.lowercase()].orEmpty().take(MAX_STRIP)
+  /** Emoji tagged with exactly [word], for the suggestion strip; chat slang first, as Unicode's keywords don't have it. */
+  fun forWord(word: String): List<String> {
+    val w = word.lowercase()
+    SLANG[w]?.let { return it }
+    return if (w.length < MIN_STRIP_WORD) emptyList() else keywordIndex[w].orEmpty().take(MAX_STRIP)
+  }
+
+  // All in emoji fonts since Android 7, so no glyph check needed
+  private val SLANG = mapOf(
+    "lol" to "😂 🤣", "lmao" to "🤣 😂", "lmfao" to "🤣 😂", "rofl" to "🤣 😂", "xd" to "😆 😂",
+    "haha" to "😂 😄", "hahaha" to "😂 🤣", "hehe" to "😁 😄", "omg" to "😱 😮", "wtf" to "😳 🤯",
+    "ok" to "👌 👍", "okay" to "👌 👍", "ty" to "🙏 😊", "thx" to "🙏 😊", "thanks" to "🙏 😊",
+    "ily" to "❤️ 🥰", "brb" to "🏃 ⏳", "gn" to "🌙 😴", "gm" to "☀️ 😊", "yay" to "🎉 🥳",
+    "ugh" to "😩 😤", "smh" to "🤦 😒", "idk" to "🤷", "congrats" to "🎉 🥳", "bday" to "🎂 🥳",
+    "acha" to "👍 👌", "accha" to "👍 👌", "achha" to "👍 👌", "pyaar" to "❤️ 🥰", "pyar" to "❤️ 🥰",
+  ).mapValues { it.value.split(' ') }
 
   /**
    * Emoji whose name or keywords match [query]: a word starting with it first ("joy" finds 😂),

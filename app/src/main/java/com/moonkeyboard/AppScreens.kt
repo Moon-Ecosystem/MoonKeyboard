@@ -157,6 +157,7 @@ fun HomeScreen(open: (Screen) -> Unit) {
       stringResource(if (Prefs.borders.value) R.string.with_borders else R.string.borderless),
     ).joinToString(", ")
     val typing = listOf(
+      stringResource(if (Prefs.hinglish.value) R.string.english_hinglish else R.string.english_only),
       stringResource(if (Prefs.autocorrect.value) R.string.autocorrect_on else R.string.autocorrect_off),
       stringResource(if (Prefs.haptics.value) R.string.vibration else R.string.no_vibration),
     ).joinToString(", ")
@@ -259,6 +260,8 @@ private fun PreviewKeyboard() {
 @Composable
 fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
   Card {
+    SwitchRow(R.string.hinglish, Prefs.hinglish, stringResource(R.string.hinglish_detail))
+    Divider()
     SwitchRow(R.string.autocorrect, Prefs.autocorrect, stringResource(R.string.autocorrect_detail))
     Divider()
     SwitchRow(R.string.block_offensive, Prefs.blockOffensive, stringResource(R.string.block_offensive_detail))

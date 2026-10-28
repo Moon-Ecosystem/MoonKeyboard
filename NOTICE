@@ -1,7 +1,9 @@
 Moon Keyboard
 Copyright (c) 2026 Moon Keyboard contributors. Code licensed under the MIT License (see LICENSE).
 
-The English language pack (app/src/main/assets/dict/en.dict) is built from:
+The English + Hinglish language pack (app/src/main/assets/dict/en.dict) is built from the sources
+below. Because it includes L3Cube-HingCorpus data, the pack file itself is licensed under
+CC BY-NC-SA 4.0 (non-commercial); the code stays MIT.
 
 - AOSP LatinIME English word list (en_US_wordlist.combined)
   Copyright (c) 2008, The Android Open Source Project
@@ -11,7 +13,11 @@ The English language pack (app/src/main/assets/dict/en.dict) is built from:
 - Word-pair counts derived from Tatoeba English sentences (https://tatoeba.org)
   Licensed under CC BY 2.0 FR: https://creativecommons.org/licenses/by/2.0/fr/
 
-tools/fetch-data.sh downloads both sources; tools/ rebuilds the pack.
+- Hinglish words and word-pair counts derived from L3Cube-HingCorpus (romanised Hindi-English tweets)
+  Nayak and Joshi, "L3Cube-HingCorpus and HingBERT", WILDRE 2022. https://github.com/l3cube-pune/code-mixed-nlp
+  Licensed under CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+tools/fetch-data.sh downloads the sources; tools/ rebuilds the pack.
 
 The emoji list (app/src/main/assets/emoji.txt) is built from Unicode's emoji-test.txt
   Copyright (c) 1991-2023 Unicode, Inc. Licensed under the Unicode License v3:

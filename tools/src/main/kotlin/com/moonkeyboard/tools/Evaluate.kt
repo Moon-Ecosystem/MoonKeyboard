@@ -14,12 +14,14 @@ import java.io.File
 
 /**
  * Accuracy on held-out sentences with simulated typists:
- *   --dict <en.dict> --eval <sentences.txt> [--offset 0] [--limit 600] [--errors 25] [--grid true]
+ *   --dict <en.dict> --eval <sentences.txt> [--offset 0] [--limit 600] [--errors 25] [--grid true] [--hinglish false]
  * Run: ./gradlew :tools:run -PmainClass=com.moonkeyboard.tools.EvaluateKt --args="..."
  */
 fun main(args: Array<String>) {
   val opts = args.toList().chunked(2).associate { (k, v) -> k.removePrefix("--") to v }
   val lexicon = Lexicon.read(File(opts.getValue("dict")).readBytes())
+  // --hinglish false measures the pack the way it types with Hinglish turned off
+  lexicon.hinglish = opts["hinglish"] != "false"
   // --offset skips the sentences the grid tuned on, to check the result on unseen ones
   val sentences = File(opts.getValue("eval")).readLines().filter { it.isNotBlank() }
     .drop(opts["offset"]?.toInt() ?: 0).take(opts["limit"]?.toInt() ?: 600)

@@ -20,6 +20,8 @@
   <string name="home_privacy">Offline. Nothing you type leaves this phone.</string>
   <string name="with_borders">key borders</string>
   <string name="borderless">borderless</string>
+  <string name="english_hinglish">English + Hinglish</string>
+  <string name="english_only">English</string>
   <string name="autocorrect_on">Autocorrect</string>
   <string name="autocorrect_off">No autocorrect</string>
   <string name="vibration">vibration</string>
@@ -34,6 +36,8 @@
   <string name="look_preview_note">Changes show in the keyboard below as you make them.</string>
   <string name="autocorrect">Autocorrect</string>
   <string name="autocorrect_detail">Fixes typos when you press space. Backspace undoes a fix.</string>
+  <string name="hinglish">Hinglish</string>
+  <string name="hinglish_detail">Suggest Hindi words typed in English letters, like \"kya kar rahe ho\"</string>
   <string name="block_offensive">Block offensive words</string>
   <string name="block_offensive_detail">Never suggest or swipe-type swear words</string>
   <string name="glide_typing">Glide typing</string>

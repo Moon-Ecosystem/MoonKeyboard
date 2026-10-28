@@ -15,7 +15,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
-/** Runs against the real English pack built by :tools (skipped if it hasn't been built). */
+/** Runs against the real English + Hinglish pack built by :tools (skipped if it hasn't been built). */
 class EnglishTest {
   private val engine: SuggestionEngine by lazy { SuggestionEngine(lexicon, UserHistory()) }
 
@@ -93,12 +93,45 @@ class EnglishTest {
    * typist. The full report and tuning live in tools/Evaluate.kt; this guards against regressions.
    */
   @Test
-  fun tapAccuracyOnHeldOutSentences() {
+  fun tapAccuracyOnHeldOutSentences() = tapAccuracy(EVAL, TAP_FLOOR)
+
+  @Test
+  fun glideAccuracyOnHeldOutSentences() = glideAccuracy(EVAL, GLIDE_FLOOR)
+
+  @Test
+  fun hinglishTapAccuracy() = tapAccuracy(EVAL_HI, HINGLISH_TAP_FLOOR, HINGLISH_BROKE_CEILING)
+
+  @Test
+  fun hinglishGlideAccuracy() = glideAccuracy(EVAL_HI, HINGLISH_GLIDE_FLOOR)
+
+  @Test
+  fun hinglishWordsAreKnown() {
+    for (word in listOf("nahi", "kya", "hai", "bhai")) assertNull(word, suggest(word, prev = null).autocorrect)
+    assertTrue(suggest("kuc", prev = "aur").items.contains("kuch"))
+  }
+
+  @Test
+  fun predictsHinglish() {
+    val ctx = WordContext.START.then("kya").then("kar")
+    assertTrue(engine.predict(ctx, capitalize = false).items.toString(), engine.predict(ctx, capitalize = false).items.contains("rahe"))
+  }
+
+  @Test
+  fun hinglishCanBeTurnedOff() {
+    val english = Lexicon.read(file.readBytes()).also { it.hinglish = false }
+    val e = SuggestionEngine(english, UserHistory())
+    assertTrue("nahi is just a typo with Hinglish off", suggest("nahi", prev = null, engine = e).autocorrect != null)
+    assertTrue(e.predict(WordContext.START.then("kya"), capitalize = false).items.none { english.findLenient(it).let { id -> id >= 0 && !english.isSuggestable(id) } })
+    // English words that are also Hindi stay
+    assertNull(suggest("main", prev = "the", engine = e).autocorrect)
+  }
+
+  private fun tapAccuracy(sentences: List<String>, floor: Double, brokeCeiling: Double = 0.005) {
     val sim = TypingSimulator(geometry, seed = 1)
     var words = 0
     var committed = 0
     var broke = 0
-    for (sentence in EVAL) {
+    for (sentence in sentences) {
       var context = WordContext.START
       for (target in sentence.split(' ')) {
         val (typed, touches) = sim.tap(target, 0.35f)
@@ -111,8 +144,8 @@ class EnglishTest {
       }
     }
     println("tap: committed %.1f%%, broke %.1f%% of %d words".format(100.0 * committed / words, 100.0 * broke / words, words))
-    assertTrue("committed accuracy", committed >= words * TAP_FLOOR)
-    assertTrue("autocorrect must almost never break a right word", broke <= words * 0.005)
+    assertTrue("committed accuracy", committed >= words * floor)
+    assertTrue("autocorrect must almost never break a right word", broke <= words * brokeCeiling)
   }
 
   @Test
@@ -136,12 +169,11 @@ class EnglishTest {
   }
 
   /** Wobbly, corner-cutting swipes of held-out sentences. */
-  @Test
-  fun glideAccuracyOnHeldOutSentences() {
+  private fun glideAccuracy(sentences: List<String>, floor: Double) {
     val sim = TypingSimulator(geometry, seed = 2)
     var words = 0
     var right = 0
-    for (sentence in EVAL) {
+    for (sentence in sentences) {
       var context = WordContext.START
       for (target in sentence.split(' ')) {
         if (target.count { it.isLetter() } >= 2) {
@@ -152,7 +184,7 @@ class EnglishTest {
       }
     }
     println("glide: right %.1f%% of %d words".format(100.0 * right / words, words))
-    assertTrue("glide accuracy", right >= words * GLIDE_FLOOR)
+    assertTrue("glide accuracy", right >= words * floor)
   }
 
   private companion object {
@@ -165,14 +197,21 @@ class EnglishTest {
     val keys = KeyMap.from(geometry)
 
     /** Held-out sentences written by :tools; the first 150 keep the test quick. */
-    val EVAL: List<String> by lazy {
-      val stream = EnglishTest::class.java.getResourceAsStream("/eval/en.txt")
+    val EVAL: List<String> by lazy { eval("en") }
+    val EVAL_HI: List<String> by lazy { eval("hi") }
+
+    private fun eval(name: String): List<String> {
+      val stream = EnglishTest::class.java.getResourceAsStream("/eval/$name.txt")
       assumeTrue("held-out sentences not built", stream != null)
-      stream!!.bufferedReader().readLines().filter { it.isNotBlank() }.take(150)
+      return stream!!.bufferedReader().readLines().filter { it.isNotBlank() }.take(150)
     }
 
     // A few points under what tools/Evaluate.kt measures, so noise in a change doesn't flake the build
     const val TAP_FLOOR = 0.95
     const val GLIDE_FLOOR = 0.72
+    const val HINGLISH_TAP_FLOOR = 0.92
+    const val HINGLISH_GLIDE_FLOOR = 0.65
+    /** Tweets' looser spelling: variants correct into each other more often than English words do. */
+    const val HINGLISH_BROKE_CEILING = 0.012
   }
 }

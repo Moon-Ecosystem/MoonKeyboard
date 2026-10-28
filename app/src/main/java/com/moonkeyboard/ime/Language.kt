@@ -42,6 +42,7 @@ object Language {
       val history = if (historyFile.exists()) UserHistory.parse(historyFile.readText()) else UserHistory()
       savedVersion = history.version
       lexicon.blockOffensive = Prefs.blockOffensive.value
+      lexicon.hinglish = Prefs.hinglish.value
       loaded.value = SuggestionEngine(lexicon, history)
     }
   }

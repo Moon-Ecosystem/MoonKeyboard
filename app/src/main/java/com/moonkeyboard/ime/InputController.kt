@@ -161,13 +161,28 @@ class InputController(private val host: KeyboardHost) {
     }
   }
 
-  fun onStartInput(info: EditorInfo) {
+  /**
+   * A field gained focus. [restarting]: the same field restarted its input (Firefox does this when
+   * you tap back into a search box); the open panel stays, but the strip is filled again, since
+   * [onFinishInput] emptied it.
+   */
+  fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
+    field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
+    if (restarting) {
+      selAnchor = info.initialSelStart
+      selCursor = info.initialSelEnd
+      clearWord()
+      afterSeparator()
+      return
+    }
     layerId = when (info.inputType and InputType.TYPE_MASK_CLASS) {
       InputType.TYPE_CLASS_NUMBER, InputType.TYPE_CLASS_PHONE, InputType.TYPE_CLASS_DATETIME -> SYMBOLS
       else -> LETTERS
     }
-    field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
-    Language.engine?.lexicon?.blockOffensive = Prefs.blockOffensive.value
+    Language.engine?.lexicon?.let {
+      it.blockOffensive = Prefs.blockOffensive.value
+      it.hinglish = Prefs.hinglish.value
+    }
     selAnchor = info.initialSelStart
     selCursor = info.initialSelEnd
     phantomSpace = false
@@ -713,13 +728,16 @@ class InputController(private val host: KeyboardHost) {
         val password = variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
           variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
           variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
-        val suggest = !password && type and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS == 0
-        val literal = variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
+        // Search boxes that draw their own suggestion list often say "no suggestions"; the strip
+        // still helps there, so the flag only turns off what changes or remembers the text
+        val noSuggestions = type and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0
+        val suggest = !password
+        val literal = noSuggestions || variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
           variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
           variation == InputType.TYPE_TEXT_VARIATION_URI ||
           variation == InputType.TYPE_TEXT_VARIATION_FILTER ||
           variation == InputType.TYPE_TEXT_VARIATION_PERSON_NAME
-        val learn = suggest && info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING == 0
+        val learn = suggest && !noSuggestions && info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING == 0
         val caps = type and (InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_CAP_WORDS or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS) != 0
         return FieldFlags(suggest, autocorrect = suggest && !literal, learn = learn, autoCaps = caps, secret = password)
       }

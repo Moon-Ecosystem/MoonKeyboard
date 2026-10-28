@@ -28,7 +28,7 @@ Status: agreed, decisions at the bottom. Licence: MIT. Visual design: [Moon Keyb
 
 ### Later
 
-- **Hinglish**: Hindi typed in Latin letters (`kya kar rahe ho`), mixed freely with English. Output stays in Latin script, with no Devanagari. It has its own dictionary that knows spelling variants (`kya`/`kyaa`, `hai`/`he`). Suggestions come from English and Hinglish together, and glide typing works as-is on the same QWERTY layout.
+- **Hinglish** (milestone 5, built): Hindi typed in Latin letters (`kya kar rahe ho`), mixed freely with English. Output stays in Latin script, with no Devanagari. Common spelling variants (`kya`/`kyaa`, `nahi`/`nhi`) are all words, and learning brings the user's own spelling forward. Suggestions come from English and Hinglish together, glide typing works as-is on the same QWERTY layout, and a setting turns Hinglish off.
 - More languages through new packs. Non-Latin scripts such as Devanagari aren't planned, but the engine doesn't rule them out (see the note on Unicode below).
 - Switching languages by swiping the space bar, multilingual typing without switching.
 - Emoji search, floating and split keyboard, personal dictionary import/export, backup.
@@ -80,9 +80,9 @@ interface LanguagePack {
 
 - **Lexicon and model format.** `:tools` compiles them into one binary per pack: a trie stored as flat arrays plus a pruned word-pair model (the 40 most common successors of each word). It is read into a handful of primitive arrays with bulk copies, with no per-word objects. A trigram model and memory-mapping can come later if size or load time demand it.
 - **The model is an interface.** We start with n-grams because they are small, fast and predictable. A small neural model (TFLite/ONNX) can replace it later without touching the decoders.
-- **Several packs at once.** With English and Hinglish both on, the decoder searches both lexicons and weights each by how likely each language is in the current sentence. This is what makes code-mixed typing work.
+- **English and Hinglish in one pack.** Both languages share the Latin alphabet, so they live in one lexicon: Hinglish-only words carry a `HINGLISH` flag, and the word-pair model is counted over English sentences and Hinglish tweets together. The model itself then says which language the sentence is in (after "kya" it expects "kar", after "what" it expects "are"), with no separate language detection. Turning Hinglish off hides the flagged words; English words that are also Hindi ("main", "to") stay.
 - **Unicode correctness from day one.** Backspace, cursor moves and word boundaries use grapheme clusters (`BreakIterator`), not chars. Emoji already need this, and it keeps other scripts possible later.
-- **Hinglish spelling variants.** The Hinglish lexicon groups variants (`kya`, `kyaa`, `kia`) under one entry. Typing any of them suggests the user's own preferred spelling, which is learned from what they pick.
+- **Hinglish spelling variants.** Each common spelling is its own word with its own frequency (`nahi` and `nhi` both). Typing one suggests the others as alternatives, and the user's history brings their own spelling forward. Grouping variants under one entry can come later if the strip gets crowded with them.
 
 ### Decoding
 
@@ -119,7 +119,7 @@ Each row: `id, kind (text|image|gif), content (the text, or the image's file nam
 The code is MIT. Bundled data files keep their own licences, listed in a `NOTICE` file.
 
 - English word frequencies: the AOSP LatinIME word lists (Apache 2.0, which can ship inside an MIT app with attribution), plus a corpus for n-grams (Wikipedia, CC BY-SA). If CC BY-SA applies to the compiled model, that file is licensed CC BY-SA on its own and the code stays MIT.
-- Hinglish: the romanised half of Google's Dakshina dataset, plus romanised Hindi chat text.
+- Hinglish: L3Cube-HingCorpus, 52M romanised Hindi-English tweets (CC BY-NC-SA 4.0). A word is Hinglish when it isn't English, turns up mostly in tweets with two or more unmistakably Hindi words ("hai", "nahi", "kya"…) and mostly in lower case. Because of this data the pack file is non-commercial; the code stays MIT.
 
 ### Testing
 
@@ -138,5 +138,6 @@ The code is MIT. Bundled data files keep their own licences, listed in a `NOTICE
 
 - Clipboard text is kept until the user deletes it. Unpinned images and GIFs expire after 1 week by default; the user can pick 1 month or never.
 - Hinglish is Latin script only, with no Devanagari output.
+- Hinglish data is HingCorpus (best quality), which makes the bundled dictionary non-commercial (CC BY-NC-SA 4.0). That's fine: nothing will be released paid or with ads.
 - The licence is MIT.
 - Distribution is to be decided once there is a working build.

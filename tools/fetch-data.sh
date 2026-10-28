@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Downloads the source data for the English language pack into tools/data/ (git-ignored), then:
 #   ./gradlew :tools:run --args="--words $PWD/tools/data/en_US_wordlist.combined.gz \
-#       --sentences $PWD/tools/data/eng_sentences.tsv --out $PWD/app/src/main/assets/dict/en.dict"
+#       --sentences $PWD/tools/data/eng_sentences.tsv --hinglish $PWD/tools/data/hingcorpus.15m.txt.gz \
+#       --out $PWD/app/src/main/assets/dict/en.dict --eval-out $PWD/engine/src/test/resources/eval/en.txt \
+#       --hinglish-eval-out $PWD/engine/src/test/resources/eval/hi.txt"
 set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p data && cd data
@@ -18,3 +20,9 @@ bunzip2 -f eng_sentences.tsv.bz2
 curl -sSf -o emoji-test.txt https://unicode.org/Public/emoji/15.1/emoji-test.txt
 # CLDR emoji keywords for emoji search, Unicode License v3
 curl -sSf -o cldr-annotations-en.xml https://raw.githubusercontent.com/unicode-org/cldr/release-44/common/annotations/en.xml
+
+# L3Cube-HingCorpus, romanised Hinglish tweets, CC BY-NC-SA 4.0. The archive is 2.5 GB (4.9 GB
+# unpacked) and already shuffled, so only its first 15M lines are kept, streamed straight to gzip.
+# (curl and tar are cut off by head on purpose, hence the || true)
+{ curl -sSfL "https://drive.usercontent.google.com/download?id=1s_6eHO9zDhxQ-xVN1TyNguszV1meZkl9&export=download&confirm=t" || true; } \
+  | { tar xzO 2>/dev/null || true; } | head -n 15000000 | gzip -6 > hingcorpus.15m.txt.gz
