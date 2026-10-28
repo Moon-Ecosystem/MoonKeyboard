@@ -57,6 +57,20 @@ class LayoutsTest {
     assertEquals(one.bottom + 10f, q.top, 0.01f)
   }
 
+  @Test
+  fun splitMovesTheRightHalfOverAndStretchesSpace() {
+    val layout = Layouts.load("qwerty")
+    val whole = KeyboardGeometry.compute(layout, width = 600f, keyHeight = 34f, hGap = 6f, vGap = 6f, sidePadding = 4f)
+    val split = KeyboardGeometry.compute(layout, width = 840f, keyHeight = 34f, hGap = 6f, vGap = 6f, sidePadding = 4f, splitGap = 240f)
+    fun key(g: KeyboardGeometry, label: String) = g.keys.first { it.key.label == label }
+    assertEquals(key(whole, "t").left, key(split, "t").left, 0.01f)
+    assertEquals(key(whole, "y").left + 240f, key(split, "y").left, 0.01f)
+    assertEquals("g stays left", key(whole, "g").left, key(split, "g").left, 0.01f)
+    val space = split.keys.first { it.key.type == KeyType.SPACE }
+    assertTrue("space spans the gap", space.left < 420f && space.right > 420f + 120f)
+    assertEquals("y", split.keyAt(key(split, "y").centerX, key(split, "y").centerY)?.key?.label)
+  }
+
   private fun geometry(layout: Layout) =
     KeyboardGeometry.compute(layout, width = 390f, keyHeight = 46f, hGap = 6f, vGap = 10f, sidePadding = 4f)
 }

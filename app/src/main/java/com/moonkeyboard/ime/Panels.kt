@@ -402,6 +402,51 @@ fun EmojiSearchStrip(controller: InputController, colors: KeyboardColors) {
   }
 }
 
+// Options
+
+/** The keyboard's quick settings, so the toolbar keeps only what is used all the time. */
+@Composable
+fun OptionsPanel(controller: InputController, colors: KeyboardColors, modifier: Modifier) {
+  val context = LocalContext.current
+  val floating = Prefs.floating.value
+  val keys = { controller.panel = Panel.KEYS }
+  Column(modifier) {
+    PanelHeader(R.string.keyboard_options, controller, colors)
+    Column(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      EditRow {
+        OptionTile(colors, Icons.TextEdit, R.string.text_editing) { controller.panel = Panel.EDIT }
+        // One-handed doesn't apply to a floating keyboard, which is already small
+        OptionTile(colors, Icons.OneHanded, R.string.one_handed_short, active = !floating && Prefs.oneHanded.value != OneHanded.OFF, enabled = !floating) {
+          Prefs.oneHanded.value = if (Prefs.oneHanded.value == OneHanded.OFF) Prefs.oneHandedSide.value else OneHanded.OFF
+          keys()
+        }
+        OptionTile(colors, Icons.Floating, R.string.floating_short, active = floating) {
+          Prefs.floating.value = !floating
+          keys()
+        }
+      }
+      EditRow {
+        OptionTile(colors, Icons.Split, R.string.split_short, active = Prefs.splitLandscape.value) { Prefs.splitLandscape.value = !Prefs.splitLandscape.value }
+        OptionTile(colors, Icons.Theme, R.string.theme) { flipTheme(colors) }
+        OptionTile(colors, Icons.Open, R.string.settings) {
+          context.startActivity(Intent(context, com.moonkeyboard.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun RowScope.OptionTile(colors: KeyboardColors, icon: ImageVector, label: Int, active: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+  PanelKey(colors, Modifier.weight(1f).alpha(if (enabled) 1f else 0.4f), special = false, active = active, onClick = { if (enabled) onClick() }) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      val tint = if (active) colors.onAccent else colors.text
+      Icon(icon, null, Modifier.size(22.dp), tint = tint)
+      Text(stringResource(label), color = tint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+  }
+}
+
 // Text editing
 
 @Composable

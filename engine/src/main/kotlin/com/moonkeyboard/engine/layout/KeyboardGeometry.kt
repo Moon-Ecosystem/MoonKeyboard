@@ -32,7 +32,22 @@ class KeyboardGeometry(val keys: List<KeyBounds>, val width: Float, val height: 
       vGap: Float,
       sidePadding: Float,
       topPadding: Float = 0f,
+      /** A gap down the middle for thumbs: keys right of centre move over by it, space stretches across. */
+      splitGap: Float = 0f,
     ): KeyboardGeometry {
+      if (splitGap > 0f) {
+        val narrow = compute(layout, width - splitGap, keyHeight, hGap, vGap, sidePadding, topPadding)
+        val mid = (width - splitGap) / 2
+        val keys = narrow.keys.map {
+          when {
+            // A key straddling the middle ("g", "v") stays with the left half
+            it.centerX > mid + 1f -> it.copy(left = it.left + splitGap, right = it.right + splitGap)
+            it.key.type == KeyType.SPACE && it.right > mid -> it.copy(right = it.right + splitGap)
+            else -> it
+          }
+        }
+        return KeyboardGeometry(keys, width, narrow.height)
+      }
       val units = layout.rows.maxOf { row -> row.keys.sumOf { it.width.toDouble() } }.toFloat()
       val unit = (width - 2 * sidePadding - (units - 1) * hGap) / units
       // A key spanning n units also spans the n-1 gaps it replaces, so wide keys line up with the grid

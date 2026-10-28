@@ -1,6 +1,6 @@
 package com.moonkeyboard.ime
 
-import android.content.Intent
+import android.content.res.Configuration
 import android.media.AudioManager
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
@@ -29,10 +29,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import com.moonkeyboard.MainActivity
+import androidx.compose.ui.platform.LocalConfiguration
 import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Density
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -87,6 +88,10 @@ private val BottomPadding = 8.dp
 private val KeyRadius = 8.dp
 private const val ONE_HANDED_SHARE = 0.84f
 private val EmojiExtraHeight = 96.dp
+// Landscape: everything smaller, and rows closer, so the app keeps about half the screen
+private const val LANDSCAPE_SCALE = 0.8f
+private val LandscapeVGap = 8.dp
+private const val SPLIT_SHARE = 0.28f
 
 private val ShiftIcon = icon("M12 4l8 8h-5v8H9v-8H4z")
 private val BackspaceIcon = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM12 9l6 6M18 9l-6 6")
@@ -99,18 +104,28 @@ private fun icon(d: String): Path = PathParser().parsePathString(d).toPath()
  * The suggestion strip over one Canvas holding every key: a key press redraws once instead of
  * recomposing ~40 keys. Popups and debug paths live on an overlay without pointer input, so they
  * can spill over the strip without stealing its taps.
+ *
+ * [floating]: drawn inside the floating card, which sizes it (and scales it through the density).
  */
 @Composable
-fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
-  val dark = when (Prefs.theme.value) {
-    ThemeMode.SYSTEM -> isSystemInDarkTheme()
-    ThemeMode.LIGHT -> false
-    ThemeMode.DARK -> true
+fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null, floating: Boolean = false) {
+  val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+  if (!landscape) return KeyboardContent(controller, recorder, floating, landscape = false)
+  // Landscape shrinks everything alike (keys, labels, strip), as the floating card does
+  val d = LocalDensity.current
+  CompositionLocalProvider(LocalDensity provides Density(d.density * LANDSCAPE_SCALE, d.fontScale)) {
+    KeyboardContent(controller, recorder, floating, landscape = true)
   }
-  val colors = if (dark) KeyboardColors.Dark else KeyboardColors.Light
+}
+
+@Composable
+private fun KeyboardContent(controller: InputController, recorder: GestureRecorder?, floating: Boolean, landscape: Boolean) {
+  val colors = keyboardColors()
   val borders = Prefs.borders.value
-  val oneHanded = Prefs.oneHanded.value
+  val oneHanded = if (floating) OneHanded.OFF else Prefs.oneHanded.value
   val keyHeight = KeyHeight * Prefs.keySize.value.scale
+  val vGap = if (landscape) LandscapeVGap else VGap
+  val split = landscape && !floating && oneHanded == OneHanded.OFF && Prefs.splitLandscape.value
   val density = LocalDensity.current
   val view = LocalView.current
   val audio = remember { view.context.getSystemService(AudioManager::class.java) }
@@ -119,14 +134,14 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
   val layout = controller.layout
 
   BoxWithConstraints(
-    Modifier.fillMaxWidth().background(colors.background).windowInsetsPadding(WindowInsets.navigationBars)
+    Modifier.fillMaxWidth().background(colors.background).then(if (floating) Modifier else Modifier.windowInsetsPadding(WindowInsets.navigationBars))
       // Watches every touch on the keyboard without taking it, so the controller can tell its own
       // edits' echoes from the cursor moving in the app
       .pointerInput(controller) {
         awaitPointerEventScope {
           while (true) {
-            awaitPointerEvent(PointerEventPass.Initial)
-            controller.onKeyboardTouch()
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            controller.onKeyboardTouch(fingerDown = event.changes.any { it.pressed })
           }
         }
       }
@@ -134,15 +149,18 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
     val fullWidth = constraints.maxWidth.toFloat()
     val widthPx = if (oneHanded == OneHanded.OFF) fullWidth else (fullWidth * ONE_HANDED_SHARE).roundToInt().toFloat()
     val letters = controller.layoutFor(InputController.LETTERS)
-    val geometry = remember(layout, letters, widthPx, keyHeight, density) {
+    val geometry = remember(layout, letters, widthPx, keyHeight, vGap, split, density) {
       with(density) {
         // Every layer is as tall as the letters: a layer with fewer rows (symbols next to letters
         // with a number row) spreads them out instead of shrinking the keyboard
         val k = keyHeight.toPx()
         fun keysHeight(l: Layout) = l.rows.sumOf { (k * it.height).toDouble() }.toFloat()
-        val target = keysHeight(letters) + (letters.rows.size - 1) * VGap.toPx()
-        val gap = if (layout.rows.size > 1) maxOf(VGap.toPx(), (target - keysHeight(layout)) / (layout.rows.size - 1)) else VGap.toPx()
-        KeyboardGeometry.compute(layout, widthPx, k, HGap.toPx(), gap, SidePadding.toPx(), topPadding = TopPadding.toPx())
+        val target = keysHeight(letters) + (letters.rows.size - 1) * vGap.toPx()
+        val gap = if (layout.rows.size > 1) maxOf(vGap.toPx(), (target - keysHeight(layout)) / (layout.rows.size - 1)) else vGap.toPx()
+        KeyboardGeometry.compute(
+          layout, widthPx, k, HGap.toPx(), gap, SidePadding.toPx(), topPadding = TopPadding.toPx(),
+          splitGap = if (split) widthPx * SPLIT_SHARE else 0f,
+        )
       }
     }
     val touches = remember(geometry) {
@@ -165,8 +183,10 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
     when (controller.panel) {
       Panel.CLIPBOARD -> ClipboardPanel(controller, colors, panelModifier)
       // Taller than the keys, so emoji can be big: the app above moves up to make room
-      Panel.EMOJI -> EmojiPanel(controller, colors, Modifier.fillMaxWidth().height(StripHeight + height + EmojiExtraHeight))
+      // (Not in landscape or floating, where the app has little room to spare)
+      Panel.EMOJI -> EmojiPanel(controller, colors, Modifier.fillMaxWidth().height(StripHeight + height + if (landscape || floating) 0.dp else EmojiExtraHeight))
       Panel.EDIT -> EditPanel(controller, colors, panelModifier)
+      Panel.OPTIONS -> OptionsPanel(controller, colors, panelModifier)
       Panel.KEYS -> Column {
         Strip(controller, colors)
         Row {
@@ -196,6 +216,21 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
       }
     }
   }
+}
+
+// Flips what's on screen; cycling through "follow system" looked like a dead tap when that matched
+internal fun flipTheme(colors: KeyboardColors) {
+  Prefs.theme.value = if (colors == KeyboardColors.Dark) ThemeMode.LIGHT else ThemeMode.DARK
+}
+
+@Composable
+internal fun keyboardColors(): KeyboardColors {
+  val dark = when (Prefs.theme.value) {
+    ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    ThemeMode.LIGHT -> false
+    ThemeMode.DARK -> true
+  }
+  return if (dark) KeyboardColors.Dark else KeyboardColors.Light
 }
 
 private fun soundFor(type: KeyType) = when (type) {
@@ -235,20 +270,14 @@ private fun Strip(controller: InputController, colors: KeyboardColors) {
 
 @Composable
 private fun Toolbar(controller: InputController, colors: KeyboardColors) {
-  val context = LocalContext.current
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
     if (controller.toolbarOpen) ToolButton(Icons.Back, R.string.close_toolbar, colors) { controller.toolbarOpen = false }
     ToolButton(Icons.Emoji, R.string.emoji, colors) { controller.panel = Panel.EMOJI }
-    ToolButton(Icons.TextEdit, R.string.text_editing, colors) { controller.panel = Panel.EDIT }
-    ToolButton(Icons.OneHanded, R.string.one_handed, colors, active = Prefs.oneHanded.value != OneHanded.OFF) {
-      Prefs.oneHanded.value = if (Prefs.oneHanded.value == OneHanded.OFF) Prefs.oneHandedSide.value else OneHanded.OFF
-    }
-    // Flips what's on screen; cycling through "follow system" looked like a dead tap when that matched
-    val dark = colors == KeyboardColors.Dark
-    ToolButton(Icons.Theme, R.string.theme, colors) { Prefs.theme.value = if (dark) ThemeMode.LIGHT else ThemeMode.DARK }
-    ToolButton(Icons.Settings, R.string.settings, colors) {
-      context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
+    ToolButton(Icons.Theme, R.string.theme, colors) { flipTheme(colors) }
+    val floating = Prefs.floating.value
+    ToolButton(Icons.Floating, R.string.floating, colors, active = floating) { Prefs.floating.value = !floating }
+    // Everything else lives in the options panel, so the bar stays short
+    ToolButton(Icons.Settings, R.string.keyboard_options, colors) { controller.panel = Panel.OPTIONS }
     // Last, where the suggestion strip has it too, so it doesn't move when the toolbar opens
     ToolButton(Icons.Clipboard, R.string.clipboard, colors) { controller.panel = Panel.CLIPBOARD }
   }
@@ -385,14 +414,13 @@ private fun DrawScope.drawPopup(popup: Popup, controller: InputController, color
   }
 }
 
-/** The glide trail from the design: a soft halo under a solid line, ending in a dot under the finger. */
+/** The glide trail: one solid line in the accent colour, ending in a dot under the finger (a pale halo looked washed out). */
 private fun DrawScope.drawGlideTrail(touches: TouchTracker, colors: KeyboardColors) {
   val end = touches.trailEnd ?: return
   val path = Path()
   touches.trail.forEachIndexed { i, p -> if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y) }
-  drawPath(path, colors.accent.copy(alpha = 0.18f), style = Stroke(width = 16.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-  drawPath(path, colors.accent.copy(alpha = 0.9f), style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-  drawCircle(colors.accent, radius = 9.dp.toPx(), center = end)
+  drawPath(path, colors.accent, style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+  drawCircle(colors.accent, radius = 8.dp.toPx(), center = end)
 }
 
 /** Debug overlay: fingers currently down, or else the last finished trace, with every raw sample dotted. */

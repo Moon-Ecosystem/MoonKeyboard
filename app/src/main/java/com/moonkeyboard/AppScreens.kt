@@ -237,6 +237,10 @@ fun LookScreen(onBack: () -> Unit) {
         LabelRow(R.string.key_height) { Segmented(Prefs.keySize, KeySize.entries, listOf(R.string.key_short, R.string.key_normal, R.string.key_tall), compact = true) }
         Divider()
         LabelRow(R.string.one_handed_short) { Segmented(Prefs.oneHanded, OneHanded.entries, listOf(R.string.off, R.string.left, R.string.right), compact = true) }
+        Divider()
+        SwitchRow(R.string.floating, Prefs.floating)
+        Divider()
+        SwitchRow(R.string.split_landscape, Prefs.splitLandscape, stringResource(R.string.split_landscape_detail))
       }
       Text(stringResource(R.string.look_preview_note), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 12.sp)
     }

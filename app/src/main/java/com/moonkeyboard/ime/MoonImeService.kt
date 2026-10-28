@@ -1,8 +1,11 @@
 package com.moonkeyboard.ime
 
 import android.content.ClipboardManager
+import android.graphics.Rect
 import android.inputmethodservice.InputMethodService
 import android.view.View
+import android.view.ViewGroup
+import androidx.core.view.updateLayoutParams
 import android.view.inputmethod.EditorInfo
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
@@ -47,12 +50,48 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
     runCatching { clipboard.primaryClip }.getOrNull()?.let { ClipboardStore.capture(this, it) }
   }
 
+  /** Where the keyboard is in the window; the rest of the window is see-through and lets touches through. */
+  private val keyboardBounds = Rect()
+  private var inputView: View? = null
+
   override fun onCreateInputView(): View {
     window.window?.decorView?.let {
       it.setViewTreeLifecycleOwner(this)
       it.setViewTreeSavedStateRegistryOwner(this)
     }
-    return ComposeView(this).apply { setContent { KeyboardUi(controller) } }
+    return ComposeView(this).apply {
+      setContent {
+        KeyboardWindow(controller) { b ->
+          if (b != keyboardBounds) {
+            keyboardBounds.set(b)
+            // Insets are recomputed on a layout pass; a card being dragged doesn't ask for one itself
+            requestLayout()
+          }
+        }
+      }
+    }.also { inputView = it }
+  }
+
+  // The view covers the whole window so the floating keyboard can go anywhere on screen
+  override fun setInputView(view: View) {
+    super.setInputView(view)
+    window.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    window.window?.findViewById<View>(android.R.id.inputArea)?.updateLayoutParams { height = ViewGroup.LayoutParams.MATCH_PARENT }
+    view.updateLayoutParams { height = ViewGroup.LayoutParams.MATCH_PARENT }
+  }
+
+  // Landscape keeps the app on screen instead of a full-screen text box
+  override fun onEvaluateFullscreenMode() = false
+
+  override fun onComputeInsets(outInsets: Insets) {
+    super.onComputeInsets(outInsets)
+    val height = inputView?.height ?: return
+    // A floating keyboard covers nothing the app has to move out of the way of (nor one not laid out yet)
+    val top = if (Prefs.floating.value || keyboardBounds.isEmpty) height else keyboardBounds.top
+    outInsets.contentTopInsets = top
+    outInsets.visibleTopInsets = top
+    outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
+    outInsets.touchableRegion.set(keyboardBounds)
   }
 
   override fun onStartInputView(info: EditorInfo, restarting: Boolean) {

@@ -109,6 +109,15 @@
   <string name="settings">Settings</string>
   <string name="full_width">Full-width keyboard</string>
   <string name="other_side">Move to the other side</string>
+  <string name="floating">Floating keyboard</string>
+  <string name="floating_short">Floating</string>
+  <string name="split_short">Split landscape</string>
+  <string name="keyboard_options">Keyboard options</string>
+  <string name="move_keyboard">Move keyboard</string>
+  <string name="resize_keyboard">Resize keyboard</string>
+  <string name="dock_hint">Let go to dock</string>
+  <string name="split_landscape">Split keyboard in landscape</string>
+  <string name="split_landscape_detail">Two halves at the screen edges, for typing with both thumbs</string>
   <string name="back_to_keyboard">Back to keyboard</string>
 
   <string name="clear_unpinned">Clear unpinned items</string>

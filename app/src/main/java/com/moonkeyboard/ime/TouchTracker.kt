@@ -280,7 +280,7 @@ class TouchTracker(
     const val BACKSPACE_REPEAT_DELAY_MS = 400L
     const val BACKSPACE_REPEAT_MS = 50L
     const val PREVIEW_INTERVAL_MS = 80L
-    const val TRAIL_POINTS = 48
+    const val TRAIL_POINTS = 120
     // In key widths: how far to slide before space becomes a cursor, and the slide per character
     const val CURSOR_SLOP = 0.5f
     const val CURSOR_STEP = 0.35f

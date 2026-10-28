@@ -9,6 +9,17 @@ enum class OneHanded { OFF, LEFT, RIGHT }
 enum class KeySize(val scale: Float) { SHORT(0.9f), NORMAL(1f), TALL(1.12f) }
 enum class ImageExpiry(val days: Int?) { WEEK(7), MONTH(30), NEVER(null) }
 
+/** Where the floating keyboard sits, in dp from the top left of the screen, and how wide it is. */
+data class FloatSpot(val x: Float, val y: Float, val width: Float) {
+  override fun toString() = "$x,$y,$width"
+
+  companion object {
+    val UNSET = FloatSpot(-1f, -1f, -1f)
+
+    fun parse(s: String) = s.split(',').map(String::toFloat).let { (x, y, w) -> FloatSpot(x, y, w) }
+  }
+}
+
 /**
  * User settings, shared by the keyboard and the settings screen (same process). Each one is Compose
  * state, so the keyboard redraws the moment a setting changes.
@@ -42,6 +53,11 @@ object Prefs {
   val oneHanded = Pref("one_handed", OneHanded.OFF, OneHanded::valueOf)
   /** The side one-handed mode goes back to when switched on from the toolbar. */
   val oneHandedSide = Pref("one_handed_side", OneHanded.RIGHT, OneHanded::valueOf)
+  val floating = Pref("floating", false, String::toBoolean)
+  // Portrait and landscape each keep their own spot: one rarely fits the other
+  val floatPortrait = Pref("float_portrait", FloatSpot.UNSET, FloatSpot::parse)
+  val floatLandscape = Pref("float_landscape", FloatSpot.UNSET, FloatSpot::parse)
+  val splitLandscape = Pref("split_landscape", false, String::toBoolean)
   val haptics = Pref("haptics", true, String::toBoolean)
   val sound = Pref("sound", false, String::toBoolean)
   val glideTrail = Pref("glide_trail", true, String::toBoolean)

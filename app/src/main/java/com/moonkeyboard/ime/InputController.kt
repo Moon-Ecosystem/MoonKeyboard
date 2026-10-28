@@ -8,6 +8,7 @@ import android.text.InputType
 import android.text.SpannableString
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,7 +54,7 @@ fun InputMethodService.asKeyboardHost() = object : KeyboardHost {
   override fun sendDownUpKeyEvents(keyCode: Int) = this@asKeyboardHost.sendDownUpKeyEvents(keyCode)
 }
 
-enum class Panel { KEYS, CLIPBOARD, EMOJI, EDIT }
+enum class Panel { KEYS, CLIPBOARD, EMOJI, EDIT, OPTIONS }
 
 /**
  * Shows [text] as the word being typed, without the underline apps add by default: they only add
@@ -199,10 +200,15 @@ class InputController(private val host: KeyboardHost) {
 
   /** When a finger was last on the keyboard; selection changes soon after are echoes of our own edits. */
   private var lastTouchMs = 0L
+  /** A finger still on the keyboard: a held backspace keeps editing with no new touch events. */
+  private var fingerDown = false
 
-  fun onKeyboardTouch() {
+  fun onKeyboardTouch(fingerDown: Boolean) {
+    this.fingerDown = fingerDown
     lastTouchMs = SystemClock.uptimeMillis()
   }
+
+  private fun isEcho() = fingerDown || SystemClock.uptimeMillis() - lastTouchMs < ECHO_MS
 
   /**
    * The cursor landed somewhere the keyboard didn't put it (focus, a tap in the text, the app
@@ -211,8 +217,7 @@ class InputController(private val host: KeyboardHost) {
    */
   private fun cursorPlaced() {
     val ic = host.inputConnection
-    val ours = SystemClock.uptimeMillis() - lastTouchMs < ECHO_MS
-    if (ic != null && !ours && panel == Panel.KEYS && emojiQuery == null && field.suggest) resumeWord(ic)
+    if (ic != null && !isEcho() && panel == Panel.KEYS && emojiQuery == null && field.suggest) resumeWord(ic)
     if (composing.isEmpty()) afterSeparator() else requestSuggestions()
   }
 
@@ -231,7 +236,7 @@ class InputController(private val host: KeyboardHost) {
     }
     if (composing.isEmpty()) {
       // Our own commits echo back here too; only a cursor the user (or app) moved is acted on
-      if (selStart == selEnd && SystemClock.uptimeMillis() - lastTouchMs >= ECHO_MS) {
+      if (selStart == selEnd && !isEcho()) {
         revert = null
         autoSpaced = false
         lastWasSpace = false
@@ -653,10 +658,16 @@ class InputController(private val host: KeyboardHost) {
     if (start == 0 && before.length == RESUME_CHARS) return
     val word = before.substring(start)
     if (word.isEmpty() || !word[0].isLetter()) return
-    ic.beginBatchEdit()
-    ic.deleteSurroundingText(word.length, 0)
-    ic.compose(word)
-    ic.endBatchEdit()
+    // Mark the word where it is: deleting and retyping it made Firefox's caret jump to its start
+    val text = ic.getExtractedText(ExtractedTextRequest(), 0)
+    val cursor = if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
+    if (cursor < word.length || !ic.setComposingRegion(cursor - word.length, cursor)) {
+      // Editors without composing regions get the word retyped instead
+      ic.beginBatchEdit()
+      ic.deleteSurroundingText(word.length, 0)
+      ic.compose(word)
+      ic.endBatchEdit()
+    }
     composing.append(word)
     word.forEach { touches += keyMap?.touchFor(it) ?: Touch.exact(it) }
   }
