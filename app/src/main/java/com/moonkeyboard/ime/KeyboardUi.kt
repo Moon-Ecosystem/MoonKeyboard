@@ -1,6 +1,7 @@
 package com.moonkeyboard.ime
 
 import android.content.res.Configuration
+import android.os.SystemClock
 import android.media.AudioManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -50,7 +51,10 @@ import com.moonkeyboard.engine.decode.KeyMap
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -204,9 +208,15 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
                 }
               }
             )
+            // Its own offscreen layer, where each piece replaces what's under it: fading pieces
+            // blended over each other showed their overlaps as a string of dots
+            if (Prefs.glideTrail.value) {
+              Canvas(Modifier.matchParentSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+                drawGlideTrail(touches, colors)
+              }
+            }
             // Not clipped, so popups can rise over the strip
             Canvas(Modifier.matchParentSize()) {
-              if (Prefs.glideTrail.value) drawGlideTrail(touches, colors)
               if (recorder != null && recorder.showPaths) drawTouchPaths(recorder, colors)
               touches.popup?.let { drawPopup(it, controller, colors, measurer) }
             }
@@ -460,14 +470,30 @@ private fun DrawScope.drawPopup(popup: Popup, controller: InputController, color
   }
 }
 
-/** The glide trail: one solid line in the accent colour, ending in a dot under the finger (a pale halo looked washed out). */
+/**
+ * The glide trail in the accent colour (a pale halo looked washed out). Each piece fades and thins
+ * with its age, so the line tapers behind the finger and melts away after it lifts.
+ */
 private fun DrawScope.drawGlideTrail(touches: TouchTracker, colors: KeyboardColors) {
-  val end = touches.trailEnd ?: return
-  val path = Path()
-  touches.trail.forEachIndexed { i, p -> if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y) }
-  drawPath(path, colors.accent, style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-  drawCircle(colors.accent, radius = 8.dp.toPx(), center = end)
+  touches.trailTick // Read so each frame of the fade redraws
+  val trail = touches.trail
+  if (trail.size < 2) return
+  val now = SystemClock.uptimeMillis()
+  val thick = TrailStartWidth.toPx()
+  val thin = TrailEndWidth.toPx()
+  for (i in 1 until trail.size) {
+    val a = trail[i - 1]
+    val b = trail[i]
+    val age = (now - b.t).toFloat()
+    val life = age / (TRAIL_SOLID_MS + TRAIL_FADE_MS)
+    if (life >= 1f) continue
+    val alpha = if (age < TRAIL_SOLID_MS) 1f else 1f - (age - TRAIL_SOLID_MS) / TRAIL_FADE_MS
+    drawLine(colors.accent.copy(alpha = alpha), Offset(a.x, a.y), Offset(b.x, b.y), thick + (thin - thick) * life, StrokeCap.Round, blendMode = BlendMode.Src)
+  }
 }
+
+private val TrailStartWidth = 10.dp
+private val TrailEndWidth = 2.dp
 
 /** Debug overlay: fingers currently down, or else the last finished trace, with every raw sample dotted. */
 private fun DrawScope.drawTouchPaths(recorder: GestureRecorder, colors: KeyboardColors) {

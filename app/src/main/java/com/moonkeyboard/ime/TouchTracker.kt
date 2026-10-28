@@ -1,7 +1,10 @@
 package com.moonkeyboard.ime
 
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -28,6 +31,13 @@ class Popup(val items: List<String>, val left: Float, val top: Float, val cellWi
   var selected by mutableIntStateOf(0)
 }
 
+/** A glide trail sample and when the finger passed it ([SystemClock.uptimeMillis]); it fades by age. */
+class TrailPoint(val x: Float, val y: Float, val t: Long)
+
+// The trail fades like AOSP's: each sample stays solid briefly, then fades and thins out
+internal const val TRAIL_SOLID_MS = 100L
+internal const val TRAIL_FADE_MS = 700L
+
 /**
  * Follows every finger on its own so fast typists can roll from one key to the next. Characters
  * are typed when the finger lifts; shift and backspace act on touch. A lone finger that starts on
@@ -47,11 +57,12 @@ class TouchTracker(
   val pressed = mutableStateMapOf<PointerId, KeyBounds>()
   var popup by mutableStateOf<Popup?>(null)
     private set
-  /** The newest samples of the glide in progress: a short tail keeps each frame's stroke cheap to draw. */
-  val trail = ArrayDeque<Offset>(TRAIL_POINTS)
-  /** Where the trail ends (null when no glide); changing it is what triggers a redraw. */
-  var trailEnd by mutableStateOf<Offset?>(null)
+  /** The glide's samples still visible, oldest first; they outlive the glide while they fade. */
+  val trail = ArrayDeque<TrailPoint>()
+  /** Changes every frame while the trail is on screen, so it redraws as it fades. */
+  var trailTick by mutableLongStateOf(0L)
     private set
+  private var trailTicker: Job? = null
 
   private var popupOwner: PointerId? = null
   private val holds = HashMap<PointerId, Job>()
@@ -157,16 +168,15 @@ class TouchTracker(
       glidePath.clear()
       glidePath += TracePoint(start.x, start.y, 0)
       trail.clear()
-      trail += start
+      trail += TrailPoint(start.x, start.y, downTime[id] ?: nowMs)
+      fadeTrail()
     }
     if (glideOwner != id) return
     val t0 = downTime[id] ?: nowMs
     for ((point, time) in samples) {
       glidePath += TracePoint(point.x, point.y, time - t0)
-      if (trail.size == TRAIL_POINTS) trail.removeFirst()
-      trail += point
+      trail += TrailPoint(point.x, point.y, time)
     }
-    trailEnd = at
     if (nowMs - lastPreviewMs >= PREVIEW_INTERVAL_MS) {
       lastPreviewMs = nowMs
       controller.previewGlide(glidePath.toList())
@@ -222,7 +232,7 @@ class TouchTracker(
       pressed.remove(id)
       downAt.remove(id)
       glidePath += TracePoint(at.x, at.y, nowMs - (downTime.remove(id) ?: nowMs))
-      clearTrail()
+      // The trail stays and fades out on its own
       recorder?.up(id, at.x, at.y, nowMs, "glide")
       controller.onGlide(glidePath.toList())
       return
@@ -251,10 +261,7 @@ class TouchTracker(
     pressed.remove(id)
     downAt.remove(id)
     downTime.remove(id)
-    if (glideOwner == id) {
-      glideOwner = null
-      clearTrail()
-    }
+    if (glideOwner == id) glideOwner = null
     if (cursorOwner == id) cursorOwner = null
     if (popupOwner == id) {
       popup = null
@@ -264,8 +271,21 @@ class TouchTracker(
   }
 
   private fun clearTrail() {
+    trailTicker?.cancel()
     trail.clear()
-    trailEnd = null
+  }
+
+  /** Redraws every frame, dropping samples that have faded, until none are left. */
+  private fun fadeTrail() {
+    if (trailTicker?.isActive == true) return
+    trailTicker = scope.launch {
+      while (trail.isNotEmpty()) {
+        withFrameMillis { }
+        val now = SystemClock.uptimeMillis()
+        while (trail.isNotEmpty() && now - trail.first().t > TRAIL_SOLID_MS + TRAIL_FADE_MS) trail.removeFirst()
+        trailTick = now
+      }
+    }
   }
 
   private fun popupFor(bounds: KeyBounds): Popup {
@@ -280,7 +300,6 @@ class TouchTracker(
     const val BACKSPACE_REPEAT_DELAY_MS = 400L
     const val BACKSPACE_REPEAT_MS = 50L
     const val PREVIEW_INTERVAL_MS = 80L
-    const val TRAIL_POINTS = 120
     // In key widths: how far to slide before space becomes a cursor, and the slide per character
     const val CURSOR_SLOP = 0.5f
     const val CURSOR_STEP = 0.35f
