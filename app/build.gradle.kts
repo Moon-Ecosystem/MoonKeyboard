@@ -56,6 +56,8 @@ dependencies {
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.material3)
+  // Installs the baseline profiles bundled with Compose so its code is compiled ahead of time, not JIT-ed while typing
+  implementation(libs.androidx.profileinstaller)
   debugImplementation(libs.androidx.compose.ui.tooling)
   testImplementation(libs.junit)
 }

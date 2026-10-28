@@ -1,0 +1,2 @@
+HSPLcom/moonkeyboard/**;->**(**)**
+Lcom/moonkeyboard/**;

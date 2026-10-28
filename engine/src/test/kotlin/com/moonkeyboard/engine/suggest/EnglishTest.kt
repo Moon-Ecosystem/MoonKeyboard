@@ -1,8 +1,10 @@
 package com.moonkeyboard.engine.suggest
 
 import com.moonkeyboard.engine.decode.KeyMap
-import com.moonkeyboard.engine.decode.Touch
+import com.moonkeyboard.engine.decode.resample
+import com.moonkeyboard.engine.trace.TracePoint
 import com.moonkeyboard.engine.dict.Lexicon
+import com.moonkeyboard.engine.eval.TypingSimulator
 import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.layout.KeyboardGeometry
 import com.moonkeyboard.engine.layout.Layouts
@@ -12,7 +14,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
-import java.util.Random
 
 /** Runs against the real English pack built by :tools (skipped if it hasn't been built). */
 class EnglishTest {
@@ -63,46 +64,70 @@ class EnglishTest {
   }
 
   /**
-   * Noisy-typing benchmark: real sentences tapped with Gaussian finger error, scored on the word
-   * that space would commit. Prints numbers so tuning changes can be compared.
+   * Accuracy floors on held-out sentences (never seen by the pair model) typed by a simulated
+   * typist. The full report and tuning live in tools/Evaluate.kt; this guards against regressions.
    */
   @Test
-  fun noisyTypingBenchmark() {
-    val random = Random(42)
-    for (sigma in listOf(0.25f, 0.4f, 0.55f)) {
-      var words = 0
-      var literalRight = 0
-      var committedRight = 0
-      var top3 = 0
-      var nanos = 0L
-      for (sentence in SENTENCES) {
-        var context = WordContext.START
-        for (target in sentence.split(' ')) {
-          val noisy = target.map { c ->
-            val (x, y) = keys.center(c.lowercaseChar())!!
-            Touch(x + (random.nextGaussian() * sigma * keys.keyWidth).toFloat(), y + (random.nextGaussian() * sigma * keys.keyWidth).toFloat(), c)
-          }
-          // What a keyboard without correction would type: the key each touch landed on
-          val typed = noisy.joinToString("") { t -> letterKeys.minBy { it.distanceSq(t.x, t.y) }.key.label }
-            .let { if (target[0].isUpperCase()) it.replaceFirstChar(Char::uppercaseChar) else it }
-          val touchesTyped = noisy.mapIndexed { i, t -> t.copy(char = typed[i]) }
-          val start = System.nanoTime()
-          val s = engine.suggest(typed, touchesTyped, keys, context, allowAutocorrect = true)
-          nanos += System.nanoTime() - start
-          val committed = s.autocorrect ?: typed
-          words++
-          if (typed.equals(target, ignoreCase = true)) literalRight++
-          if (committed.equals(target, ignoreCase = true)) committedRight++
-          if (s.items.any { it.equals(target, ignoreCase = true) }) top3++
-          context = WordContext(target, false)
-        }
+  fun tapAccuracyOnHeldOutSentences() {
+    val sim = TypingSimulator(geometry, seed = 1)
+    var words = 0
+    var committed = 0
+    var broke = 0
+    for (sentence in EVAL) {
+      var context = WordContext.START
+      for (target in sentence.split(' ')) {
+        val (typed, touches) = sim.tap(target, 0.35f)
+        if (typed.isEmpty()) continue
+        val result = engine.suggest(typed, touches, sim.keys, context, allowAutocorrect = true).let { it.autocorrect ?: typed }
+        words++
+        if (result.equals(target, ignoreCase = true)) committed++
+        else if (typed.equals(target, ignoreCase = true)) broke++
+        context = WordContext(target, false)
       }
-      println(
-        "noise %.2f keys: literal %.1f%%, committed %.1f%%, in strip %.1f%%, %.2f ms/word"
-          .format(sigma, 100.0 * literalRight / words, 100.0 * committedRight / words, 100.0 * top3 / words, nanos / 1e6 / words)
-      )
-      assertTrue("correction must not lose to raw taps at noise $sigma", committedRight >= literalRight)
     }
+    println("tap: committed %.1f%%, broke %.1f%% of %d words".format(100.0 * committed / words, 100.0 * broke / words, words))
+    assertTrue("committed accuracy", committed >= words * TAP_FLOOR)
+    assertTrue("autocorrect must almost never break a right word", broke <= words * 0.005)
+  }
+
+  @Test
+  fun glideFindsCleanPaths() {
+    val sim = TypingSimulator(geometry)
+    for (word in listOf("moon", "hello", "keyboard", "the", "don't")) {
+      val s = engine.glide(sim.glide(word, 0f, 0f), keys, WordContext("the", false), false, false)
+      assertEquals(word, s.typed)
+      assertEquals("no case-only duplicates in ${s.items}", s.items.size, s.items.distinctBy { it.lowercase() }.size)
+    }
+  }
+
+  /** Turning back before reaching "a" (n → almost a → m → e) used to type "be". */
+  @Test
+  fun glideForgivesTurningBeforeTheKey() {
+    fun c(ch: Char) = keys.center(ch)!!
+    val (ax, ay) = c('a')
+    val turn = (ax + 1.5f * keys.keyWidth) to ay
+    val path = resample(listOf(c('n'), turn, c('m'), c('e')), 60).mapIndexed { i, (x, y) -> TracePoint(x, y, i * 8L) }
+    assertEquals("name", engine.glide(path, keys, WordContext("my", false), false, false).typed)
+  }
+
+  /** Wobbly, corner-cutting swipes of held-out sentences. */
+  @Test
+  fun glideAccuracyOnHeldOutSentences() {
+    val sim = TypingSimulator(geometry, seed = 2)
+    var words = 0
+    var right = 0
+    for (sentence in EVAL) {
+      var context = WordContext.START
+      for (target in sentence.split(' ')) {
+        if (target.count { it.isLetter() } >= 2) {
+          words++
+          if (engine.glide(sim.glide(target, 0.3f, 0.6f, 0.35f), sim.keys, context, false, false).typed.equals(target, ignoreCase = true)) right++
+        }
+        context = WordContext(target, false)
+      }
+    }
+    println("glide: right %.1f%% of %d words".format(100.0 * right / words, words))
+    assertTrue("glide accuracy", right >= words * GLIDE_FLOOR)
   }
 
   private companion object {
@@ -113,30 +138,16 @@ class EnglishTest {
     }
     val geometry = KeyboardGeometry.compute(Layouts.load("qwerty"), 390f, 46f, 6f, 10f, 4f)
     val keys = KeyMap.from(geometry)
-    // Simulated typists only miss onto other letters; a stray shift would just be another key press
-    val letterKeys = geometry.keys.filter { it.key.label.length == 1 && it.key.label[0].isLetter() }
 
-    val SENTENCES = listOf(
-      "I will be there in five minutes",
-      "Are you coming to the party tonight",
-      "Thank you so much for your help",
-      "Can we meet tomorrow morning",
-      "I am running a little late",
-      "What time does the movie start",
-      "Let me know when you get home",
-      "Do you want to grab lunch",
-      "The meeting has been moved to Friday",
-      "I think we should leave early",
-      "Please send me the address",
-      "Happy birthday to you",
-      "She said she would call back later",
-      "We need to buy milk and bread",
-      "How was your day",
-      "I really like this song",
-      "Sorry I missed your call",
-      "The weather is beautiful today",
-      "Have you finished the report",
-      "Good night and sleep well",
-    )
+    /** Held-out sentences written by :tools; the first 150 keep the test quick. */
+    val EVAL: List<String> by lazy {
+      val stream = EnglishTest::class.java.getResourceAsStream("/eval/en.txt")
+      assumeTrue("held-out sentences not built", stream != null)
+      stream!!.bufferedReader().readLines().filter { it.isNotBlank() }.take(150)
+    }
+
+    // A few points under what tools/Evaluate.kt measures, so noise in a change doesn't flake the build
+    const val TAP_FLOOR = 0.95
+    const val GLIDE_FLOOR = 0.72
   }
 }

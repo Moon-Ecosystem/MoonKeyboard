@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,12 +28,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import com.moonkeyboard.R
 import com.moonkeyboard.engine.decode.KeyMap
-import com.moonkeyboard.engine.suggest.Suggestions
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -103,7 +106,8 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
     }
     val touches = remember(geometry) {
       with(density) {
-        TouchTracker(controller, geometry, scope, popupGap = 8.dp.toPx(), sidePadding = SidePadding.toPx(), recorder) {
+        val keyWidth = geometry.keys.minOf { it.width }
+        TouchTracker(controller, geometry, scope, popupGap = 8.dp.toPx(), sidePadding = SidePadding.toPx(), glideThreshold = keyWidth * 0.8f, recorder) {
           view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         }
       }
@@ -116,14 +120,23 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
     val height = with(density) { geometry.height.toDp() } + BottomPadding
 
     Column {
-      SuggestionStrip(controller.suggestions, colors, controller::pickSuggestion, controller::forgetSuggestion)
-      Canvas(Modifier.fillMaxWidth().height(height).pointerInput(touches) { touches.track(this) }) {
-        val pressed = touches.pressed.values.mapTo(HashSet()) { it.key }
-        for (bounds in geometry.keys) drawKey(bounds, bounds.key in pressed, controller, colors, measurer)
-      }
+      SuggestionStrip(controller, colors)
+      Spacer(
+        Modifier.fillMaxWidth().height(height).pointerInput(touches) { touches.track(this) }.drawWithCache {
+          // Every key at rest, recorded once; rebuilt only when what it reads (shift, size) changes
+          val keys = obtainGraphicsLayer().apply {
+            record { for (bounds in geometry.keys) drawKey(bounds, false, controller, colors, measurer) }
+          }
+          onDrawBehind {
+            drawLayer(keys)
+            for (bounds in touches.pressed.values) drawKey(bounds, true, controller, colors, measurer)
+          }
+        }
+      )
     }
     Canvas(Modifier.matchParentSize()) {
       translate(top = StripHeight.toPx()) {
+        drawGlideTrail(touches, colors)
         if (recorder != null && recorder.showPaths) drawTouchPaths(recorder, colors)
         touches.popup?.let { drawPopup(it, controller, colors, measurer) }
       }
@@ -134,7 +147,11 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
 /** Three slots: the best word in the middle, bold when space will autocorrect to it. Long-press forgets a word. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SuggestionStrip(suggestions: Suggestions, colors: KeyboardColors, onPick: (Int) -> Unit, onForget: (Int) -> Unit) {
+private fun SuggestionStrip(controller: InputController, colors: KeyboardColors) {
+  // Read here, not in KeyboardUi, so a new suggestion recomposes only the strip
+  val suggestions = controller.suggestions
+  val onPick = controller::pickSuggestion
+  val onForget = controller::forgetSuggestion
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     for (i in 0 until 3) {
       if (i > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
@@ -220,6 +237,16 @@ private fun DrawScope.drawPopup(popup: Popup, controller: InputController, color
   }
 }
 
+/** The glide trail from the design: a soft halo under a solid line, ending in a dot under the finger. */
+private fun DrawScope.drawGlideTrail(touches: TouchTracker, colors: KeyboardColors) {
+  val end = touches.trailEnd ?: return
+  val path = Path()
+  touches.trail.forEachIndexed { i, p -> if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y) }
+  drawPath(path, colors.accent.copy(alpha = 0.18f), style = Stroke(width = 16.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+  drawPath(path, colors.accent.copy(alpha = 0.9f), style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+  drawCircle(colors.accent, radius = 9.dp.toPx(), center = end)
+}
+
 /** Debug overlay: fingers currently down, or else the last finished trace, with every raw sample dotted. */
 private fun DrawScope.drawTouchPaths(recorder: GestureRecorder, colors: KeyboardColors) {
   val paths = recorder.live.values.ifEmpty { listOfNotNull(recorder.traces.lastOrNull()?.points) }
@@ -227,7 +254,7 @@ private fun DrawScope.drawTouchPaths(recorder: GestureRecorder, colors: Keyboard
     val path = Path()
     points.forEachIndexed { i, p -> if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y) }
     drawPath(path, colors.accent.copy(alpha = 0.7f), style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    for (p in points) drawCircle(colors.text, radius = 1.5.dp.toPx(), center = Offset(p.x, p.y))
+    drawPoints(points.map { Offset(it.x, it.y) }, PointMode.Points, colors.text, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
     points.firstOrNull()?.let { drawCircle(colors.accent, radius = 5.dp.toPx(), center = Offset(it.x, it.y)) }
   }
 }

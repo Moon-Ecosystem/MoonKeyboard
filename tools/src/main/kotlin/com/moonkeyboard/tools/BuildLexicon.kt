@@ -11,6 +11,7 @@ import kotlin.math.ln
  *   --words      AOSP LatinIME `.combined(.gz)` word list (words, frequencies, fixed corrections)
  *   --sentences  Tatoeba sentences TSV (id, lang, text) for word-pair counts
  *   --out        lexicon file to write
+ *   --eval-out   where to write held-out sentences for accuracy tests (never counted in the pairs)
  *
  * See tools/fetch-data.sh for where the inputs come from.
  */
@@ -19,11 +20,19 @@ fun main(args: Array<String>) {
   val words = File(opts["words"] ?: usage())
   val sentences = opts["sentences"]?.let(::File)
   val out = File(opts["out"] ?: usage())
+  val evalOut = opts["eval-out"]?.let(::File)
 
   val builder = LexiconBuilder()
   readAospWordList(words, builder)
   println("words: ${builder.size}")
-  if (sentences != null) addPairs(sentences, builder)
+  if (sentences != null) {
+    val heldOut = addPairs(sentences, builder)
+    evalOut?.let {
+      it.parentFile?.mkdirs()
+      it.writeText(heldOut.joinToString("\n", postfix = "\n"))
+      println("held-out test sentences: ${heldOut.size} → $it")
+    }
+  }
 
   val lexicon = builder.build()
   out.parentFile?.mkdirs()
@@ -32,7 +41,7 @@ fun main(args: Array<String>) {
 }
 
 private fun usage(): Nothing {
-  System.err.println("usage: --words <aosp.combined.gz> [--sentences <tatoeba.tsv>] --out <file>")
+  System.err.println("usage: --words <aosp.combined.gz> [--sentences <tatoeba.tsv>] --out <file> [--eval-out <file>]")
   kotlin.system.exitProcess(2)
 }
 
@@ -83,12 +92,18 @@ private val TOKEN = Regex("""[\p{L}\p{N}]+(?:['’][\p{L}]+)*|[.!?]|[,;:"()]""")
  * Counts which known word follows which (and which words start sentences), keeping the
  * [PER_WORD] most common successors seen at least [MIN_COUNT] times.
  */
-private fun addPairs(file: File, builder: LexiconBuilder) {
+private fun addPairs(file: File, builder: LexiconBuilder): List<String> {
   val pairs = LongCounter()
   val totals = HashMap<Int, Int>()
+  val heldOut = ArrayList<String>()
   var sentences = 0
   for (line in lines(file)) {
     val text = line.substringAfterLast('\t')
+    // Every HOLD_OUT-th sentence is test data: kept out of the counts so tests can't have seen it
+    if ((line.substringBefore('\t').toIntOrNull() ?: 0) % HOLD_OUT == 0) {
+      if (heldOut.size < MAX_HELD_OUT) testSentence(builder, text)?.let { heldOut += it }
+      continue
+    }
     var prev: Int? = Lexicon.SENTENCE_START
     for (m in TOKEN.findAll(text)) {
       val token = m.value.replace('’', '\'')
@@ -119,6 +134,23 @@ private fun addPairs(file: File, builder: LexiconBuilder) {
     }
   }
   println("sentences: $sentences, distinct pairs: ${pairs.size}, kept: $kept")
+  return heldOut
+}
+
+/**
+ * A held-out sentence as space-separated words, or null if it isn't a fair test: every word must
+ * be in the dictionary (a keyboard can't be blamed for words it has never heard of), no digits,
+ * no names, 3–12 words.
+ */
+private fun testSentence(builder: LexiconBuilder, text: String): String? {
+  val words = TOKEN.findAll(text).map { it.value.replace('’', '\'') }.filter { it[0].isLetterOrDigit() }.toList()
+  if (words.size !in 3..12) return null
+  for (w in words) {
+    if (w.any { it.isDigit() }) return null
+    val id = lookup(builder, w) ?: return null
+    if (isName(builder, id) || !builder.isWord(id)) return null
+  }
+  return words.joinToString(" ")
 }
 
 /** Sentence-initial capitals fold to the dictionary's form: "The" → "the", but "I" stays "I". */
@@ -138,6 +170,8 @@ private fun key(prev: Int, next: Int): Long = (prev.toLong() shl 32) or (next.to
 
 private const val MIN_COUNT = 2
 private const val PER_WORD = 40
+private const val HOLD_OUT = 50
+private const val MAX_HELD_OUT = 3000
 
 /** Long → count with open addressing; a boxed HashMap would need ~10× the memory for millions of pairs. */
 private class LongCounter {

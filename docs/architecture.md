@@ -91,7 +91,7 @@ Both input types feed the same ranking:
 `score(word) = log P(touches | word) + λ · log P(word | context) + user-history boost`
 
 - **Tap typing.** Each touch is a probability spread over nearby keys, using the real key centres from the layout. A beam search walks the trie and allows a few insertions, deletions and swaps. That gives completions and autocorrect from one search.
-- **Glide typing.** The path is resampled and compared with each candidate word's ideal path through the key centres, by shape and by position (the SHARK2 approach). Candidates are pre-filtered by the first and last key and the keys the path passes over, so only a few hundred words get scored. AOSP's open-source LatinIME has no glide decoder (Gboard's is closed), so this is our own code. FlorisBoard's Apache-2.0 glide classifier is a reference.
+- **Glide typing.** A trie walk keeps only words whose letters' keys the path passes near, in order, starting and ending at the right keys. Each survivor's ideal path through its key centres is resampled alongside the finger's path, and the mean distance between them is the score (SHARK2's location channel; its shape channel can be added if real traces show a need). AOSP's open-source LatinIME has no glide decoder (Gboard's is closed), so this is our own code. FlorisBoard's Apache-2.0 glide classifier is a reference.
 - **Autocorrect.** It replaces the typed word only when the best candidate beats the literal input by a clear margin. It never corrects words the user has typed before. Backspace right after a correction undoes it.
 
 ### Storage

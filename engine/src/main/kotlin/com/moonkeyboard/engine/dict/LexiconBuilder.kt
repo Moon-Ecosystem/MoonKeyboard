@@ -18,6 +18,8 @@ class LexiconBuilder {
 
   fun word(id: Int): String = words[id]
 
+  fun isWord(id: Int): Boolean = flags[id] and (Lexicon.NOT_A_WORD or Lexicon.NO_SUGGEST) == 0
+
   /** Adds or updates a word; [frequency] is 0–255 on the AOSP log scale. Returns its id. */
   fun addWord(word: String, frequency: Int, flags: Int = 0): Int {
     require(word.isNotEmpty() && '\u0000' !in word) { "Bad word '$word'" }

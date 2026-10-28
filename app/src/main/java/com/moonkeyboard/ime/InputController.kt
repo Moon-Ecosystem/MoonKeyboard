@@ -20,6 +20,7 @@ import com.moonkeyboard.engine.suggest.Suggestions
 import com.moonkeyboard.engine.suggest.WordContext
 import com.moonkeyboard.engine.suggest.isWordChar
 import com.moonkeyboard.engine.text.lastGraphemeLength
+import com.moonkeyboard.engine.trace.TracePoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -78,6 +79,9 @@ class InputController(private val host: KeyboardHost) {
   private var lastWasSpace = false
   /** An autocorrection the next backspace undoes. */
   private var revert: Revert? = null
+  /** The composing word came from a glide: it is already decoded, so never autocorrect it again. */
+  private var glided = false
+  private var wordContext: WordContext? = null
 
   private data class Revert(val typed: String, val corrected: String, val separator: String)
 
@@ -183,6 +187,47 @@ class InputController(private val host: KeyboardHost) {
     if (composing.isNotEmpty()) requestSuggestions() else refreshPredictions()
   }
 
+  /** Live preview in the strip while the finger is still moving; the latest path wins. */
+  fun previewGlide(path: List<TracePoint>) {
+    val engine = Language.engine ?: return
+    val keys = keyMap ?: return
+    val ic = host.inputConnection ?: return
+    val context = if (composing.isNotEmpty()) WordContext(composing.toString(), false) else WordContext.from(ic.getTextBeforeCursor(CONTEXT_CHARS, 0) ?: "")
+    val firstUpper = shift != ShiftState.OFF
+    val allUpper = shift == ShiftState.LOCKED
+    decodeJob?.cancel()
+    decodeJob = scope.launch {
+      suggestions = withContext(decodeDispatcher) { engine.glide(path, keys, context, firstUpper, allUpper) }
+    }
+  }
+
+  /** The finger lifted: commit any word in progress, then compose the best glide word after a space. */
+  fun onGlide(path: List<TracePoint>) {
+    val engine = Language.engine ?: return
+    val keys = keyMap ?: return
+    val ic = host.inputConnection ?: return
+    decodeJob?.cancel()
+    revert = null
+    lastWasSpace = false
+    autoSpaced = false
+    ic.beginBatchEdit()
+    if (composing.isNotEmpty()) commitWord(autocorrect = true)
+    val context = WordContext.from(ic.getTextBeforeCursor(CONTEXT_CHARS, 0) ?: "")
+    val result = engine.glide(path, keys, context, firstUpper = shift != ShiftState.OFF, allUpper = shift == ShiftState.LOCKED)
+    if (result.typed.isNotEmpty()) {
+      val before = textBefore(ic, 1)
+      if (before.isNotEmpty() && !before[0].isWhitespace() && before[0] !in "([{\"'") ic.commitText(" ", 1)
+      composing.append(result.typed)
+      result.typed.forEach { touches += keys.touchFor(it) }
+      glided = true
+      ic.setComposingText(composing, 1)
+    }
+    ic.endBatchEdit()
+    suggestions = result
+    shiftController.onCharTyped()
+    syncShift()
+  }
+
   private fun typeText(text: String, x: Float, y: Float) {
     val ic = host.inputConnection ?: return
     revert = null
@@ -191,6 +236,8 @@ class InputController(private val host: KeyboardHost) {
     if (field.suggest && c != null && (c.isLetter() || (c == '\'' && composing.isNotEmpty()))) {
       composing.append(c)
       touches += if (x.isNaN()) keyMap?.touchFor(c) ?: Touch.exact(c) else Touch(x, y, c)
+      // Tapping more letters onto a glided word makes it an ordinary typed word again
+      glided = false
       ic.setComposingText(composing, 1)
       autoSpaced = false
       shiftController.onCharTyped()
@@ -255,6 +302,13 @@ class InputController(private val host: KeyboardHost) {
         return
       }
     }
+    if (composing.isNotEmpty() && glided) {
+      // A glide put the whole word down at once, so one backspace takes it all back
+      ic.commitText("", 1)
+      clearWord()
+      afterSeparator()
+      return
+    }
     if (composing.isNotEmpty()) {
       val n = lastGraphemeLength(composing)
       composing.setLength(composing.length - n)
@@ -307,7 +361,7 @@ class InputController(private val host: KeyboardHost) {
     val ic = host.inputConnection ?: return null
     val typed = composing.toString()
     val context = contextBeforeWord(ic)
-    val word = (if (autocorrect && field.autocorrect) resultFor(typed, context)?.autocorrect else null) ?: typed
+    val word = (if (autocorrect && field.autocorrect && !glided) resultFor(typed, context)?.autocorrect else null) ?: typed
     if (word != typed) ic.setComposingText(word, 1)
     ic.finishComposingText()
     learn(word, context)
@@ -388,9 +442,11 @@ class InputController(private val host: KeyboardHost) {
     Language.historyChanged()
   }
 
+  /** The words before the composing word. They can't change mid-word, so one IPC per word, not per letter. */
   private fun contextBeforeWord(ic: InputConnection): WordContext {
+    wordContext?.let { return it }
     val before = ic.getTextBeforeCursor(CONTEXT_CHARS + composing.length, 0) ?: ""
-    return WordContext.from(before.dropLast(minOf(composing.length, before.length)))
+    return WordContext.from(before.dropLast(minOf(composing.length, before.length))).also { wordContext = it }
   }
 
   private fun doubleSpaceApplies(ic: InputConnection): Boolean {
@@ -404,6 +460,8 @@ class InputController(private val host: KeyboardHost) {
     decodeJob?.cancel()
     composing.clear()
     touches.clear()
+    glided = false
+    wordContext = null
   }
 
   private fun syncShift() {

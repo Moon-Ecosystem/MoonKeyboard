@@ -87,11 +87,11 @@ class Spatial(val touches: List<Touch>, keys: KeyMap?, private val config: Decod
 
 /** Every decoder knob in one place, so the benchmark can tune them. */
 data class DecoderConfig(
-  val spatialScale: Float = 2f,
+  val spatialScale: Float = 1.2f,
   val maxSubstitution: Float = 6f,
-  val insert: Float = 2.4f,
-  val delete: Float = 2.4f,
-  val transpose: Float = 1.2f,
+  val insert: Float = 3f,
+  val delete: Float = 3f,
+  val transpose: Float = 1.8f,
   /** Inserting an apostrophe the user skipped ("dont" → "don't") is nearly free. */
   val apostropheInsert: Float = 0.3f,
   val accent: Float = 0.25f,

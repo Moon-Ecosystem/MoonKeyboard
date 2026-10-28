@@ -13,6 +13,7 @@ java {
 
 kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_11 } }
 
-application { mainClass = "com.moonkeyboard.tools.BuildLexiconKt" }
+// -PmainClass=com.moonkeyboard.tools.EvaluateKt runs the accuracy evaluation instead
+application { mainClass = providers.gradleProperty("mainClass").orElse("com.moonkeyboard.tools.BuildLexiconKt") }
 
 dependencies { implementation(project(":engine")) }

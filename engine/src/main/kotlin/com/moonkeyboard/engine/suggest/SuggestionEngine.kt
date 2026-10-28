@@ -1,12 +1,15 @@
 package com.moonkeyboard.engine.suggest
 
 import com.moonkeyboard.engine.decode.DecoderConfig
+import com.moonkeyboard.engine.decode.GlideConfig
+import com.moonkeyboard.engine.decode.GlideDecoder
 import com.moonkeyboard.engine.decode.KeyMap
 import com.moonkeyboard.engine.decode.Spatial
 import com.moonkeyboard.engine.decode.TapDecoder
 import com.moonkeyboard.engine.decode.Touch
 import com.moonkeyboard.engine.dict.Lexicon
 import com.moonkeyboard.engine.history.UserHistory
+import com.moonkeyboard.engine.trace.TracePoint
 import kotlin.math.exp
 import kotlin.math.ln
 
@@ -29,16 +32,22 @@ data class Suggestions(
 
 data class EngineConfig(
   /** How much the language model counts against touch accuracy. */
-  val lmWeight: Float = 0.3f,
+  val lmWeight: Float = 0.2f,
   /** Share of the pair model when a pair is known; the rest is the single-word model. */
   val bigramShare: Float = 0.8f,
   /** ln P for a word only the user has typed. */
   val userWordLogProb: Float = -14f,
   val userBoost: Float = 1f,
-  /** Autocorrect only when the winner beats the runner-up by this much. */
-  val autocorrectMargin: Float = 0.6f,
+  /** Autocorrect a non-word only when the winner beats the next whole-word candidate by this much. */
+  val autocorrectMargin: Float = 0.2f,
+  /** Correct a real but unlikely word ("tour" → "your") only when the alternative scores this much higher. */
+  val realWordMargin: Float = 1.5f,
+  /** ln P taken off names and acronyms unless the user typed the capital (the dictionary over-rates them). */
+  val capitalPenalty: Float = 8f,
   /** A word typed this often is the user's own and is never corrected away. */
   val learnedAt: Int = 2,
+  /** How much a glide path straying from a word's ideal path (in key widths) counts against it. */
+  val glideWeight: Float = 4.5f,
 )
 
 class SuggestionEngine(
@@ -46,8 +55,10 @@ class SuggestionEngine(
   val history: UserHistory,
   val config: EngineConfig = EngineConfig(),
   decoderConfig: DecoderConfig = DecoderConfig(),
+  glideConfig: GlideConfig = GlideConfig(),
 ) {
   private val decoder = TapDecoder(lexicon, decoderConfig)
+  private val glideDecoder = GlideDecoder(lexicon, glideConfig)
   private val fallbackPredictions: List<Int> by lazy {
     (0 until lexicon.wordCount).filter { lexicon.isSuggestable(it) }.sortedByDescending { lexicon.frequency(it) }.take(3)
   }
@@ -60,10 +71,13 @@ class SuggestionEngine(
     val spatial = Spatial(touches, keys, decoder.config)
     val prevId = previousId(context)
     val best = HashMap<String, Candidate>()
+    // A capital the keyboard added at a sentence start says nothing about wanting a name
+    val typedCapital = typed[0].isUpperCase() && !context.sentenceStart
 
     fun offer(word: String, cost: Float, completion: Boolean, logProb: Float) {
       if (history.isBlocked(word)) return
-      val score = -cost + config.lmWeight * (logProb + userBoost(context.prev, word))
+      val penalty = if (isProper(word) && !typedCapital) config.capitalPenalty else 0f
+      val score = -cost + config.lmWeight * (logProb - penalty + userBoost(context.prev, word))
       val old = best[word]
       if (old == null || score > old.score) best[word] = Candidate(word, cost, score, completion)
     }
@@ -105,6 +119,42 @@ class SuggestionEngine(
     return Suggestions(typed, items, autocorrect, isPrediction = false, debug = debug)
   }
 
+  /**
+   * Words for a glide [path] (key-area pixels). The best is [Suggestions.typed] and sits in the
+   * middle of [Suggestions.items]; nothing is autocorrected because the glide already chose.
+   */
+  fun glide(path: List<TracePoint>, keys: KeyMap, context: WordContext, firstUpper: Boolean, allUpper: Boolean): Suggestions {
+    val prevId = previousId(context)
+    val scores = HashMap<String, Pair<Float, Float>>()
+    fun offer(word: String, cost: Float, logProb: Float) {
+      if (history.isBlocked(word)) return
+      val penalty = if (isProper(word)) config.capitalPenalty else 0f
+      val score = -config.glideWeight * cost + config.lmWeight * (logProb - penalty + userBoost(context.prev, word))
+      if ((scores[word]?.second ?: Float.NEGATIVE_INFINITY) < score) scores[word] = cost to score
+    }
+    glideDecoder.search(path, keys) { hit ->
+      val target = lexicon.whitelistTarget(hit.wordId)
+      if (target >= 0) offer(lexicon.word(target), hit.cost, logProb(target, prevId))
+      if (lexicon.isSuggestable(hit.wordId)) offer(lexicon.word(hit.wordId), hit.cost, logProb(hit.wordId, prevId))
+    }
+    for ((word, _) in history.wordsAtLeast(config.learnedAt)) {
+      if (lexicon.find(word) >= 0) continue
+      glideDecoder.cost(word, path, keys)?.let { offer(word, it, config.userWordLogProb) }
+    }
+    val ranked = scores.entries.sortedByDescending { it.value.second }
+    // "moon" and "Moon" are one choice in the strip; keep the better-scored spelling
+    val top = ranked.distinctBy { it.key.lowercase() }.take(3).map { (word, _) ->
+      when {
+        allUpper -> word.uppercase()
+        firstUpper -> word.replaceFirstChar(Char::uppercaseChar)
+        else -> word
+      }
+    }
+    val debug = ranked.take(12).map { (w, s) -> "%-14s path %.2f  score %.2f".format(w, s.first, s.second) }
+    val best = top.firstOrNull() ?: return Suggestions("", emptyList(), null, isPrediction = false, debug = listOf("no word fits this path"))
+    return Suggestions(best, listOfNotNull(top.getOrNull(1), best, top.getOrNull(2)), null, isPrediction = false, debug = debug)
+  }
+
   /** Next-word predictions after a separator. */
   fun predict(context: WordContext, capitalize: Boolean): Suggestions {
     val prevId = previousId(context)
@@ -128,9 +178,17 @@ class SuggestionEngine(
   }
 
   /** A real word: in the dictionary, or typed often enough by this user. */
+  /**
+   * A real word: in the dictionary in the form typed (or lower case), or typed often enough by
+   * this user. A name only counts when typed with its capital: "jim" isn't a word, "Jim" is.
+   */
   fun isValid(word: String): Boolean {
-    val id = lexicon.findLenient(word)
-    return (id >= 0 && lexicon.isWord(id)) || history.count(word) >= config.learnedAt
+    if (word.isEmpty()) return false
+    if (history.count(word) >= config.learnedAt) return true
+    var id = lexicon.find(word)
+    if (id < 0) id = lexicon.find(word.lowercase())
+    if (id < 0 && word[0].isUpperCase()) id = lexicon.findLenient(word)
+    return id >= 0 && lexicon.isWord(id)
   }
 
   private fun autocorrectFor(typed: String, ranked: List<Candidate>): String? {
@@ -140,12 +198,25 @@ class SuggestionEngine(
       val target = lexicon.whitelistTarget(typedId)
       if (target >= 0 && !history.isBlocked(lexicon.word(target))) return applyCase(lexicon.word(target), typed)
     }
-    if (isValid(typed)) return null
-    val pick = ranked.firstOrNull { !it.completion } ?: return null
-    val runnerUp = ranked.firstOrNull { it !== pick }
-    if (runnerUp != null && pick.score - runnerUp.score < config.autocorrectMargin) return null
-    return applyCase(pick.word, typed).takeIf { !it.equals(typed, ignoreCase = false) }
+    // The user's own words are never corrected away
+    if (history.count(typed) >= config.learnedAt) return null
+    // Completions are suggestions, not corrections: only whole-word candidates compete here
+    val words = ranked.filter { !it.completion }
+    val pick = words.firstOrNull() ?: return null
+    if (pick.word.equals(typed, ignoreCase = true)) return null
+    if (isValid(typed)) {
+      // A real word is replaced only by something far more likely here ("tour" → "your")
+      val typedScore = words.firstOrNull { it.word.equals(typed, ignoreCase = true) }?.score ?: return null
+      if (pick.score - typedScore < config.realWordMargin) return null
+    } else {
+      val runnerUp = words.getOrNull(1)
+      if (runnerUp != null && pick.score - runnerUp.score < config.autocorrectMargin) return null
+    }
+    return applyCase(pick.word, typed)
   }
+
+  /** Names and acronyms; the "I" family is ordinary English. */
+  private fun isProper(word: String) = word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
 
   private fun previousId(context: WordContext): Int = when {
     context.sentenceStart -> Lexicon.SENTENCE_START
