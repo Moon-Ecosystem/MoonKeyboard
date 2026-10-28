@@ -24,4 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MoonKeyboard"
 
-include(":app", ":engine")
+include(":app", ":engine", ":tools")

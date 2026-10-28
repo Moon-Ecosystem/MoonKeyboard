@@ -26,6 +26,24 @@ class ShiftControllerTest {
   }
 
   @Test
+  fun autoCapsTurnsOnAndOffButNeverOverridesTheUser() {
+    val s = ShiftController()
+    s.autoCapitalize(true)
+    assertEquals(ShiftState.ON, s.state)
+    s.autoCapitalize(false)
+    assertEquals(ShiftState.OFF, s.state)
+
+    s.onShiftTap(1_000)
+    s.autoCapitalize(false)
+    assertEquals("a shift the user tapped stays", ShiftState.ON, s.state)
+
+    s.reset()
+    s.autoCapitalize(true)
+    s.onShiftTap(1_000)
+    assertEquals("tapping an automatic shift turns it off", ShiftState.OFF, s.state)
+  }
+
+  @Test
   fun slowSecondTapTurnsShiftOff() {
     val s = ShiftController()
     s.onShiftTap(1_000)

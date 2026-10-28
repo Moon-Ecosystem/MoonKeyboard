@@ -44,6 +44,8 @@ class TouchTracker(
 
   private var popupOwner: PointerId? = null
   private val holds = HashMap<PointerId, Job>()
+  // Where each finger landed: the point the decoder scores, not where it lifted
+  private val downAt = HashMap<PointerId, Offset>()
 
   @OptIn(ExperimentalComposeUiApi::class)
   suspend fun track(input: PointerInputScope) = input.awaitPointerEventScope {
@@ -70,6 +72,7 @@ class TouchTracker(
       holds.values.forEach { it.cancel() }
       holds.clear()
       pressed.clear()
+      downAt.clear()
       popup = null
     }
   }
@@ -79,6 +82,7 @@ class TouchTracker(
     val key = bounds.key
     recorder?.down(id, at.x, at.y, nowMs, keyName(bounds))
     pressed[id] = bounds
+    downAt[id] = at
     haptic()
     when {
       key.type == KeyType.SHIFT -> controller.onKey(key, nowMs)
@@ -109,17 +113,19 @@ class TouchTracker(
   private fun up(id: PointerId, at: Offset, nowMs: Long) {
     holds.remove(id)?.cancel()
     val bounds = pressed.remove(id) ?: return
+    val start = downAt.remove(id) ?: at
     val p = popup
     if (p != null && popupOwner == id) {
       popup = null
       popupOwner = null
       val item = p.items[p.selected]
       recorder?.up(id, at.x, at.y, nowMs, controller.display(item))
-      controller.commitPopup(item)
+      // A chosen accent was deliberate: score it as a dead-centre tap on its key
+      controller.commitPopup(item, bounds.centerX, bounds.centerY)
     } else {
       val acts = bounds.key.type != KeyType.SHIFT && bounds.key.type != KeyType.BACKSPACE
       recorder?.up(id, at.x, at.y, nowMs, if (bounds.key.type == KeyType.CHAR) controller.display(bounds.key.label) else keyName(bounds))
-      if (acts) controller.onKey(bounds.key, nowMs)
+      if (acts) controller.onKey(bounds.key, nowMs, start.x, start.y)
     }
   }
 

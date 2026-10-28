@@ -31,6 +31,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +50,7 @@ import com.moonkeyboard.ime.GestureRecorder
 import com.moonkeyboard.ime.InputController
 import com.moonkeyboard.ime.KeyboardHost
 import com.moonkeyboard.ime.KeyboardUi
+import com.moonkeyboard.ime.Language
 
 /** A text buffer the keyboard can type into without being the system keyboard. */
 private class TestPadHost(view: View) : KeyboardHost {
@@ -67,7 +69,8 @@ private class TestPadHost(view: View) : KeyboardHost {
   }
 
   override val editorInfo = EditorInfo().apply {
-    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+      InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
     imeOptions = EditorInfo.IME_ACTION_NONE
   }
 
@@ -85,7 +88,11 @@ fun TestPad(onBack: () -> Unit) {
   BackHandler(onBack = onBack)
   val view = LocalView.current
   val host = remember { TestPadHost(view) }
-  val controller = remember { InputController(host).also { it.onStartInput(host.editorInfo) } }
+  val controller = remember {
+    Language.load(view.context)
+    InputController(host).also { it.onStartInput(host.editorInfo) }
+  }
+  DisposableEffect(controller) { onDispose { controller.close() } }
   val recorder = remember { GestureRecorder() }
   var showDebug by rememberSaveable { mutableStateOf(true) }
 
@@ -137,6 +144,13 @@ private fun DebugPanel(recorder: GestureRecorder, controller: InputController, m
       Text("last  typed '${last.typed}'  ${last.points.size} pts  ${last.durationMs} ms  ${last.lengthPx.toInt()} px", style = mono)
       Text("      ${"%.1f".format(speed)} px/ms  sample every ${"%.1f".format(avgSampleMs)} ms", style = mono)
       Text("keys  ${last.keysAlong(geometry).joinToString(" → ")}", style = mono)
+    }
+    val suggestions = controller.suggestions
+    if (suggestions.debug.isNotEmpty()) {
+      Text("decoder  '${suggestions.typed}' → ${suggestions.autocorrect ?: "(no autocorrect)"}", style = mono)
+      suggestions.debug.forEach { Text("  $it", style = mono) }
+    } else if (Language.engine == null) {
+      Text("decoder  dictionary loading…", style = mono)
     }
     recorder.log.asReversed().forEach { Text(it, style = mono) }
   }

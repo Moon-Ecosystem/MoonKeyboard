@@ -60,7 +60,7 @@ Status: agreed, decisions at the bottom. Licence: MIT. Visual design: [Moon Keyb
    │    composing text, shift state, autocorrect commit/undo, cursor tracking
    ├─ SuggestionService ──► :engine Decoder      background thread, latest request wins
    ├─ ClipboardRepository (Room + files)
-   └─ UserHistoryRepository (Room)
+   └─ UserHistory (one file)
 ```
 
 - **Rendering.** The suggestion strip, toolbar and panels are Compose, the same as FlorisBoard. The key area is a single Compose `Canvas`, so a full redraw (glide trail, key press) costs one draw pass instead of 40 recompositions.
@@ -78,7 +78,7 @@ interface LanguagePack {
 }
 ```
 
-- **Lexicon and model format.** `:tools` compiles them into one binary per pack: a compact trie plus a pruned trigram model (Kneser-Ney smoothed). It ships in `assets/` uncompressed and is memory-mapped, so loading is instant and it doesn't use heap.
+- **Lexicon and model format.** `:tools` compiles them into one binary per pack: a trie stored as flat arrays plus a pruned word-pair model (the 40 most common successors of each word). It is read into a handful of primitive arrays with bulk copies, with no per-word objects. A trigram model and memory-mapping can come later if size or load time demand it.
 - **The model is an interface.** We start with n-grams because they are small, fast and predictable. A small neural model (TFLite/ONNX) can replace it later without touching the decoders.
 - **Several packs at once.** With English and Hinglish both on, the decoder searches both lexicons and weights each by how likely each language is in the current sentence. This is what makes code-mixed typing work.
 - **Unicode correctness from day one.** Backspace, cursor moves and word boundaries use grapheme clusters (`BreakIterator`), not chars. Emoji already need this, and it keeps other scripts possible later.
@@ -101,7 +101,7 @@ All local, all deletable from settings.
 | Data | Where | Kept |
 | --- | --- | --- |
 | Settings | DataStore | — |
-| Learned words and phrases | Room: `word(lang, text, count, lastUsed)`, `bigram(...)` | Until the user deletes them; rarely used entries decay in ranking but aren't deleted |
+| Learned words and phrases | `filesDir/history.tsv`: word counts, word-pair counts, forgotten words (a word list doesn't need a database) | Until the user deletes them |
 | Clipboard text | Room `clip` table | Forever, until the user deletes it |
 | Clipboard images/GIFs | Files in `filesDir/clips/`, row in `clip` table | Auto-deleted after the chosen period unless pinned |
 

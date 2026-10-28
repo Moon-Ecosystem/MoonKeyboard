@@ -1,0 +1,14 @@
+Moon Keyboard
+Copyright (c) 2026 Moon Keyboard contributors. Code licensed under the MIT License (see LICENSE).
+
+The English language pack (app/src/main/assets/dict/en.dict) is built from:
+
+- AOSP LatinIME English word list (en_US_wordlist.combined)
+  Copyright (c) 2008, The Android Open Source Project
+  Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0
+  https://android.googlesource.com/platform/packages/inputmethods/LatinIME/+/refs/heads/main/dictionaries/
+
+- Word-pair counts derived from Tatoeba English sentences (https://tatoeba.org)
+  Licensed under CC BY 2.0 FR: https://creativecommons.org/licenses/by/2.0/fr/
+
+tools/fetch-data.sh downloads both sources; tools/ rebuilds the pack.

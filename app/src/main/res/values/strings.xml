@@ -1,6 +1,7 @@
 <resources>
   <string name="app_name">Moon Keyboard</string>
   <string name="subtype_en_us">English (US)</string>
+  <string name="forget_word">Don\'t suggest this word</string>
 
   <string name="setup_tagline">An offline keyboard. Nothing you type leaves your phone.</string>
   <string name="setup_step_enable">1. Turn on Moon Keyboard</string>

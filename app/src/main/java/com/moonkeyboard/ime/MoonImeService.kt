@@ -31,6 +31,7 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
     // Compose only recomposes while STARTED; the service lives exactly as long as the keyboard
     lifecycleRegistry.currentState = Lifecycle.State.RESUMED
     controller = InputController(asKeyboardHost())
+    Language.load(this)
   }
 
   override fun onCreateInputView(): View {
@@ -46,7 +47,20 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
     if (!restarting) controller.onStartInput(info)
   }
 
+  override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
+    super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+    controller.onSelectionUpdate(newSelStart, newSelEnd, candidatesEnd)
+  }
+
+  override fun onFinishInput() {
+    controller.onFinishInput()
+    Language.flush()
+    super.onFinishInput()
+  }
+
   override fun onDestroy() {
+    controller.close()
+    Language.flush()
     lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
     super.onDestroy()
   }

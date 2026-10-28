@@ -15,6 +15,7 @@ data class KeyboardColors(
   val onAccent: Color,
   val shadow: Color,
   val popup: Color,
+  val divider: Color,
 ) {
   companion object {
     val Light = KeyboardColors(
@@ -29,6 +30,7 @@ data class KeyboardColors(
       onAccent = Color(0xFFFFFFFF),
       shadow = Color(0xFFB5BAC8),
       popup = Color(0xFFFFFFFF),
+      divider = Color(0xFFC4C9D4),
     )
     val Dark = KeyboardColors(
       background = Color(0xFF0F1117),
@@ -42,6 +44,7 @@ data class KeyboardColors(
       onAccent = Color(0xFF12141C),
       shadow = Color(0xFF05060A),
       popup = Color(0xFF2F3442),
+      divider = Color(0xFF343947),
     )
   }
 }

@@ -2,19 +2,37 @@ package com.moonkeyboard.ime
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import com.moonkeyboard.R
+import com.moonkeyboard.engine.decode.KeyMap
+import com.moonkeyboard.engine.suggest.Suggestions
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -46,7 +64,6 @@ private val KeyHeight = 46.dp
 private val HGap = 6.dp
 private val VGap = 10.dp
 private val SidePadding = 4.dp
-// Reserved for the suggestion strip (milestone 2); popups for the top row also open into it
 private val StripHeight = 48.dp
 private val TopPadding = 6.dp
 private val BottomPadding = 8.dp
@@ -58,7 +75,11 @@ private val EnterIcon = icon("M20 5v7a2 2 0 0 1-2 2H5M9 10l-4 4 4 4")
 
 private fun icon(d: String): Path = PathParser().parsePathString(d).toPath()
 
-/** The whole key area is one Canvas: a key press or popup redraws once instead of recomposing ~40 keys. */
+/**
+ * The suggestion strip over one Canvas holding every key: a key press redraws once instead of
+ * recomposing ~40 keys. Popups and debug paths live on an overlay without pointer input, so they
+ * can spill over the strip without stealing its taps.
+ */
 @Composable
 fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
   val colors = if (isSystemInDarkTheme()) KeyboardColors.Dark else KeyboardColors.Light
@@ -76,7 +97,7 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
       with(density) {
         KeyboardGeometry.compute(
           layout, widthPx, KeyHeight.toPx(), HGap.toPx(), VGap.toPx(), SidePadding.toPx(),
-          topPadding = (StripHeight + TopPadding).toPx(),
+          topPadding = TopPadding.toPx(),
         )
       }
     }
@@ -87,14 +108,53 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
         }
       }
     }
+    if (controller.layerId == InputController.LETTERS) {
+      val keyMap = remember(geometry) { KeyMap.from(geometry) }
+      SideEffect { controller.keyMap = keyMap }
+    }
     if (recorder != null) SideEffect { recorder.attach(controller.layerId, geometry) }
     val height = with(density) { geometry.height.toDp() } + BottomPadding
 
-    Canvas(Modifier.fillMaxWidth().height(height).pointerInput(touches) { touches.track(this) }) {
-      val pressed = touches.pressed.values.mapTo(HashSet()) { it.key }
-      for (bounds in geometry.keys) drawKey(bounds, bounds.key in pressed, controller, colors, measurer)
-      if (recorder != null && recorder.showPaths) drawTouchPaths(recorder, colors)
-      touches.popup?.let { drawPopup(it, controller, colors, measurer) }
+    Column {
+      SuggestionStrip(controller.suggestions, colors, controller::pickSuggestion, controller::forgetSuggestion)
+      Canvas(Modifier.fillMaxWidth().height(height).pointerInput(touches) { touches.track(this) }) {
+        val pressed = touches.pressed.values.mapTo(HashSet()) { it.key }
+        for (bounds in geometry.keys) drawKey(bounds, bounds.key in pressed, controller, colors, measurer)
+      }
+    }
+    Canvas(Modifier.matchParentSize()) {
+      translate(top = StripHeight.toPx()) {
+        if (recorder != null && recorder.showPaths) drawTouchPaths(recorder, colors)
+        touches.popup?.let { drawPopup(it, controller, colors, measurer) }
+      }
+    }
+  }
+}
+
+/** Three slots: the best word in the middle, bold when space will autocorrect to it. Long-press forgets a word. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SuggestionStrip(suggestions: Suggestions, colors: KeyboardColors, onPick: (Int) -> Unit, onForget: (Int) -> Unit) {
+  Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    for (i in 0 until 3) {
+      if (i > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
+      val word = suggestions.items.getOrNull(i)
+      val clickable = if (word == null) Modifier else {
+        Modifier.combinedClickable(onClick = { onPick(i) }, onLongClick = { onForget(i) }, onLongClickLabel = stringResource(R.string.forget_word))
+      }
+      Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(22.dp)).then(clickable), contentAlignment = Alignment.Center) {
+        if (word != null) {
+          Text(
+            word,
+            Modifier.padding(horizontal = 6.dp),
+            color = if (i == 1) colors.text else colors.muted,
+            fontSize = 16.sp,
+            fontWeight = if (i == 1 && suggestions.autocorrect != null) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+        }
+      }
     }
   }
 }
