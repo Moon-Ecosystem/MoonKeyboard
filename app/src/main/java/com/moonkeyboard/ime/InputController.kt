@@ -172,7 +172,7 @@ class InputController(private val host: KeyboardHost) {
       selAnchor = info.initialSelStart
       selCursor = info.initialSelEnd
       clearWord()
-      afterSeparator()
+      cursorPlaced()
       return
     }
     layerId = when (info.inputType and InputType.TYPE_MASK_CLASS) {
@@ -194,7 +194,26 @@ class InputController(private val host: KeyboardHost) {
     autoSpaced = false
     lastWasSpace = false
     revert = null
-    afterSeparator()
+    cursorPlaced()
+  }
+
+  /** When a finger was last on the keyboard; selection changes soon after are echoes of our own edits. */
+  private var lastTouchMs = 0L
+
+  fun onKeyboardTouch() {
+    lastTouchMs = SystemClock.uptimeMillis()
+  }
+
+  /**
+   * The cursor landed somewhere the keyboard didn't put it (focus, a tap in the text, the app
+   * clearing the field): the word it ends is picked up so the strip offers fixes and completions
+   * for it ("who|"), as after backspacing into a word; elsewhere the strip predicts what comes next.
+   */
+  private fun cursorPlaced() {
+    val ic = host.inputConnection
+    val ours = SystemClock.uptimeMillis() - lastTouchMs < ECHO_MS
+    if (ic != null && !ours && panel == Panel.KEYS && emojiQuery == null && field.suggest) resumeWord(ic)
+    if (composing.isEmpty()) afterSeparator() else requestSuggestions()
   }
 
   fun onFinishInput() {
@@ -210,8 +229,18 @@ class InputController(private val host: KeyboardHost) {
       selAnchor = selStart
       selCursor = selEnd
     }
-    // Updates without a composing span can be stale echoes of our own commits
-    if (composing.isEmpty() || composingEnd < 0) return
+    if (composing.isEmpty()) {
+      // Our own commits echo back here too; only a cursor the user (or app) moved is acted on
+      if (selStart == selEnd && SystemClock.uptimeMillis() - lastTouchMs >= ECHO_MS) {
+        revert = null
+        autoSpaced = false
+        lastWasSpace = false
+        phantomSpace = false
+        cursorPlaced()
+      }
+      return
+    }
+    if (composingEnd < 0) return
     if (selStart != selEnd || composingEnd != selEnd) {
       host.inputConnection?.finishComposingText()
       clearWord()
@@ -751,6 +780,8 @@ class InputController(private val host: KeyboardHost) {
     private const val GRAPHEME_LOOKBEHIND = 32
     private const val CONTEXT_CHARS = 64
     private const val RESUME_CHARS = 48
+    /** Apps echo our edits back well within this; a cursor move later than it came from elsewhere. */
+    private const val ECHO_MS = 500L
     private const val LEARN_AS_WORD = 2
     private const val AUTOCORRECT_TRIGGERS = ".,?!:;)\""
     private const val SPACE_SWAPPING = ".,?!:;)"

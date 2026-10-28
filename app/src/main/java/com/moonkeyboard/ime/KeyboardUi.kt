@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -119,6 +120,16 @@ fun KeyboardUi(controller: InputController, recorder: GestureRecorder? = null) {
 
   BoxWithConstraints(
     Modifier.fillMaxWidth().background(colors.background).windowInsetsPadding(WindowInsets.navigationBars)
+      // Watches every touch on the keyboard without taking it, so the controller can tell its own
+      // edits' echoes from the cursor moving in the app
+      .pointerInput(controller) {
+        awaitPointerEventScope {
+          while (true) {
+            awaitPointerEvent(PointerEventPass.Initial)
+            controller.onKeyboardTouch()
+          }
+        }
+      }
   ) {
     val fullWidth = constraints.maxWidth.toFloat()
     val widthPx = if (oneHanded == OneHanded.OFF) fullWidth else (fullWidth * ONE_HANDED_SHARE).roundToInt().toFloat()
