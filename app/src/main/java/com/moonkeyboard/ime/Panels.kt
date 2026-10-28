@@ -407,26 +407,21 @@ fun EmojiSearchStrip(controller: InputController, colors: KeyboardColors) {
 @Composable
 fun OptionsPanel(controller: InputController, colors: KeyboardColors, modifier: Modifier) {
   val context = LocalContext.current
-  val floating = Prefs.floating.value
-  val keys = { controller.panel = Panel.KEYS }
+  // Emoji is left out: the comma key's long press opens emoji search too
+  val tile: @Composable RowScope.(ToolbarItem) -> Unit = { item ->
+    OptionTile(colors, item.icon, item.label, active = item.isOn(), enabled = item.isEnabled()) { item.act(controller, colors) }
+  }
   Column(modifier) {
     PanelHeader(R.string.keyboard_options, controller, colors)
     Column(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       EditRow {
-        OptionTile(colors, Icons.TextEdit, R.string.text_editing) { controller.panel = Panel.EDIT }
-        // One-handed doesn't apply to a floating keyboard, which is already small
-        OptionTile(colors, Icons.OneHanded, R.string.one_handed_short, active = !floating && Prefs.oneHanded.value != OneHanded.OFF, enabled = !floating) {
-          Prefs.oneHanded.value = if (Prefs.oneHanded.value == OneHanded.OFF) Prefs.oneHandedSide.value else OneHanded.OFF
-          keys()
-        }
-        OptionTile(colors, Icons.Floating, R.string.floating_short, active = floating) {
-          Prefs.floating.value = !floating
-          keys()
-        }
+        tile(ToolbarItem.TEXT_EDIT)
+        tile(ToolbarItem.ONE_HANDED)
+        tile(ToolbarItem.FLOATING)
       }
       EditRow {
-        OptionTile(colors, Icons.Split, R.string.split_short, active = Prefs.splitLandscape.value) { Prefs.splitLandscape.value = !Prefs.splitLandscape.value }
-        OptionTile(colors, Icons.Theme, R.string.theme) { flipTheme(colors) }
+        tile(ToolbarItem.SPLIT)
+        tile(ToolbarItem.THEME)
         OptionTile(colors, Icons.Open, R.string.settings) {
           context.startActivity(Intent(context, com.moonkeyboard.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }

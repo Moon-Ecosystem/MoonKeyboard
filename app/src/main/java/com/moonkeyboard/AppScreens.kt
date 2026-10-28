@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -62,6 +63,8 @@ import com.moonkeyboard.ime.Language
 import com.moonkeyboard.ime.OneHanded
 import com.moonkeyboard.ime.Prefs
 import com.moonkeyboard.ime.ThemeMode
+import com.moonkeyboard.ime.ToolbarItem
+import com.moonkeyboard.ime.label
 
 enum class Screen { HOME, LOOK, TYPING, GLIDE, EMOJI, CLIPBOARD, LEARNED, TEST_PAD }
 
@@ -243,6 +246,21 @@ fun LookScreen(onBack: () -> Unit) {
         Divider()
         SwitchRow(R.string.split_landscape, Prefs.splitLandscape, stringResource(R.string.split_landscape_detail))
       }
+      Spacer(Modifier.height(4.dp))
+      SectionLabel(R.string.top_bar)
+      Card {
+        val chosen = Prefs.toolbar()
+        ToolbarItem.entries.forEachIndexed { i, item ->
+          if (i > 0) Divider()
+          val on = item in chosen
+          // A full bar takes nothing more until something comes off it
+          val enabled = on || chosen.size < ToolbarItem.MAX
+          LabelRow(item.label) {
+            Switch(on, { Prefs.setOnToolbar(item, it) }, enabled = enabled, colors = switchColors())
+          }
+        }
+      }
+      Text(stringResource(R.string.top_bar_note, ToolbarItem.MAX), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 12.sp)
       Text(stringResource(R.string.look_preview_note), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 12.sp)
     }
     PreviewKeyboard()

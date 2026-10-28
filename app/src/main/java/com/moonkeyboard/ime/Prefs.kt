@@ -9,6 +9,16 @@ enum class OneHanded { OFF, LEFT, RIGHT }
 enum class KeySize(val scale: Float) { SHORT(0.9f), NORMAL(1f), TALL(1.12f) }
 enum class ImageExpiry(val days: Int?) { WEEK(7), MONTH(30), NEVER(null) }
 
+/** What the user can put on the toolbar; options and clipboard are always there. Shown in this order. */
+enum class ToolbarItem {
+  EMOJI, THEME, FLOATING, ONE_HANDED, TEXT_EDIT, SPLIT;
+
+  companion object {
+    /** As many as fit beside options, clipboard and the back arrow on a narrow phone. */
+    const val MAX = 5
+  }
+}
+
 /** Where the floating keyboard sits, in dp from the top left of the screen, and how wide it is. */
 data class FloatSpot(val x: Float, val y: Float, val width: Float) {
   override fun toString() = "$x,$y,$width"
@@ -58,6 +68,16 @@ object Prefs {
   val floatPortrait = Pref("float_portrait", FloatSpot.UNSET, FloatSpot::parse)
   val floatLandscape = Pref("float_landscape", FloatSpot.UNSET, FloatSpot::parse)
   val splitLandscape = Pref("split_landscape", false, String::toBoolean)
+  /** Toolbar items as comma-separated names; use [toolbar] and [setOnToolbar]. */
+  val toolbarItems = Pref("toolbar", "EMOJI,THEME,FLOATING") { it }
+
+  fun toolbar(): List<ToolbarItem> = toolbarItems.value.split(',').let { names -> ToolbarItem.entries.filter { it.name in names } }
+
+  fun setOnToolbar(item: ToolbarItem, on: Boolean) {
+    val items = toolbar().toMutableSet().apply { if (on) add(item) else remove(item) }
+    toolbarItems.value = ToolbarItem.entries.filter { it in items }.joinToString(",")
+  }
+
   val haptics = Pref("haptics", true, String::toBoolean)
   /** 0: the system's keyboard tap; 1 to [Haptics.MAX_STRENGTH]: our own. */
   val hapticStrength = Pref("haptic_strength", 0, String::toInt)

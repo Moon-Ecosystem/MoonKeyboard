@@ -23,7 +23,7 @@ object Icons {
   val Settings = icon("M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12", circle(16f, 6f, 2f), circle(10f, 12f, 2f), circle(18f, 18f, 2f))
   val Trash = icon("M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3")
   val Pin = icon("M12 17v5M9 3h6l-1 6 3 3H7l3-3z")
-  val Backspace = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM12 9l6 6M18 9l-6 6")
+  val Backspace = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM11 9l6 6M17 9l-6 6")
   val Up = icon("M12 19V5M6 11l6-6 6 6")
   val Down = icon("M12 5v14M6 13l6 6 6-6")
   val Left = icon("M19 12H5M11 6l-6 6 6 6")

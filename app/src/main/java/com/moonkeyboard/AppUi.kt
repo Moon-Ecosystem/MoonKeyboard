@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
 import kotlin.math.roundToInt
 import androidx.compose.material3.Text
@@ -165,15 +166,17 @@ fun SwitchRow(label: Int, pref: Prefs.Pref<Boolean>, detail: String? = null) {
       Text(stringResource(label), color = c.text, fontSize = 15.sp)
       if (detail != null) Text(detail, Modifier.padding(top = 2.dp), color = c.muted, fontSize = 12.sp)
     }
-    Switch(
-      pref.value,
-      { pref.value = it },
-      colors = SwitchDefaults.colors(
-        checkedThumbColor = c.onAccent, checkedTrackColor = c.accent,
-        uncheckedThumbColor = c.muted, uncheckedTrackColor = c.switchOff, uncheckedBorderColor = c.switchOff,
-      ),
-    )
+    Switch(pref.value, { pref.value = it }, colors = switchColors())
   }
+}
+
+@Composable
+fun switchColors(): SwitchColors {
+  val c = LocalAppColors.current
+  return SwitchDefaults.colors(
+    checkedThumbColor = c.onAccent, checkedTrackColor = c.accent,
+    uncheckedThumbColor = c.muted, uncheckedTrackColor = c.switchOff, uncheckedBorderColor = c.switchOff,
+  )
 }
 
 /** A whole-number setting on a slider; [valueText] names the current value, [onSettled] runs when the finger lifts. */

@@ -4,7 +4,9 @@ import android.content.res.Configuration
 import android.graphics.Rect
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -103,7 +106,7 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
     // Kept on screen when it grows (the emoji panel), except while being dragged to the dock
     val y = if (dragging) spot.y else spot.y.coerceIn(0f, maxOf(0f, areaH - cardHeight))
 
-    // Runs from the drag handler, which outlives this composition: it reads state, never local vals
+    // Runs from the drag handler, which can outlive this composition: it reads state, never local vals
     fun settle() {
       dragging = false
       if (overDock()) Prefs.floating.value = false
@@ -124,14 +127,25 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
         Box(
           Modifier.weight(1f).fillMaxHeight()
             .semantics { contentDescription = move }
-            .pointerInput(areaW, areaH) {
-              detectDragGestures(onDragStart = { dragging = true }, onDragEnd = ::settle, onDragCancel = ::settle) { change, amount ->
-                change.consume()
-                spot = spot.copy(
-                  x = (spot.x + amount.x / density.density).coerceIn(0f, areaW - spot.width),
-                  // Lets the card slide down off the screen into the dock target
-                  y = (spot.y + amount.y / density.density).coerceIn(0f, areaH - HandleHeight.value),
-                )
+            .pointerInput(areaW, areaH, pref) {
+              awaitEachGesture {
+                val down = awaitFirstDown()
+                dragging = true
+                // However the drag ends (a lift, the system taking the touch, the handler restarting),
+                // the card settles: with only drag-end callbacks it once stayed stuck mid-drag
+                try {
+                  drag(down.id) { change ->
+                    val amount = change.positionChange()
+                    change.consume()
+                    spot = spot.copy(
+                      x = (spot.x + amount.x / density.density).coerceIn(0f, areaW - spot.width),
+                      // Lets the card slide down off the screen into the dock target
+                      y = (spot.y + amount.y / density.density).coerceIn(0f, areaH - HandleHeight.value),
+                    )
+                  }
+                } finally {
+                  settle()
+                }
               }
             },
           contentAlignment = Alignment.Center,
@@ -141,10 +155,18 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
         val resize = stringResource(R.string.resize_keyboard)
         Canvas(
           Modifier.width(GripWidth).fillMaxHeight().semantics { contentDescription = resize }
-            .pointerInput(areaW) {
-              detectDragGestures(onDragEnd = { pref.value = spot }) { change, amount ->
-                change.consume()
-                spot = spot.copy(width = (spot.width + amount.x / density.density).coerceIn(MinWidth.value, areaW - spot.x))
+            .pointerInput(areaW, pref) {
+              awaitEachGesture {
+                val down = awaitFirstDown()
+                try {
+                  drag(down.id) { change ->
+                    val amount = change.positionChange()
+                    change.consume()
+                    spot = spot.copy(width = (spot.width + amount.x / density.density).coerceIn(MinWidth.value, areaW - spot.x))
+                  }
+                } finally {
+                  pref.value = spot
+                }
               }
             }
         ) {

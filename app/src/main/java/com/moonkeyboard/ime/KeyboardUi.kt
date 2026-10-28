@@ -93,7 +93,8 @@ private val LandscapeVGap = 8.dp
 private const val SPLIT_SHARE = 0.28f
 
 private val ShiftIcon = icon("M12 4l8 8h-5v8H9v-8H4z")
-private val BackspaceIcon = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM12 9l6 6M18 9l-6 6")
+// The × sits a little left of the box's middle, so it looks centred in the whole shape, point included
+private val BackspaceIcon = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM11 9l6 6M17 9l-6 6")
 private val EnterIcon = icon("M20 5v7a2 2 0 0 1-2 2H5M9 10l-4 4 4 4")
 private val SmileIcon = icon("M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01")
 
@@ -217,6 +218,53 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
   }
 }
 
+internal val ToolbarItem.icon get() = when (this) {
+  ToolbarItem.EMOJI -> Icons.Emoji
+  ToolbarItem.THEME -> Icons.Theme
+  ToolbarItem.FLOATING -> Icons.Floating
+  ToolbarItem.ONE_HANDED -> Icons.OneHanded
+  ToolbarItem.TEXT_EDIT -> Icons.TextEdit
+  ToolbarItem.SPLIT -> Icons.Split
+}
+
+internal val ToolbarItem.label get() = when (this) {
+  ToolbarItem.EMOJI -> R.string.emoji
+  ToolbarItem.THEME -> R.string.theme
+  ToolbarItem.FLOATING -> R.string.floating_short
+  ToolbarItem.ONE_HANDED -> R.string.one_handed_short
+  ToolbarItem.TEXT_EDIT -> R.string.text_editing
+  ToolbarItem.SPLIT -> R.string.split_short
+}
+
+/** A setting that is on, shown highlighted. */
+internal fun ToolbarItem.isOn() = when (this) {
+  ToolbarItem.FLOATING -> Prefs.floating.value
+  ToolbarItem.ONE_HANDED -> !Prefs.floating.value && Prefs.oneHanded.value != OneHanded.OFF
+  ToolbarItem.SPLIT -> Prefs.splitLandscape.value
+  else -> false
+}
+
+// One-handed doesn't apply to a floating keyboard, which is already small
+internal fun ToolbarItem.isEnabled() = this != ToolbarItem.ONE_HANDED || !Prefs.floating.value
+
+/** The same action from the toolbar or the options panel; a change of layout goes back to the keys. */
+internal fun ToolbarItem.act(controller: InputController, colors: KeyboardColors) {
+  when (this) {
+    ToolbarItem.EMOJI -> controller.panel = Panel.EMOJI
+    ToolbarItem.THEME -> flipTheme(colors)
+    ToolbarItem.FLOATING -> {
+      Prefs.floating.value = !Prefs.floating.value
+      controller.panel = Panel.KEYS
+    }
+    ToolbarItem.ONE_HANDED -> {
+      Prefs.oneHanded.value = if (Prefs.oneHanded.value == OneHanded.OFF) Prefs.oneHandedSide.value else OneHanded.OFF
+      controller.panel = Panel.KEYS
+    }
+    ToolbarItem.TEXT_EDIT -> controller.panel = Panel.EDIT
+    ToolbarItem.SPLIT -> Prefs.splitLandscape.value = !Prefs.splitLandscape.value
+  }
+}
+
 // Flips what's on screen; cycling through "follow system" looked like a dead tap when that matched
 internal fun flipTheme(colors: KeyboardColors) {
   Prefs.theme.value = if (colors == KeyboardColors.Dark) ThemeMode.LIGHT else ThemeMode.DARK
@@ -271,11 +319,10 @@ private fun Strip(controller: InputController, colors: KeyboardColors) {
 private fun Toolbar(controller: InputController, colors: KeyboardColors) {
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
     if (controller.toolbarOpen) ToolButton(Icons.Back, R.string.close_toolbar, colors) { controller.toolbarOpen = false }
-    ToolButton(Icons.Emoji, R.string.emoji, colors) { controller.panel = Panel.EMOJI }
-    ToolButton(Icons.Theme, R.string.theme, colors) { flipTheme(colors) }
-    val floating = Prefs.floating.value
-    ToolButton(Icons.Floating, R.string.floating, colors, active = floating) { Prefs.floating.value = !floating }
-    // Everything else lives in the options panel, so the bar stays short
+    // The user's picks; everything is also in the options panel, which is always here
+    for (item in Prefs.toolbar().filter { it.isEnabled() }) {
+      ToolButton(item.icon, item.label, colors, active = item.isOn()) { item.act(controller, colors) }
+    }
     ToolButton(Icons.Settings, R.string.keyboard_options, colors) { controller.panel = Panel.OPTIONS }
     // Last, where the suggestion strip has it too, so it doesn't move when the toolbar opens
     ToolButton(Icons.Clipboard, R.string.clipboard, colors) { controller.panel = Panel.CLIPBOARD }

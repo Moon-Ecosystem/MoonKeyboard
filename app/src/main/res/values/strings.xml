@@ -113,6 +113,8 @@
   <string name="floating_short">Floating</string>
   <string name="split_short">Split landscape</string>
   <string name="keyboard_options">Keyboard options</string>
+  <string name="top_bar">Top bar</string>
+  <string name="top_bar_note">Up to %1$d. Options and clipboard are always there, and everything is in options.</string>
   <string name="move_keyboard">Move keyboard</string>
   <string name="resize_keyboard">Resize keyboard</string>
   <string name="dock_hint">Let go to dock</string>
