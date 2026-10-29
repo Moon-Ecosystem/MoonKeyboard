@@ -79,8 +79,8 @@ object Prefs {
   }
 
   val haptics = Pref("haptics", true, String::toBoolean)
-  /** 0: the system's keyboard tap; 1 to [Haptics.MAX_STRENGTH]: our own. */
-  val hapticStrength = Pref("haptic_strength", 0, String::toInt)
+  /** 1 to [Haptics.MAX_STRENGTH]; a 0 saved by the old "system default" step reads as 1. */
+  val hapticStrength = Pref("haptic_strength", 2) { it.toInt().coerceAtLeast(1) }
   val autoCaps = Pref("auto_caps", true, String::toBoolean)
   val sound = Pref("sound", false, String::toBoolean)
   val glideTrail = Pref("glide_trail", true, String::toBoolean)

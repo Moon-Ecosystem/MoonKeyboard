@@ -295,12 +295,8 @@ fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
     SwitchRow(R.string.haptics, Prefs.haptics)
     if (Prefs.haptics.value) {
       val view = LocalView.current
-      val strength = Prefs.hapticStrength.value
       // Buzzes once at the new strength, so the choice can be felt
-      SliderRow(
-        R.string.vibration_strength, Prefs.hapticStrength, 0..Haptics.MAX_STRENGTH,
-        if (strength == 0) stringResource(R.string.vibration_system) else "$strength",
-      ) { Haptics.tap(view) }
+      SliderRow(R.string.vibration_strength, Prefs.hapticStrength, 1..Haptics.MAX_STRENGTH, "${Prefs.hapticStrength.value}") { Haptics.tap(view) }
     }
     Divider()
     SwitchRow(R.string.key_sound, Prefs.sound)
