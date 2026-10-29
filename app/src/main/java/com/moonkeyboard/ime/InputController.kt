@@ -554,7 +554,10 @@ class InputController(private val host: KeyboardHost) {
     val word = forgetAsk ?: return
     forgetAsk = null
     val engine = Language.engine ?: return
-    engine.history.forget(word)
+    // The strip capitalises at a sentence start ("Nba"); forget the word as it is stored ("nba"),
+    // which a name like "Paris" already is
+    val stored = listOf(word, word.lowercase()).firstOrNull { engine.lexicon.find(it) >= 0 || engine.history.count(it) > 0 } ?: word
+    engine.history.forget(stored)
     Language.historyChanged()
     refreshStrip()
   }
