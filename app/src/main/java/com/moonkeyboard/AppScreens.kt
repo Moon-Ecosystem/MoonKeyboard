@@ -22,6 +22,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
@@ -32,7 +34,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -206,23 +207,25 @@ fun HomeScreen(open: (Screen) -> Unit) {
   }
 }
 
-/** A text field to try the keyboard in; the system shows whichever keyboard is selected. */
+/**
+ * A text field to try the keyboard in; the system shows whichever keyboard is selected. The state-based
+ * field, because the older value-based one always underlines the word being typed.
+ */
 @Composable
 private fun TryField() {
   val c = LocalAppColors.current
-  var text by rememberSaveable { mutableStateOf("") }
+  val state = rememberTextFieldState()
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     Text(stringResource(R.string.setup_try).uppercase(), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp)
     BasicTextField(
-      text,
-      { text = it },
+      state,
       Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp)).background(c.surface).border(1.dp, c.focus, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp),
       textStyle = TextStyle(color = c.text, fontSize = 15.sp),
       cursorBrush = SolidColor(c.accent),
-      singleLine = true,
-      decorationBox = { inner ->
+      lineLimits = TextFieldLineLimits.SingleLine,
+      decorator = { inner ->
         Box(contentAlignment = Alignment.CenterStart) {
-          if (text.isEmpty()) Text(stringResource(R.string.try_placeholder), color = c.muted, fontSize = 15.sp)
+          if (state.text.isEmpty()) Text(stringResource(R.string.try_placeholder), color = c.muted, fontSize = 15.sp)
           inner()
         }
       },
@@ -539,7 +542,8 @@ fun LearnedScreen(onBack: () -> Unit) {
   val history = engine?.history
   // Bumped after each change, so the lists are read again
   var version by remember { mutableIntStateOf(0) }
-  var query by rememberSaveable { mutableStateOf("") }
+  val queryState = rememberTextFieldState()
+  val query = queryState.text.toString()
   val words = remember(history, version) { history?.learnedWords().orEmpty() }
   val phrases = remember(history, version) { history?.learnedPhrases().orEmpty() }
   val blocked = remember(history, version) { history?.blockedWords().orEmpty() }
@@ -570,7 +574,7 @@ fun LearnedScreen(onBack: () -> Unit) {
         Icon(Icons.Search, null, Modifier.size(18.dp), tint = c.muted)
         Box(Modifier.weight(1f).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
           if (query.isEmpty()) Text(stringResource(R.string.search_learned), color = c.muted, fontSize = 15.sp)
-          BasicTextField(query, { query = it }, Modifier.fillMaxWidth(), textStyle = TextStyle(color = c.text, fontSize = 15.sp), cursorBrush = SolidColor(c.accent), singleLine = true)
+          BasicTextField(queryState, Modifier.fillMaxWidth(), textStyle = TextStyle(color = c.text, fontSize = 15.sp), cursorBrush = SolidColor(c.accent), lineLimits = TextFieldLineLimits.SingleLine)
         }
       }
       LazyColumn(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.surface)) {
