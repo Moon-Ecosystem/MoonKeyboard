@@ -38,6 +38,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -198,6 +199,7 @@ class InputController(private val host: KeyboardHost) {
    * [onFinishInput] emptied it.
    */
   fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
+    forgetAsk = null
     pasteUndo = null
     midWord = null
     field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
@@ -328,6 +330,7 @@ class InputController(private val host: KeyboardHost) {
       return
     }
     if (key.type != KeyType.SHIFT && key.type != KeyType.LAYER) {
+      forgetAsk = null
       pasteUndo = null
       midWord = null
     }
@@ -397,6 +400,19 @@ class InputController(private val host: KeyboardHost) {
     if ((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && selCursor >= 0) {
       stepCursor(ic, forward = keyCode == KeyEvent.KEYCODE_DPAD_RIGHT, select)
       return
+    }
+    if ((keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) && selCursor >= 0) {
+      // With no line break that way the app would move focus to another field, so go to the text's start or end.
+      // shortcut: a soft-wrapped first or last paragraph jumps to its end rather than one visual line; cursor bounds would fix it
+      val up = keyCode == KeyEvent.KEYCODE_DPAD_UP
+      val side = (if (up) ic.getTextBeforeCursor(LINE_LOOKAROUND, 0) else ic.getTextAfterCursor(LINE_LOOKAROUND, 0)) ?: ""
+      if ('\n' !in side) {
+        // The text either side is measured from the selection's edges
+        selCursor = if (up) maxOf(0, minOf(selAnchor, selCursor) - side.length) else maxOf(selAnchor, selCursor) + side.length
+        if (!select) selAnchor = selCursor
+        ic.setSelection(selAnchor, selCursor)
+        return
+      }
     }
     val meta = if (select) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
     val now = SystemClock.uptimeMillis()
@@ -513,13 +529,44 @@ class InputController(private val host: KeyboardHost) {
     afterSeparator()
   }
 
-  /** Long-press on a suggestion: never suggest it again (until the user types it themselves). */
-  fun forgetSuggestion(index: Int) {
-    val word = suggestions.items.getOrNull(index) ?: return
+  /** A long-pressed suggestion: its slot asks whether to forget it, until answered or the user types on. */
+  var forgetAsk by mutableStateOf<String?>(null)
+    private set
+
+  fun askForget(index: Int) {
+    val word = suggestions.items.getOrNull(index)?.takeIf { it.isNotEmpty() } ?: return
+    forgetAsk = word
+    // Unanswered, the slot goes back to the word
+    forgetAskTimeout?.cancel()
+    forgetAskTimeout = scope.launch {
+      delay(FORGET_ASK_MS)
+      forgetAsk = null
+    }
+  }
+  private var forgetAskTimeout: Job? = null
+
+  fun cancelForget() {
+    forgetAsk = null
+  }
+
+  /** Never suggest the asked-about word again (until the user types it themselves). */
+  fun forgetSuggestion() {
+    val word = forgetAsk ?: return
+    forgetAsk = null
     val engine = Language.engine ?: return
     engine.history.forget(word)
     Language.historyChanged()
-    if (composing.isNotEmpty()) requestSuggestions() else refreshPredictions()
+    refreshStrip()
+  }
+
+  /** The strip's words again for where the cursor is, after the history changed under them. */
+  private fun refreshStrip() {
+    val m = midWord
+    when {
+      composing.isNotEmpty() -> requestSuggestions()
+      m != null -> suggestMidWord(m)
+      else -> refreshPredictions()
+    }
   }
 
   /** Live preview in the strip while the finger is still moving; the latest path wins. */
@@ -553,6 +600,7 @@ class InputController(private val host: KeyboardHost) {
     val ic = host.inputConnection ?: return
     decodeJob?.cancel()
     ClipboardStore.fresh = null
+    forgetAsk = null
     pasteUndo = null
     midWord = null
     revert = null
@@ -582,6 +630,7 @@ class InputController(private val host: KeyboardHost) {
     val ic = host.inputConnection ?: return
     // Typing means the user moved on from what they copied
     ClipboardStore.fresh = null
+    forgetAsk = null
     pasteUndo = null
     midWord = null
     revert = null
@@ -769,7 +818,8 @@ class InputController(private val host: KeyboardHost) {
     val text = ic.getExtractedText(ExtractedTextRequest(), 0)
     val cursor = if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
     if (end > 0) {
-      if (cursor < word.length) return
+      // A real word has nothing to fix: the predictions stay, without a flash of the fixes' look first
+      if (cursor < word.length || Language.engine?.isValid(word + after.substring(0, end)) != false) return
       val textBefore = ic.getTextBeforeCursor(CONTEXT_CHARS + word.length, 0)?.toString() ?: ""
       midWord = MidWord(cursor - word.length, word + after.substring(0, end), WordContext.from(textBefore.dropLast(word.length)))
       return
@@ -905,6 +955,9 @@ class InputController(private val host: KeyboardHost) {
     const val SYMBOLS = "symbols"
     // Longest grapheme we expect (ZWJ emoji sequences run to ~11 chars), with room to spare
     private const val GRAPHEME_LOOKBEHIND = 32
+    // How far ↑ ↓ look for a line break; past this, a field with none is treated as ending there
+    private const val LINE_LOOKAROUND = 10_000
+    private const val FORGET_ASK_MS = 4_000L
     private const val CONTEXT_CHARS = 64
     private const val RESUME_CHARS = 48
     /** Apps echo our edits back well within this; a cursor move later than it came from elsewhere. */

@@ -296,13 +296,13 @@ class TouchTracker(
     return Popup(bounds.key.popup, left, bounds.top - bounds.height - popupGap, cell, bounds.height)
   }
 
-  private companion object {
-    const val LONG_PRESS_MS = 300L
+  companion object {
+    private const val LONG_PRESS_MS = 300L
     const val BACKSPACE_REPEAT_DELAY_MS = 400L
     const val BACKSPACE_REPEAT_MS = 50L
-    const val PREVIEW_INTERVAL_MS = 80L
+    private const val PREVIEW_INTERVAL_MS = 80L
     // In key widths: how far to slide before space becomes a cursor, and the slide per character
-    const val CURSOR_SLOP = 0.5f
-    const val CURSOR_STEP = 0.35f
+    private const val CURSOR_SLOP = 0.5f
+    private const val CURSOR_STEP = 0.35f
   }
 }

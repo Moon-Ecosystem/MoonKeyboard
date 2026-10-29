@@ -45,6 +45,15 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -469,27 +478,34 @@ fun EditPanel(controller: InputController, colors: KeyboardColors, modifier: Mod
 
   Column(modifier) {
     PanelHeader(R.string.text_editing, controller, colors)
-    Column(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      EditRow {
-        EditKey(colors, label = R.string.line_start) { move(KeyEvent.KEYCODE_MOVE_HOME) }
-        EditKey(colors, Icons.Up, R.string.up) { move(KeyEvent.KEYCODE_DPAD_UP) }
-        EditKey(colors, label = R.string.line_end) { move(KeyEvent.KEYCODE_MOVE_END) }
-        EditKey(colors, label = R.string.select_all, special = true) { controller.contextAction(android.R.id.selectAll) }
-        EditKey(colors, label = R.string.copy, special = true) { controller.contextAction(android.R.id.copy) }
+    // A d-pad with Select in its middle and line start/end under it; the clipboard actions down the right
+    Row(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(Modifier.weight(3f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        EditRow {
+          Spacer(Modifier.weight(1f))
+          EditKey(colors, Icons.Up, R.string.up, repeats = true) { move(KeyEvent.KEYCODE_DPAD_UP) }
+          Spacer(Modifier.weight(1f))
+        }
+        EditRow {
+          EditKey(colors, Icons.Left, R.string.left, repeats = true) { move(KeyEvent.KEYCODE_DPAD_LEFT) }
+          EditKey(colors, label = R.string.select, active = selecting) { selecting = !selecting }
+          EditKey(colors, Icons.Right, R.string.right, repeats = true) { move(KeyEvent.KEYCODE_DPAD_RIGHT) }
+        }
+        EditRow {
+          Spacer(Modifier.weight(1f))
+          EditKey(colors, Icons.Down, R.string.down, repeats = true) { move(KeyEvent.KEYCODE_DPAD_DOWN) }
+          Spacer(Modifier.weight(1f))
+        }
+        EditRow {
+          EditKey(colors, Icons.LineStart, R.string.line_start) { move(KeyEvent.KEYCODE_MOVE_HOME) }
+          EditKey(colors, Icons.LineEnd, R.string.line_end) { move(KeyEvent.KEYCODE_MOVE_END) }
+        }
       }
-      EditRow {
-        EditKey(colors, Icons.Left, R.string.left) { move(KeyEvent.KEYCODE_DPAD_LEFT) }
-        EditKey(colors, label = R.string.select, active = selecting) { selecting = !selecting }
-        EditKey(colors, Icons.Right, R.string.right) { move(KeyEvent.KEYCODE_DPAD_RIGHT) }
-        EditKey(colors, label = R.string.cut, special = true) { controller.contextAction(android.R.id.cut) }
-        EditKey(colors, label = R.string.paste, special = true) { controller.contextAction(android.R.id.paste) }
-      }
-      EditRow {
-        Spacer(Modifier.weight(1f))
-        EditKey(colors, Icons.Down, R.string.down) { move(KeyEvent.KEYCODE_DPAD_DOWN) }
-        Spacer(Modifier.weight(1f))
-        EditKey(colors, Icons.Backspace, R.string.delete, special = true, onClick = controller::deleteBackward)
-        EditKey(colors, label = R.string.abc, special = true) { controller.panel = Panel.KEYS }
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        EditRow { EditKey(colors, label = R.string.select_all, special = true) { controller.contextAction(android.R.id.selectAll) } }
+        EditRow { EditKey(colors, label = R.string.copy, special = true) { controller.contextAction(android.R.id.copy) } }
+        EditRow { EditKey(colors, label = R.string.paste, special = true) { controller.contextAction(android.R.id.paste) } }
+        EditRow { EditKey(colors, Icons.Backspace, R.string.delete, special = true, repeats = true, onClick = controller::deleteBackward) }
       }
     }
   }
@@ -507,9 +523,10 @@ private fun RowScope.EditKey(
   label: Int,
   special: Boolean = false,
   active: Boolean = false,
+  repeats: Boolean = false,
   onClick: () -> Unit,
 ) {
-  PanelKey(colors, Modifier.weight(1f).fillMaxHeight(), special, active, onClick) {
+  PanelKey(colors, Modifier.weight(1f).fillMaxHeight(), special, active, repeats, onClick) {
     if (icon != null) {
       Icon(icon, stringResource(label), Modifier.size(22.dp), tint = if (active) colors.onAccent else colors.text)
     } else {
@@ -525,17 +542,33 @@ private fun PanelKey(
   modifier: Modifier,
   special: Boolean = true,
   active: Boolean = false,
+  repeats: Boolean = false,
   onClick: () -> Unit,
   content: @Composable () -> Unit,
 ) {
   val view = LocalView.current
+  val action by rememberUpdatedState(onClick)
+  // Held, it goes again after the backspace key's delay and at its rate
+  val press = if (!repeats) Modifier.clickable { Haptics.tap(view); action() } else {
+    Modifier.semantics(mergeDescendants = true) { role = Role.Button; onClick { action(); true } }.pointerInput(Unit) {
+      detectTapGestures(onPress = {
+        Haptics.tap(view)
+        action()
+        coroutineScope {
+          val held = launch {
+            delay(TouchTracker.BACKSPACE_REPEAT_DELAY_MS)
+            while (true) { action(); delay(TouchTracker.BACKSPACE_REPEAT_MS) }
+          }
+          tryAwaitRelease()
+          held.cancel()
+        }
+      })
+    }
+  }
   Box(
     modifier.fillMaxHeight().clip(RoundedCornerShape(8.dp))
       .background(if (active) colors.accent else if (special) colors.special else colors.key)
-      .clickable {
-        Haptics.tap(view)
-        onClick()
-      },
+      .then(press),
     contentAlignment = Alignment.Center,
   ) { content() }
 }

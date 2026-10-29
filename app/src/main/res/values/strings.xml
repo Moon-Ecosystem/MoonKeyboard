@@ -2,7 +2,6 @@
   <string name="app_name">Moon Keyboard</string>
   <string name="subtype_en_us">English (US)</string>
   <string name="forget_word">Don\'t suggest this word</string>
-
   <string name="welcome_pitch">A fast keyboard with glide typing and smart suggestions. It works fully offline, so nothing you type leaves your phone.</string>
   <string name="welcome_privacy">The app has no internet permission. Learned words and your clipboard stay on this phone.</string>
   <string name="try_without_switching">Try it without switching</string>
@@ -146,9 +145,7 @@
   <string name="select">Select</string>
   <string name="select_all">Select all</string>
   <string name="copy">Copy</string>
-  <string name="cut">Cut</string>
   <string name="paste">Paste</string>
-  <string name="abc">ABC</string>
 
   <string name="look">Look</string>
   <string name="theme_system">Follow system</string>

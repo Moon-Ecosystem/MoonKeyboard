@@ -341,20 +341,36 @@ private fun Toolbar(controller: InputController, colors: KeyboardColors) {
   }
 }
 
-/** Three slots: the best word in the middle, bold when space will autocorrect to it. Long-press forgets a word. */
+@Composable
+private fun ForgetButton(icon: ImageVector, label: String, colors: KeyboardColors, onClick: () -> Unit) {
+  Box(Modifier.size(36.dp).clip(CircleShape).background(colors.key).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Icon(icon, label, Modifier.size(18.dp), tint = colors.text)
+  }
+}
+
+/** Three slots: the best word in the middle, bold when space will autocorrect to it. Long-press offers to forget a word. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SuggestionStrip(controller: InputController, colors: KeyboardColors) {
   val suggestions = controller.suggestions
   val onPick = controller::pickSuggestion
-  val onForget = controller::forgetSuggestion
+  val onForget = controller::askForget
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     ToolButton(Icons.Next, R.string.open_toolbar, colors) { controller.toolbarOpen = true }
     // Fixes for the word the cursor is inside: the best one is a filled pill, so it reads as "replace with"
-    val fixing = controller.midWord != null
+    // Not the predictions shown until the fixes arrive
+    val fixing = controller.midWord != null && !suggestions.isPrediction
     for (i in 0 until 3) {
-      if (i > 0 && !fixing) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
+      if (i > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
       val word = suggestions.items.getOrNull(i)?.takeIf { it.isNotEmpty() }
+      // Long-pressed: the slot asks whether to forget the word, the rest of the strip stays
+      if (word != null && word == controller.forgetAsk) {
+        Row(Modifier.weight(1f).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+          ForgetButton(Icons.Trash, stringResource(R.string.forget_word), colors, controller::forgetSuggestion)
+          ForgetButton(Icons.Close, stringResource(android.R.string.cancel), colors, controller::cancelForget)
+        }
+        continue
+      }
       val clickable = if (word == null) Modifier else {
         Modifier.combinedClickable(onClick = { onPick(i) }, onLongClick = { onForget(i) }, onLongClickLabel = stringResource(R.string.forget_word))
       }
