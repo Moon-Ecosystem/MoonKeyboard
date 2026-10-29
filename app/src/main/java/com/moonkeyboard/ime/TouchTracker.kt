@@ -225,6 +225,7 @@ class TouchTracker(
       downAt.remove(id)
       downTime.remove(id)
       recorder?.up(id, at.x, at.y, nowMs, "cursor")
+      controller.cursorSlideEnded()
       return
     }
     if (glideOwner == id) {

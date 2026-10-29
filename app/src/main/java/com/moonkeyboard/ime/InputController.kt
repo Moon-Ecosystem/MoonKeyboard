@@ -105,6 +105,20 @@ class InputController(private val host: KeyboardHost) {
 
   data class PasteUndo(val text: String, val undone: Boolean)
 
+  /**
+   * The cursor stopped inside this word: the strip offers fixes for all of it, and picking one
+   * replaces it. Nothing is composed, so typing still goes where the cursor is.
+   */
+  var midWord by mutableStateOf<MidWord?>(null)
+    private set
+
+  /** [start]: where the word begins in the text. */
+  data class MidWord(val start: Int, val word: String, val context: WordContext)
+
+  /** The last live glide preview; while [suggestions] is still it, the finger hasn't lifted. */
+  var glidePreview: Suggestions? = null
+    private set
+
   fun onLongPress(action: String) {
     when (action) {
       "emoji_search" -> startEmojiSearch()
@@ -185,7 +199,8 @@ class InputController(private val host: KeyboardHost) {
    */
   fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
     pasteUndo = null
-    field =FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
+    midWord = null
+    field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
     if (restarting) {
       selAnchor = info.initialSelStart
       selCursor = info.initialSelEnd
@@ -232,11 +247,33 @@ class InputController(private val host: KeyboardHost) {
    * clearing the field): the word it ends is picked up so the strip offers fixes and completions
    * for it ("who|"), as after backspacing into a word; elsewhere the strip predicts what comes next.
    */
-  private fun cursorPlaced() {
+  private fun cursorPlaced(bySlide: Boolean = false) {
+    midWord = null
     val ic = host.inputConnection
-    if (ic != null && !isEcho() && panel == Panel.KEYS && emojiQuery == null && field.suggest) resumeWord(ic)
-    if (composing.isEmpty()) afterSeparator() else requestSuggestions()
+    if (ic != null && (bySlide || !isEcho()) && composing.isEmpty() && panel == Panel.KEYS && emojiQuery == null && field.suggest) resumeWord(ic)
+    if (composing.isNotEmpty()) return requestSuggestions()
+    afterSeparator()
+    // After the predictions, which would otherwise replace these fixes
+    midWord?.let(::suggestMidWord)
   }
+
+  private fun suggestMidWord(m: MidWord) {
+    val engine = Language.engine ?: return
+    val keys = keyMap
+    val wordTouches = m.word.map { keys?.touchFor(it) ?: Touch.exact(it) }
+    decodeJob?.cancel()
+    decodeJob = scope.launch {
+      // No autocorrect: space doesn't apply these, it types a space where the cursor is
+      val result = withContext(decodeDispatcher) { engine.suggest(m.word, wordTouches, keys, m.context, false) }
+      // Only fixes, best first: the word as typed would change nothing. The best goes in the middle,
+      // the runner-up on the left ("" leaves a slot empty)
+      val fixes = result.items.filter { it != m.word }
+      if (midWord == m) suggestions = result.copy(items = if (fixes.isEmpty()) emptyList() else listOf(fixes.getOrElse(1) { "" }, fixes[0]))
+    }
+  }
+
+  /** The space-bar slide let go: the word the cursor stopped after is picked up, as a tap in the text would. */
+  fun cursorSlideEnded() = cursorPlaced(bySlide = true)
 
   fun onFinishInput() {
     if (composing.isNotEmpty()) host.inputConnection?.finishComposingText()
@@ -290,7 +327,10 @@ class InputController(private val host: KeyboardHost) {
       }
       return
     }
-    if (key.type != KeyType.SHIFT && key.type != KeyType.LAYER) pasteUndo = null
+    if (key.type != KeyType.SHIFT && key.type != KeyType.LAYER) {
+      pasteUndo = null
+      midWord = null
+    }
     when (key.type) {
       KeyType.CHAR -> typeText(display(key.label), x, y)
       KeyType.SPACE -> space()
@@ -351,6 +391,7 @@ class InputController(private val host: KeyboardHost) {
   /** An arrow, Home or End key; with [select] it extends the selection instead of moving the cursor. */
   fun moveCursor(keyCode: Int, select: Boolean) {
     phantomSpace = false
+    midWord = null
     finishWord()
     val ic = host.inputConnection ?: return
     if ((keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) && selCursor >= 0) {
@@ -417,6 +458,17 @@ class InputController(private val host: KeyboardHost) {
   fun pickSuggestion(index: Int) {
     val word = suggestions.items.getOrNull(index) ?: return
     val ic = host.inputConnection ?: return
+    midWord?.let { m ->
+      // The whole word the cursor sits in gives way to the pick; the cursor ends up after it
+      midWord = null
+      ic.beginBatchEdit()
+      ic.setSelection(m.start, m.start + m.word.length)
+      ic.commitText(word, 1)
+      ic.endBatchEdit()
+      learn(word, m.context)
+      afterSeparator()
+      return
+    }
     revert = null
     // A picked word gets a real space after it
     phantomSpace = false
@@ -482,7 +534,9 @@ class InputController(private val host: KeyboardHost) {
     val allUpper = shift == ShiftState.LOCKED
     decodeJob?.cancel()
     decodeJob = scope.launch {
-      suggestions = withContext(decodeDispatcher) { engine.glide(path, keys, context, firstUpper, allUpper) }
+      val preview = withContext(decodeDispatcher) { engine.glide(path, keys, context, firstUpper, allUpper) }
+      glidePreview = preview
+      suggestions = preview
     }
   }
 
@@ -500,6 +554,7 @@ class InputController(private val host: KeyboardHost) {
     decodeJob?.cancel()
     ClipboardStore.fresh = null
     pasteUndo = null
+    midWord = null
     revert = null
     lastWasSpace = false
     autoSpaced = false
@@ -528,6 +583,7 @@ class InputController(private val host: KeyboardHost) {
     // Typing means the user moved on from what they copied
     ClipboardStore.fresh = null
     pasteUndo = null
+    midWord = null
     revert = null
     lastWasSpace = false
     val c = text.singleOrNull()
@@ -692,10 +748,16 @@ class InputController(private val host: KeyboardHost) {
     return if (word != typed) Revert(typed, word, "") else null
   }
 
-  /** After backspacing to the end of a word, pick it up again so it can be corrected. */
+  /**
+   * After backspacing to the end of a word, pick it up again so it can be corrected. A cursor
+   * inside a word only offers fixes for it ([midWord]).
+   */
   private fun resumeWord(ic: InputConnection) {
-    val after = ic.getTextAfterCursor(1, 0)
-    if (!after.isNullOrEmpty() && isWordChar(after[0])) return
+    val after = ic.getTextAfterCursor(RESUME_CHARS, 0) ?: ""
+    var end = 0
+    while (end < after.length && isWordChar(after[end])) end++
+    // A word running past the lookahead limit may be longer than we can see
+    if (end == RESUME_CHARS) return
     val before = ic.getTextBeforeCursor(RESUME_CHARS, 0) ?: return
     var start = before.length
     while (start > 0 && isWordChar(before[start - 1])) start--
@@ -706,6 +768,12 @@ class InputController(private val host: KeyboardHost) {
     // Mark the word where it is: deleting and retyping it made Firefox's caret jump to its start
     val text = ic.getExtractedText(ExtractedTextRequest(), 0)
     val cursor = if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
+    if (end > 0) {
+      if (cursor < word.length) return
+      val textBefore = ic.getTextBeforeCursor(CONTEXT_CHARS + word.length, 0)?.toString() ?: ""
+      midWord = MidWord(cursor - word.length, word + after.substring(0, end), WordContext.from(textBefore.dropLast(word.length)))
+      return
+    }
     ic.beginBatchEdit()
     if (cursor >= word.length && ic.setComposingRegion(cursor - word.length, cursor)) {
       // The same word over itself, for the invisible style that keeps Compose fields from underlining it

@@ -350,20 +350,23 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
   val onForget = controller::forgetSuggestion
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     ToolButton(Icons.Next, R.string.open_toolbar, colors) { controller.toolbarOpen = true }
+    // Fixes for the word the cursor is inside: the best one is a filled pill, so it reads as "replace with"
+    val fixing = controller.midWord != null
     for (i in 0 until 3) {
-      if (i > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
-      val word = suggestions.items.getOrNull(i)
+      if (i > 0 && !fixing) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
+      val word = suggestions.items.getOrNull(i)?.takeIf { it.isNotEmpty() }
       val clickable = if (word == null) Modifier else {
         Modifier.combinedClickable(onClick = { onPick(i) }, onLongClick = { onForget(i) }, onLongClickLabel = stringResource(R.string.forget_word))
       }
       Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(22.dp)).then(clickable), contentAlignment = Alignment.Center) {
         if (word != null) {
+          val pill = fixing && i == 1
           Text(
             word,
-            Modifier.padding(horizontal = 6.dp),
-            color = if (i == 1) colors.text else colors.muted,
+            if (pill) Modifier.clip(RoundedCornerShape(18.dp)).background(colors.accent).padding(horizontal = 16.dp, vertical = 6.dp) else Modifier.padding(horizontal = 6.dp),
+            color = if (pill) colors.onAccent else if (i == 1) colors.text else colors.muted,
             fontSize = 19.sp,
-            fontWeight = if (i == 1 && suggestions.autocorrect != null) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (pill || (i == 1 && suggestions.autocorrect != null)) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )
@@ -372,7 +375,9 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
     }
     // Emoji for the word being typed ("pizza" → 🍕) take the clipboard button's place
     val emoji = remember(suggestions) {
-      if (suggestions.isPrediction || !Prefs.emojiSuggestions.value) emptyList()
+      // Not for a glide still under way: its guess changes every few frames
+      // Nor inside a word, where an emoji would land in the middle of it
+      if (suggestions.isPrediction || suggestions === controller.glidePreview || controller.midWord != null || !Prefs.emojiSuggestions.value) emptyList()
       else Emoji.forWord(suggestions.typed).ifEmpty { suggestions.autocorrect?.let(Emoji::forWord).orEmpty() }
     }
     if (emoji.isEmpty()) {
