@@ -124,6 +124,8 @@
 
   <string name="clear_unpinned">Clear unpinned items</string>
   <string name="paste_copied">Paste what you copied</string>
+  <string name="undo">Undo</string>
+  <string name="redo">Redo</string>
   <string name="copied_image">Copied image</string>
   <string name="copied_gif">Copied GIF</string>
   <string name="clipboard_empty">Text and images you copy show up here.</string>

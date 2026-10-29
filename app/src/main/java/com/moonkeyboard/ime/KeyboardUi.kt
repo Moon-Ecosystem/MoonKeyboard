@@ -320,6 +320,8 @@ private fun Strip(controller: InputController, colors: KeyboardColors) {
     // A new copy takes the predictions' place (never a word being typed), if this field can take it
     fresh != null && !controller.toolbarOpen && controller.suggestions.isPrediction &&
       (fresh.kind == ClipKind.TEXT || controller.acceptsContent(fresh.mime)) -> FreshClipStrip(controller, colors, fresh)
+    controller.pasteUndo != null && !controller.toolbarOpen && controller.suggestions.isPrediction ->
+      PasteUndoStrip(controller, colors, controller.pasteUndo!!)
     controller.toolbarOpen || controller.suggestions.items.isEmpty() -> Toolbar(controller, colors)
     else -> SuggestionStrip(controller, colors)
   }

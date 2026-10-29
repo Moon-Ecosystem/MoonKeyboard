@@ -31,6 +31,8 @@ object Icons {
   val Expand = icon("M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6")
   val SwapSide = icon("M4 8h16M16 4l4 4-4 4", "M20 16H4M8 12l-4 4 4 4")
   val Recent = icon(circle(12f, 12f, 9f), "M12 7v5l3 2")
+  val Undo = icon("M9 14L4 9l5-5", "M4 9h11a5 5 0 0 1 0 10h-4")
+  val Redo = icon("M15 14l5-5-5-5", "M20 9H9a5 5 0 0 0 0 10h4")
   val Search = icon(circle(11f, 11f, 6f), "M20 20l-4.5-4.5")
 
   /** Emoji categories, in the order of emoji.txt's groups. */

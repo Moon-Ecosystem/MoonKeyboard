@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,28 +92,38 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
   val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
   val pref = if (landscape) Prefs.floatLandscape else Prefs.floatPortrait
   BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
-    val areaW = maxWidth.value
-    val areaH = maxHeight.value
-    var spot by remember(pref, areaW, areaH) {
-      val saved = pref.value
-      val width = if (saved != FloatSpot.UNSET) saved.width.coerceIn(MinWidth.value, areaW) else areaW * (if (landscape) 0.5f else 0.78f)
-      val start = if (saved != FloatSpot.UNSET) saved else FloatSpot((areaW - width) / 2, areaH * (if (landscape) 0.2f else 0.45f), width)
-      mutableStateOf(start.copy(x = start.x.coerceIn(0f, areaW - width), width = width))
-    }
+    // The window's size jumps about as it's laid out (narrower than the screen at first, taller for a
+    // moment as a drag starts), so nothing restarts on it: the drag handlers would be reset mid-drag.
+    // They read the current size, and the spot is fitted to it wherever it's used.
+    val areaW by rememberUpdatedState(maxWidth.value)
+    val areaH by rememberUpdatedState(maxHeight.value)
+    var saved by remember(pref) { mutableStateOf(pref.value) }
     var cardHeight by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
-    fun overDock() = spot.y + HandleHeight.value > areaH - DockZone.value
-    val docking = dragging && overDock()
-    // Kept on screen when it grows (the emoji panel), except while being dragged to the dock
-    val y = if (dragging) spot.y else spot.y.coerceIn(0f, maxOf(0f, areaH - cardHeight))
 
-    // Runs from the drag handler, which can outlive this composition: it reads state, never local vals
+    // These run from the drag handlers too, which outlive this composition: they read state, never local vals
+    fun spot(): FloatSpot {
+      val s = saved
+      if (s == FloatSpot.UNSET) {
+        val width = areaW * (if (landscape) 0.5f else 0.78f)
+        return FloatSpot((areaW - width) / 2, areaH * (if (landscape) 0.2f else 0.45f), width)
+      }
+      val width = s.width.coerceIn(minOf(MinWidth.value, areaW), areaW)
+      return s.copy(x = s.x.coerceIn(0f, areaW - width), width = width)
+    }
+    fun overDock() = spot().y + HandleHeight.value > areaH - DockZone.value
     fun settle() {
       dragging = false
       if (overDock()) Prefs.floating.value = false
-      spot = spot.copy(y = spot.y.coerceIn(0f, maxOf(0f, areaH - cardHeight)))
-      pref.value = spot
+      val s = spot()
+      saved = s.copy(y = s.y.coerceIn(0f, maxOf(0f, areaH - cardHeight)))
+      pref.value = saved
     }
+
+    val spot = spot()
+    val docking = dragging && overDock()
+    // Kept on screen when it grows (the emoji panel), except while being dragged to the dock
+    val y = if (dragging) spot.y else spot.y.coerceIn(0f, maxOf(0f, areaH - cardHeight))
 
     if (dragging) DockTarget(colors, docking, Modifier.align(Alignment.BottomCenter))
     Column(
@@ -127,7 +138,7 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
         Box(
           Modifier.weight(1f).fillMaxHeight()
             .semantics { contentDescription = move }
-            .pointerInput(areaW, areaH, pref) {
+            .pointerInput(pref) {
               awaitEachGesture {
                 val down = awaitFirstDown()
                 dragging = true
@@ -137,10 +148,11 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
                   drag(down.id) { change ->
                     val amount = change.positionChange()
                     change.consume()
-                    spot = spot.copy(
-                      x = (spot.x + amount.x / density.density).coerceIn(0f, areaW - spot.width),
+                    val s = spot()
+                    saved = s.copy(
+                      x = (s.x + amount.x / density.density).coerceIn(0f, areaW - s.width),
                       // Lets the card slide down off the screen into the dock target
-                      y = (spot.y + amount.y / density.density).coerceIn(0f, areaH - HandleHeight.value),
+                      y = (s.y + amount.y / density.density).coerceIn(0f, areaH - HandleHeight.value),
                     )
                   }
                 } finally {
@@ -155,17 +167,18 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
         val resize = stringResource(R.string.resize_keyboard)
         Canvas(
           Modifier.width(GripWidth).fillMaxHeight().semantics { contentDescription = resize }
-            .pointerInput(areaW, pref) {
+            .pointerInput(pref) {
               awaitEachGesture {
                 val down = awaitFirstDown()
                 try {
                   drag(down.id) { change ->
                     val amount = change.positionChange()
                     change.consume()
-                    spot = spot.copy(width = (spot.width + amount.x / density.density).coerceIn(MinWidth.value, areaW - spot.x))
+                    val s = spot()
+                    saved = s.copy(width = (s.width + amount.x / density.density).coerceIn(minOf(MinWidth.value, areaW - s.x), areaW - s.x))
                   }
                 } finally {
-                  pref.value = spot
+                  pref.value = spot()
                 }
               }
             }

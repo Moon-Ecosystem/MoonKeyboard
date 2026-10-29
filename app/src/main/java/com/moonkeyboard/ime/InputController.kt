@@ -88,6 +88,11 @@ class InputController(private val host: KeyboardHost) {
   /** Emoji search is open: the keys type into this query instead of the app. */
   var emojiQuery by mutableStateOf<String?>(null)
     private set
+  /** Text the copied-item pill just pasted: the strip offers to undo it, then to redo it, until the user moves on. */
+  var pasteUndo by mutableStateOf<PasteUndo?>(null)
+    private set
+
+  data class PasteUndo(val text: String, val undone: Boolean)
 
   fun onLongPress(action: String) {
     when (action) {
@@ -168,7 +173,8 @@ class InputController(private val host: KeyboardHost) {
    * [onFinishInput] emptied it.
    */
   fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
-    field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
+    pasteUndo = null
+    field =FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
     if (restarting) {
       selAnchor = info.initialSelStart
       selCursor = info.initialSelEnd
@@ -237,6 +243,7 @@ class InputController(private val host: KeyboardHost) {
     if (composing.isEmpty()) {
       // Our own commits echo back here too; only a cursor the user (or app) moved is acted on
       if (selStart == selEnd && !isEcho()) {
+        pasteUndo = null
         revert = null
         autoSpaced = false
         lastWasSpace = false
@@ -272,6 +279,7 @@ class InputController(private val host: KeyboardHost) {
       }
       return
     }
+    if (key.type != KeyType.SHIFT && key.type != KeyType.LAYER) pasteUndo = null
     when (key.type) {
       KeyType.CHAR -> typeText(display(key.label), x, y)
       KeyType.SPACE -> space()
@@ -292,6 +300,30 @@ class InputController(private val host: KeyboardHost) {
 
   /** Text from a panel (emoji, a clipboard item): ends the word in progress, then goes in as is. */
   fun insert(text: String) = typeText(text, Float.NaN, Float.NaN)
+
+  /** The copied-item pill's paste, which the strip then offers to undo. */
+  fun pasteFresh(text: String) {
+    insert(text)
+    pasteUndo = PasteUndo(text, undone = false)
+  }
+
+  fun undoPaste() {
+    val undo = pasteUndo ?: return
+    val ic = host.inputConnection ?: return
+    finishWord()
+    // Only while it's still just before the cursor; the app may have changed the text since
+    if (textBefore(ic, undo.text.length) != undo.text) {
+      pasteUndo = null
+      return
+    }
+    ic.deleteSurroundingText(undo.text.length, 0)
+    pasteUndo = undo.copy(undone = true)
+    afterSeparator()
+  }
+
+  fun redoPaste() {
+    pasteUndo?.let { pasteFresh(it.text) }
+  }
 
   fun deleteBackward() = backspace()
 
@@ -456,6 +488,7 @@ class InputController(private val host: KeyboardHost) {
     val ic = host.inputConnection ?: return
     decodeJob?.cancel()
     ClipboardStore.fresh = null
+    pasteUndo = null
     revert = null
     lastWasSpace = false
     autoSpaced = false
@@ -483,6 +516,7 @@ class InputController(private val host: KeyboardHost) {
     val ic = host.inputConnection ?: return
     // Typing means the user moved on from what they copied
     ClipboardStore.fresh = null
+    pasteUndo = null
     revert = null
     lastWasSpace = false
     val c = text.singleOrNull()

@@ -210,30 +210,49 @@ fun pasteClip(context: Context, controller: InputController, clip: Clip): Boolea
 @Composable
 fun FreshClipStrip(controller: InputController, colors: KeyboardColors, clip: Clip) {
   val context = LocalContext.current
+  PillStrip(controller, colors, onClick = {
+    // Text can be taken back from the strip; an image or GIF is the app's to handle once sent
+    if (clip.kind == ClipKind.TEXT) controller.pasteFresh(clip.content)
+    if (clip.kind == ClipKind.TEXT || pasteClip(context, controller, clip)) ClipboardStore.fresh = null
+  }) {
+    Icon(Icons.Clipboard, stringResource(R.string.paste_copied), Modifier.size(16.dp), tint = colors.accent)
+    Spacer(Modifier.width(8.dp))
+    if (clip.kind == ClipKind.TEXT) {
+      // One line: newlines and runs of spaces collapse; a copied password is never shown
+      val preview = if (controller.isSecretField) "••••••••" else clip.content.take(STRIP_CHARS).replace(Regex("\\s+"), " ").trim()
+      Text(preview, color = colors.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    } else {
+      Box(Modifier.size(width = 44.dp, height = 28.dp).clip(RoundedCornerShape(6.dp))) { ClipImage(clip) }
+      Spacer(Modifier.width(8.dp))
+      Text(stringResource(if (clip.kind == ClipKind.GIF) R.string.copied_gif else R.string.copied_image), color = colors.text, fontSize = 15.sp)
+    }
+  }
+}
+
+/** After the copied-item pill pastes, the same spot takes it back, then puts it back again. */
+@Composable
+fun PasteUndoStrip(controller: InputController, colors: KeyboardColors, undo: InputController.PasteUndo) {
+  PillStrip(controller, colors, onClick = { if (undo.undone) controller.redoPaste() else controller.undoPaste() }) {
+    Icon(if (undo.undone) Icons.Redo else Icons.Undo, null, Modifier.size(16.dp), tint = colors.accent)
+    Spacer(Modifier.width(8.dp))
+    Text(stringResource(if (undo.undone) R.string.redo else R.string.undo), color = colors.text, fontSize = 15.sp)
+  }
+}
+
+/** The strip with one centred pill in place of the suggestions, between the toolbar and clipboard buttons. */
+@Composable
+private fun PillStrip(controller: InputController, colors: KeyboardColors, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     ToolButton(Icons.Next, R.string.open_toolbar, colors) { controller.toolbarOpen = true }
     // A pill as wide as its content, centred; long text stops at about two thirds of the strip
     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-    Row(
-      Modifier.widthIn(max = 240.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(colors.key)
-        .clickable {
-          if (pasteClip(context, controller, clip)) ClipboardStore.fresh = null
-        }
-        .padding(horizontal = 12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Icon(Icons.Clipboard, stringResource(R.string.paste_copied), Modifier.size(16.dp), tint = colors.accent)
-      Spacer(Modifier.width(8.dp))
-      if (clip.kind == ClipKind.TEXT) {
-        // One line: newlines and runs of spaces collapse; a copied password is never shown
-        val preview = if (controller.isSecretField) "••••••••" else clip.content.take(STRIP_CHARS).replace(Regex("\\s+"), " ").trim()
-        Text(preview, color = colors.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-      } else {
-        Box(Modifier.size(width = 44.dp, height = 28.dp).clip(RoundedCornerShape(6.dp))) { ClipImage(clip) }
-        Spacer(Modifier.width(8.dp))
-        Text(stringResource(if (clip.kind == ClipKind.GIF) R.string.copied_gif else R.string.copied_image), color = colors.text, fontSize = 15.sp)
-      }
-    }
+      Row(
+        Modifier.widthIn(max = 240.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(colors.key)
+          .clickable(onClick = onClick)
+          .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+      )
     }
     ToolButton(Icons.Clipboard, R.string.clipboard, colors) { controller.panel = Panel.CLIPBOARD }
   }
