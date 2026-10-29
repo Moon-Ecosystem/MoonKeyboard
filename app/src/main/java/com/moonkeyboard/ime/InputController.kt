@@ -1,11 +1,14 @@
 package com.moonkeyboard.ime
 
 import android.content.ClipDescription
+import android.graphics.Color
 import android.inputmethodservice.InputMethodService
 import android.net.Uri
 import android.os.SystemClock
 import android.text.InputType
 import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.BackgroundColorSpan
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
@@ -57,10 +60,18 @@ fun InputMethodService.asKeyboardHost() = object : KeyboardHost {
 enum class Panel { KEYS, CLIPBOARD, EMOJI, EDIT, OPTIONS }
 
 /**
- * Shows [text] as the word being typed, without the underline apps add by default: they only add
- * it to plain text, so styled (Spannable) text goes in as is.
+ * Shows [text] as the word being typed, without the underline apps add by default. Views only add
+ * it to plain text, so styled (Spannable) text goes in as is; Compose text fields add it unless the
+ * keyboard sends a style of its own, so the word carries an invisible one (a see-through
+ * background). It's marked as part of the word being typed, so it's dropped once the word is done.
  */
-private fun InputConnection.compose(text: CharSequence) = setComposingText(SpannableString(text), 1)
+private fun InputConnection.compose(text: CharSequence) = setComposingText(
+  SpannableString(text).apply {
+    // An exclusive span can't be empty
+    if (isNotEmpty()) setSpan(BackgroundColorSpan(Color.TRANSPARENT), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE or Spanned.SPAN_COMPOSING)
+  },
+  1,
+)
 
 /**
  * Turns key presses into edits on the host's text field. The word being typed is kept as
@@ -695,13 +706,16 @@ class InputController(private val host: KeyboardHost) {
     // Mark the word where it is: deleting and retyping it made Firefox's caret jump to its start
     val text = ic.getExtractedText(ExtractedTextRequest(), 0)
     val cursor = if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
-    if (cursor < word.length || !ic.setComposingRegion(cursor - word.length, cursor)) {
+    ic.beginBatchEdit()
+    if (cursor >= word.length && ic.setComposingRegion(cursor - word.length, cursor)) {
+      // The same word over itself, for the invisible style that keeps Compose fields from underlining it
+      ic.compose(word)
+    } else {
       // Editors without composing regions get the word retyped instead
-      ic.beginBatchEdit()
       ic.deleteSurroundingText(word.length, 0)
       ic.compose(word)
-      ic.endBatchEdit()
     }
+    ic.endBatchEdit()
     composing.append(word)
     word.forEach { touches += keyMap?.touchFor(it) ?: Touch.exact(it) }
   }
