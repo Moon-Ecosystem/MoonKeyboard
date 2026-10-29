@@ -3,6 +3,16 @@ package com.moonkeyboard.ime
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.graphics.ImageDecoder
+import android.graphics.drawable.AnimatedImageDrawable
+import android.graphics.drawable.Drawable
+import android.os.Handler
+import android.os.Looper
+import androidx.annotation.RequiresApi
+import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import android.view.KeyEvent
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -273,15 +283,66 @@ private const val STRIP_CHARS = 120
 @Composable
 private fun ClipImage(clip: Clip, keepShape: Boolean = false) {
   val maxPx = with(LocalDensity.current) { 200.dp.roundToPx() }
+  // A GIF plays in the panel's tiles (Android 9+); elsewhere, and on older phones, its first frame shows
+  if (keepShape && clip.kind == ClipKind.GIF && Build.VERSION.SDK_INT >= 28) {
+    AnimatedGif(clip, maxPx)
+    return
+  }
   val bitmap by produceState<ImageBitmap?>(null, clip.content) {
     value = withContext(Dispatchers.IO) { runCatching { ClipboardStore.thumbnail(clip, maxPx) }.getOrNull() }
   }
-  // shortcut: a GIF shows its first frame, not the animation; AnimatedImageDrawable (API 28+) can play it later
   val image = bitmap
   when {
     !keepShape -> image?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
     image == null -> Spacer(Modifier.fillMaxWidth().height(96.dp))
     else -> Image(image, null, Modifier.fillMaxWidth().aspectRatio(image.width.toFloat() / image.height), contentScale = ContentScale.Crop)
+  }
+}
+
+/**
+ * Plays a GIF clip at its own proportions, decoded at about [maxPx] wide. The drawable runs its
+ * own frame timing; each frame it asks to be redrawn bumps [frame], which redraws the canvas.
+ * It only plays while its tile is on screen: the grid drops tiles that scroll away.
+ */
+@RequiresApi(28)
+@Composable
+private fun AnimatedGif(clip: Clip, maxPx: Int) {
+  val drawable by produceState<Drawable?>(null, clip.content) {
+    value = withContext(Dispatchers.IO) {
+      runCatching {
+        ImageDecoder.decodeDrawable(ImageDecoder.createSource(ClipboardStore.file(clip))) { decoder, info, _ ->
+          // Frames are decoded at tile size, never larger: a full-size 1080p GIF would hold ~16 MB of frames
+          val w = info.size.width
+          if (w > maxPx) decoder.setTargetSize(maxPx, (info.size.height.toLong() * maxPx / w).toInt().coerceAtLeast(1))
+        }
+      }.getOrNull()
+    }
+  }
+  val d = drawable ?: return Spacer(Modifier.fillMaxWidth().height(96.dp))
+  var frame by remember { mutableIntStateOf(0) }
+  DisposableEffect(d) {
+    val handler = Handler(Looper.getMainLooper())
+    d.callback = object : Drawable.Callback {
+      override fun invalidateDrawable(who: Drawable) {
+        frame++
+      }
+      override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
+        handler.postAtTime(what, `when`)
+      }
+      override fun unscheduleDrawable(who: Drawable, what: Runnable) {
+        handler.removeCallbacks(what)
+      }
+    }
+    (d as? AnimatedImageDrawable)?.start()
+    onDispose {
+      (d as? AnimatedImageDrawable)?.stop()
+      d.callback = null
+    }
+  }
+  Canvas(Modifier.fillMaxWidth().aspectRatio(d.intrinsicWidth.toFloat() / d.intrinsicHeight.coerceAtLeast(1))) {
+    frame
+    d.setBounds(0, 0, size.width.toInt(), size.height.toInt())
+    drawIntoCanvas { d.draw(it.nativeCanvas) }
   }
 }
 
