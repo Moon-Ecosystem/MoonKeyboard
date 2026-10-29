@@ -431,27 +431,31 @@ fun EmojiSearchStrip(controller: InputController, colors: KeyboardColors) {
 
 // Options
 
-/** The keyboard's quick settings, so the toolbar keeps only what is used all the time. */
+/** What isn't on the toolbar, then settings: between the two, everything is a tap or two away. */
 @Composable
 fun OptionsPanel(controller: InputController, colors: KeyboardColors, modifier: Modifier) {
   val context = LocalContext.current
-  // Emoji is left out: the comma key's long press opens emoji search too
-  val tile: @Composable RowScope.(ToolbarItem) -> Unit = { item ->
-    OptionTile(colors, item.icon, item.label, active = item.isOn(), enabled = item.isEnabled()) { item.act(controller, colors) }
-  }
+  val items = ToolbarItem.entries - Prefs.toolbar().toSet()
+  // Two rows, at least three to a row so a few tiles don't grow huge; null is settings
+  val tiles: List<ToolbarItem?> = items + null
+  val perRow = maxOf(3, (tiles.size + 1) / 2)
   Column(modifier) {
     PanelHeader(R.string.keyboard_options, controller, colors)
     Column(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      EditRow {
-        tile(ToolbarItem.TEXT_EDIT)
-        tile(ToolbarItem.ONE_HANDED)
-        tile(ToolbarItem.FLOATING)
-      }
-      EditRow {
-        tile(ToolbarItem.SPLIT)
-        tile(ToolbarItem.THEME)
-        OptionTile(colors, Icons.Open, R.string.settings) {
-          context.startActivity(Intent(context, com.moonkeyboard.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      for (row in 0 until 2) EditRow {
+        for (slot in row * perRow until (row + 1) * perRow) {
+          if (slot > tiles.lastIndex) {
+            Spacer(Modifier.weight(1f))
+            continue
+          }
+          val item = tiles[slot]
+          if (item != null) {
+            OptionTile(colors, item.icon, item.label, active = item.isOn(), enabled = item.isEnabled()) { item.act(controller, colors) }
+          } else {
+            OptionTile(colors, Icons.Open, R.string.settings) {
+              context.startActivity(Intent(context, com.moonkeyboard.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+          }
         }
       }
     }
