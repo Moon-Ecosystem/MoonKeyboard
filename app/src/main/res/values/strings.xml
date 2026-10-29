@@ -113,6 +113,13 @@
   <string name="split_short">Split landscape</string>
   <string name="keyboard_options">Keyboard options</string>
   <string name="top_bar">Top bar</string>
+  <string name="on_the_bar">On the bar</string>
+  <string name="more_for_bar">More</string>
+  <string name="add_to_bar">Add to the top bar</string>
+  <string name="remove_from_bar">Remove from the top bar</string>
+  <string name="drag_to_reorder">Drag to reorder</string>
+  <string name="move_up">Move up</string>
+  <string name="move_down">Move down</string>
   <string name="top_bar_note">Up to %1$d. Options and clipboard are always there, and everything is in options.</string>
   <string name="move_keyboard">Move keyboard</string>
   <string name="resize_keyboard">Resize keyboard</string>

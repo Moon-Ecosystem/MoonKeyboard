@@ -65,6 +65,17 @@ import com.moonkeyboard.ime.Prefs
 import com.moonkeyboard.ime.ThemeMode
 import com.moonkeyboard.ime.ToolbarItem
 import com.moonkeyboard.ime.label
+import com.moonkeyboard.ime.icon
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.zIndex
 
 enum class Screen { HOME, LOOK, TYPING, GLIDE, EMOJI, CLIPBOARD, LEARNED, TEST_PAD }
 
@@ -248,22 +259,129 @@ fun LookScreen(onBack: () -> Unit) {
       }
       Spacer(Modifier.height(4.dp))
       SectionLabel(R.string.top_bar)
-      Card {
-        val chosen = Prefs.toolbar()
-        ToolbarItem.entries.forEachIndexed { i, item ->
-          if (i > 0) Divider()
-          val on = item in chosen
-          // A full bar takes nothing more until something comes off it
-          val enabled = on || chosen.size < ToolbarItem.MAX
-          LabelRow(item.label) {
-            Switch(on, { Prefs.setOnToolbar(item, it) }, enabled = enabled, colors = switchColors())
-          }
-        }
-      }
+      TopBarEditor()
       Text(stringResource(R.string.top_bar_note, ToolbarItem.MAX), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 12.sp)
       Text(stringResource(R.string.look_preview_note), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 12.sp)
     }
     PreviewKeyboard()
+  }
+}
+
+private val BarRowHeight = 56.dp
+
+/**
+ * The top bar's buttons in its order, moved by dragging their handles, then the ones not on it.
+ * Rows move as the dragged one passes half of its neighbour, so the saved order is always what shows.
+ */
+@Composable
+private fun TopBarEditor() {
+  val c = LocalAppColors.current
+  val view = LocalView.current
+  val chosen = Prefs.toolbar()
+  // A row and the divider under it
+  val pitch = with(LocalDensity.current) { (BarRowHeight + 1.dp).toPx() }
+  var dragging by remember { mutableStateOf<ToolbarItem?>(null) }
+  var dragY by remember { mutableFloatStateOf(0f) }
+  val moveUp = stringResource(R.string.move_up)
+  val moveDown = stringResource(R.string.move_down)
+
+  fun move(item: ToolbarItem, by: Int): Boolean {
+    val list = Prefs.toolbar().toMutableList()
+    val from = list.indexOf(item)
+    if (from < 0 || from + by !in list.indices) return false
+    list.add(from + by, list.removeAt(from))
+    Prefs.setToolbar(list)
+    Haptics.tap(view)
+    return true
+  }
+
+  Card {
+    GroupLabel(R.string.on_the_bar)
+    chosen.forEachIndexed { i, item ->
+      // Keyed so a row keeps its drag as the list reorders under it
+      key(item) {
+        if (i > 0) Divider()
+        val lifted = item == dragging
+        BarRow(
+          item,
+          Modifier.zIndex(if (lifted) 1f else 0f)
+            .graphicsLayer { translationY = if (lifted) dragY else 0f }
+            .background(if (lifted) c.selected else Color.Transparent)
+            .semantics {
+              customActions = listOf(
+                CustomAccessibilityAction(moveUp) { move(item, -1) },
+                CustomAccessibilityAction(moveDown) { move(item, 1) },
+              )
+            },
+          AppIcons.Remove, R.string.remove_from_bar, enabled = true, onAction = { Prefs.setToolbar(chosen - item) },
+        ) {
+          Box(
+            Modifier.size(44.dp).pointerInput(item) {
+              detectDragGestures(
+                onDragStart = { dragging = item; dragY = 0f },
+                onDragEnd = { dragging = null; dragY = 0f },
+                onDragCancel = { dragging = null; dragY = 0f },
+              ) { change, amount ->
+                change.consume()
+                val list = Prefs.toolbar()
+                val at = list.indexOf(item)
+                // Not past either end of the list
+                dragY = (dragY + amount.y).coerceIn(-at * pitch, (list.lastIndex - at) * pitch)
+                if (dragY > pitch / 2 && move(item, 1)) dragY -= pitch
+                if (dragY < -pitch / 2 && move(item, -1)) dragY += pitch
+              }
+            },
+            contentAlignment = Alignment.Center,
+          ) {
+            Icon(AppIcons.DragHandle, stringResource(R.string.drag_to_reorder), Modifier.size(22.dp), tint = c.muted)
+          }
+        }
+      }
+    }
+    val rest = ToolbarItem.entries - chosen.toSet()
+    if (rest.isNotEmpty()) {
+      Box(Modifier.fillMaxWidth().height(1.dp).background(c.divider))
+      GroupLabel(R.string.more_for_bar)
+      rest.forEachIndexed { i, item ->
+        if (i > 0) Divider()
+        // A full bar takes nothing more until something comes off it
+        BarRow(item, Modifier, AppIcons.Add, R.string.add_to_bar, enabled = chosen.size < ToolbarItem.MAX, onAction = { Prefs.setToolbar(chosen + item) })
+      }
+    }
+  }
+}
+
+@Composable
+private fun GroupLabel(text: Int) {
+  Text(
+    stringResource(text).uppercase(), Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+    color = LocalAppColors.current.faint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp,
+  )
+}
+
+/** A toolbar button's row: its icon and name, then add or remove, then (on the bar) the drag handle. */
+@Composable
+private fun BarRow(
+  item: ToolbarItem,
+  modifier: Modifier,
+  actionIcon: androidx.compose.ui.graphics.vector.ImageVector,
+  actionLabel: Int,
+  enabled: Boolean,
+  onAction: () -> Unit,
+  handle: @Composable () -> Unit = {},
+) {
+  val c = LocalAppColors.current
+  Row(modifier.fillMaxWidth().height(BarRowHeight).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Icon(item.icon, null, Modifier.size(20.dp), tint = c.muted)
+    Spacer(Modifier.width(14.dp))
+    Text(stringResource(item.label), Modifier.weight(1f), color = c.text, fontSize = 15.sp)
+    Box(
+      Modifier.size(44.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onAction),
+      contentAlignment = Alignment.Center,
+    ) {
+      Icon(actionIcon, stringResource(actionLabel), Modifier.size(22.dp), tint = if (enabled) c.accent else c.faint)
+    }
+    handle()
   }
 }
 
@@ -274,6 +392,12 @@ private fun PreviewKeyboard() {
   val host = remember { TestPadHost(view) }
   val controller = remember { InputController(host).also { it.onStartInput(host.editorInfo) } }
   androidx.compose.runtime.DisposableEffect(controller) { onDispose { controller.close() } }
+  // A change to the top bar opens it here, to show the result
+  var barChanged by remember { mutableStateOf(false) }
+  androidx.compose.runtime.LaunchedEffect(Prefs.toolbarItems.value) {
+    if (barChanged) controller.toolbarOpen = true
+    barChanged = true
+  }
   Box(Modifier.fillMaxWidth().height(1.dp).background(LocalAppColors.current.divider))
   KeyboardUi(controller)
 }

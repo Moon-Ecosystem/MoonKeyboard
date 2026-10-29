@@ -9,7 +9,7 @@ enum class OneHanded { OFF, LEFT, RIGHT }
 enum class KeySize(val scale: Float) { SHORT(0.9f), NORMAL(1f), TALL(1.12f) }
 enum class ImageExpiry(val days: Int?) { WEEK(7), MONTH(30), NEVER(null) }
 
-/** What the user can put on the toolbar; options and clipboard are always there. Shown in this order. */
+/** What the user can put on the toolbar, in the order they choose; options and clipboard are always there. */
 enum class ToolbarItem {
   EMOJI, THEME, FLOATING, ONE_HANDED, TEXT_EDIT, SPLIT;
 
@@ -68,14 +68,14 @@ object Prefs {
   val floatPortrait = Pref("float_portrait", FloatSpot.UNSET, FloatSpot::parse)
   val floatLandscape = Pref("float_landscape", FloatSpot.UNSET, FloatSpot::parse)
   val splitLandscape = Pref("split_landscape", false, String::toBoolean)
-  /** Toolbar items as comma-separated names; use [toolbar] and [setOnToolbar]. */
+  /** Toolbar items as comma-separated names, in the bar's order; use [toolbar] and [setToolbar]. */
   val toolbarItems = Pref("toolbar", "EMOJI,THEME,FLOATING") { it }
 
-  fun toolbar(): List<ToolbarItem> = toolbarItems.value.split(',').let { names -> ToolbarItem.entries.filter { it.name in names } }
+  fun toolbar(): List<ToolbarItem> =
+    toolbarItems.value.split(',').mapNotNull { name -> ToolbarItem.entries.find { it.name == name } }.distinct()
 
-  fun setOnToolbar(item: ToolbarItem, on: Boolean) {
-    val items = toolbar().toMutableSet().apply { if (on) add(item) else remove(item) }
-    toolbarItems.value = ToolbarItem.entries.filter { it in items }.joinToString(",")
+  fun setToolbar(items: List<ToolbarItem>) {
+    toolbarItems.value = items.joinToString(",")
   }
 
   val haptics = Pref("haptics", true, String::toBoolean)
