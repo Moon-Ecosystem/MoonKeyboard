@@ -17,4 +17,5 @@ local.properties
 .env
 debug.keystore
 .codegraph/
+.claude/
 tools/data/
