@@ -8,10 +8,18 @@
 
 Glide typing, autocorrect and next-word prediction in English and Hinglish. The app has no internet permission, so nothing you type leaves your phone.
 
-[![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?labelColor=27303D)](#building-from-source)
+[![Release](https://img.shields.io/github/v/release/Moon-Ecosystem/MoonKeyboard?label=Release&labelColor=27303D&color=0877d2)](https://github.com/Moon-Ecosystem/MoonKeyboard/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/Moon-Ecosystem/MoonKeyboard/release.yml?labelColor=27303D)](https://github.com/Moon-Ecosystem/MoonKeyboard/actions/workflows/release.yml)
+[![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?labelColor=27303D)](#download)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?labelColor=27303D)](LICENSE)
 
 </div>
+
+## Download
+
+Grab the latest signed APK from [Releases](https://github.com/Moon-Ecosystem/MoonKeyboard/releases/latest). Version tags publish a release such as **Moon Keyboard 0.1**, and every push to `main` publishes a numbered pre-release build.
+
+_Requires Android 7.0 (API 24) or higher._
 
 ## Features
 
