@@ -32,6 +32,7 @@ import com.moonkeyboard.engine.suggest.WordContext
 import com.moonkeyboard.engine.suggest.isWordChar
 import com.moonkeyboard.engine.text.graphemeStep
 import com.moonkeyboard.engine.text.lastGraphemeLength
+import com.moonkeyboard.engine.text.oneTimeCode
 import com.moonkeyboard.engine.trace.TracePoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -152,7 +153,9 @@ class InputController(private val host: KeyboardHost) {
 
   private val composing = StringBuilder()
   private val touches = ArrayList<Touch>()
-  private var field = FieldFlags.NONE
+  // State, so the strip redraws when a restart swaps a text field for a number one
+  private var field by mutableStateOf(FieldFlags.NONE)
+  private var inputClass = -1
   /** The selection as the app last reported it (or we last set it): the fixed end and the moving end. */
   private var selAnchor = -1
   private var selCursor = -1
@@ -196,22 +199,28 @@ class InputController(private val host: KeyboardHost) {
   /**
    * A field gained focus. [restarting]: the same field restarted its input (Firefox does this when
    * you tap back into a search box); the open panel stays, but the strip is filled again, since
-   * [onFinishInput] emptied it.
+   * [onFinishInput] emptied it. Chrome restarts when focus moves between a page's boxes too, so a
+   * restart into a different kind of field (text to number) is treated as a new field.
    */
   fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
     forgetAsk = null
     pasteUndo = null
     midWord = null
     field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
-    if (restarting) {
+    val kind = info.inputType and InputType.TYPE_MASK_CLASS
+    val sameKind = kind == inputClass
+    inputClass = kind
+    if (restarting && sameKind) {
       selAnchor = info.initialSelStart
       selCursor = info.initialSelEnd
       clearWord()
       cursorPlaced()
       return
     }
-    layerId = when (info.inputType and InputType.TYPE_MASK_CLASS) {
-      InputType.TYPE_CLASS_NUMBER, InputType.TYPE_CLASS_PHONE, InputType.TYPE_CLASS_DATETIME -> SYMBOLS
+    layerId = when (kind) {
+      InputType.TYPE_CLASS_NUMBER -> NUMBER
+      InputType.TYPE_CLASS_PHONE -> PHONE
+      InputType.TYPE_CLASS_DATETIME -> DATETIME
       else -> LETTERS
     }
     Language.engine?.lexicon?.let {
@@ -232,6 +241,13 @@ class InputController(private val host: KeyboardHost) {
     cursorPlaced()
   }
 
+  /**
+   * Typing puts the copied item aside so the strip can suggest; it comes back once the cursor is put
+   * somewhere new (a tap in the text, another field, the keyboard reopening) until it is pasted.
+   */
+  var clipSetAside by mutableStateOf(false)
+    private set
+
   /** When a finger was last on the keyboard; selection changes soon after are echoes of our own edits. */
   private var lastTouchMs = 0L
   /** A finger still on the keyboard: a held backspace keeps editing with no new touch events. */
@@ -251,6 +267,7 @@ class InputController(private val host: KeyboardHost) {
    */
   private fun cursorPlaced(bySlide: Boolean = false) {
     midWord = null
+    clipSetAside = false
     val ic = host.inputConnection
     if (ic != null && (bySlide || !isEcho()) && composing.isEmpty() && panel == Panel.KEYS && emojiQuery == null && field.suggest) resumeWord(ic)
     if (composing.isNotEmpty()) return requestSuggestions()
@@ -453,6 +470,14 @@ class InputController(private val host: KeyboardHost) {
   /** A password or PIN field: never show clipboard text on screen here. */
   val isSecretField: Boolean get() = this.field.secret
 
+  /**
+   * What the copied-item pill pastes for copied [text], or null to not offer it. A number field gets
+   * just the one-time code from a message, or the copy itself when it holds no letters (an account
+   * number); a message without a clear code would paste as a jumble of its digits.
+   */
+  fun copiedTextOffer(text: String): String? =
+    if (!field.number) text else oneTimeCode(text) ?: text.trim().takeIf { t -> t.isNotEmpty() && t.none(Char::isLetter) }
+
   /** The app whose field is focused. */
   val targetPackage: String? get() = host.editorInfo.packageName
 
@@ -602,7 +627,7 @@ class InputController(private val host: KeyboardHost) {
     val keys = keyMap ?: return
     val ic = host.inputConnection ?: return
     decodeJob?.cancel()
-    ClipboardStore.fresh = null
+    clipSetAside = true
     forgetAsk = null
     pasteUndo = null
     midWord = null
@@ -631,8 +656,7 @@ class InputController(private val host: KeyboardHost) {
 
   private fun typeText(text: String, x: Float, y: Float) {
     val ic = host.inputConnection ?: return
-    // Typing means the user moved on from what they copied
-    ClipboardStore.fresh = null
+    clipSetAside = true
     forgetAsk = null
     pasteUndo = null
     midWord = null
@@ -903,6 +927,8 @@ class InputController(private val host: KeyboardHost) {
   }
 
   private fun doubleSpaceApplies(ic: InputConnection): Boolean {
+    // "12  34" in a number or phone field is spacing, not the end of a sentence
+    if (inputClass != InputType.TYPE_CLASS_TEXT) return false
     val before = textBefore(ic, 2)
     return before.length == 2 && before[1] == ' ' && (before[0].isLetterOrDigit() || before[0] in "\"')")
   }
@@ -922,16 +948,16 @@ class InputController(private val host: KeyboardHost) {
   }
 
   /** What the focused field allows, from its input type. */
-  private data class FieldFlags(val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false) {
+  private data class FieldFlags(val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false, val number: Boolean = false) {
     companion object {
       val NONE = FieldFlags(suggest = false, autocorrect = false, learn = false, autoCaps = false)
 
       fun from(info: EditorInfo): FieldFlags {
         val type = info.inputType
         if (type and InputType.TYPE_MASK_CLASS != InputType.TYPE_CLASS_TEXT) {
-          val pin = type and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_NUMBER &&
-            type and InputType.TYPE_MASK_VARIATION == InputType.TYPE_NUMBER_VARIATION_PASSWORD
-          return NONE.copy(secret = pin)
+          val number = type and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_NUMBER
+          val pin = number && type and InputType.TYPE_MASK_VARIATION == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+          return NONE.copy(secret = pin, number = number)
         }
         val variation = type and InputType.TYPE_MASK_VARIATION
         val password = variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
@@ -956,6 +982,11 @@ class InputController(private val host: KeyboardHost) {
   companion object {
     const val LETTERS = "qwerty"
     const val SYMBOLS = "symbols"
+    // Pads for fields that only take digits; no way to letters, as in AOSP
+    const val NUMBER = "number"
+    const val PHONE = "phone"
+    const val DATETIME = "datetime"
+    val PADS = setOf(NUMBER, PHONE, "phone_symbols", DATETIME)
     // Longest grapheme we expect (ZWJ emoji sequences run to ~11 chars), with room to spare
     private const val GRAPHEME_LOOKBEHIND = 32
     // How far ↑ ↓ look for a line break; past this, a field with none is treated as ending there

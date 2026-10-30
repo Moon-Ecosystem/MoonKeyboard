@@ -1,0 +1,28 @@
+{
+  "rows": [
+    {"keys": [
+      {"label": "1"},
+      {"label": "2"},
+      {"label": "3"},
+      {"label": "/", "special": true}
+    ]},
+    {"keys": [
+      {"label": "4"},
+      {"label": "5"},
+      {"label": "6"},
+      {"label": ":", "special": true}
+    ]},
+    {"keys": [
+      {"label": "7"},
+      {"label": "8"},
+      {"label": "9"},
+      {"type": "backspace"}
+    ]},
+    {"keys": [
+      {"label": "-", "special": true},
+      {"label": "0"},
+      {"type": "space", "label": "␣", "special": true},
+      {"type": "enter"}
+    ]}
+  ]
+}

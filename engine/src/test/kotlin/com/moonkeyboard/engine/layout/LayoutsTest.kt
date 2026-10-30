@@ -5,7 +5,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LayoutsTest {
-  private val ids = listOf("qwerty", "symbols", "symbols2")
+  private val pads = listOf("number", "phone", "phone_symbols", "datetime")
+  private val ids = listOf("qwerty", "symbols", "symbols2") + pads
+
+  @Test
+  fun padsAreFullFourColumnGrids() {
+    for (id in pads) {
+      for (row in Layouts.load(id).rows) assertEquals("$id row", 4f, row.keys.sumOf { it.width.toDouble() }.toFloat(), 0.001f)
+    }
+  }
 
   @Test
   fun everyLayoutLoadsAndLayerKeysPointToRealLayouts() {

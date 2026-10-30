@@ -23,6 +23,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +65,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -93,6 +98,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.moonkeyboard.R
+import com.moonkeyboard.engine.text.oneTimeCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -229,21 +235,38 @@ fun pasteClip(context: Context, controller: InputController, clip: Clip): Boolea
 @Composable
 fun FreshClipStrip(controller: InputController, colors: KeyboardColors, clip: Clip) {
   val context = LocalContext.current
-  PillStrip(controller, colors, onClick = {
-    // Text can be taken back from the strip; an image or GIF is the app's to handle once sent
-    if (clip.kind == ClipKind.TEXT) controller.pasteFresh(clip.content)
-    if (clip.kind == ClipKind.TEXT || pasteClip(context, controller, clip)) ClipboardStore.fresh = null
-  }) {
-    Icon(Icons.Clipboard, stringResource(R.string.paste_copied), Modifier.size(16.dp), tint = colors.accent)
-    Spacer(Modifier.width(8.dp))
-    if (clip.kind == ClipKind.TEXT) {
-      // One line: newlines and runs of spaces collapse; a copied password is never shown
-      val preview = if (controller.isSecretField) "••••••••" else clip.content.take(STRIP_CHARS).replace(Regex("\\s+"), " ").trim()
-      Text(preview, color = colors.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    } else {
-      Box(Modifier.size(width = 44.dp, height = 28.dp).clip(RoundedCornerShape(6.dp))) { ClipImage(clip) }
+  // In a number field, just the one-time code from a copied message
+  val text = controller.copiedTextOffer(clip.content) ?: clip.content
+  // In a text field, a code in the message gets its own pill beside the whole message
+  val code = if (clip.kind == ClipKind.TEXT && !controller.isSecretField) oneTimeCode(clip.content)?.takeIf { it != text.trim() } else null
+  PillStrip(controller, colors) {
+    if (code != null) {
+      Pill(colors, onClick = {
+        controller.pasteFresh(code)
+        ClipboardStore.fresh = null
+      }) {
+        Icon(Icons.Clipboard, stringResource(R.string.paste_copied), Modifier.size(16.dp), tint = colors.accent)
+        Spacer(Modifier.width(8.dp))
+        Text(code, color = colors.text, fontSize = 15.sp, maxLines = 1)
+      }
       Spacer(Modifier.width(8.dp))
-      Text(stringResource(if (clip.kind == ClipKind.GIF) R.string.copied_gif else R.string.copied_image), color = colors.text, fontSize = 15.sp)
+    }
+    Pill(colors, maxWidth = if (code != null) 160.dp else 240.dp, onClick = {
+      // Text can be taken back from the strip; an image or GIF is the app's to handle once sent
+      if (clip.kind == ClipKind.TEXT) controller.pasteFresh(text)
+      if (clip.kind == ClipKind.TEXT || pasteClip(context, controller, clip)) ClipboardStore.fresh = null
+    }) {
+      Icon(Icons.Clipboard, stringResource(R.string.paste_copied), Modifier.size(16.dp), tint = colors.accent)
+      Spacer(Modifier.width(8.dp))
+      if (clip.kind == ClipKind.TEXT) {
+        // One line: newlines and runs of spaces collapse; a copied password is never shown
+        val preview = if (controller.isSecretField) "••••••••" else text.take(STRIP_CHARS).replace(Regex("\\s+"), " ").trim()
+        Text(preview, color = colors.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      } else {
+        Box(Modifier.size(width = 44.dp, height = 28.dp).clip(RoundedCornerShape(6.dp))) { ClipImage(clip) }
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(if (clip.kind == ClipKind.GIF) R.string.copied_gif else R.string.copied_image), color = colors.text, fontSize = 15.sp)
+      }
     }
   }
 }
@@ -251,30 +274,35 @@ fun FreshClipStrip(controller: InputController, colors: KeyboardColors, clip: Cl
 /** After the copied-item pill pastes, the same spot takes it back, then puts it back again. */
 @Composable
 fun PasteUndoStrip(controller: InputController, colors: KeyboardColors, undo: InputController.PasteUndo) {
-  PillStrip(controller, colors, onClick = { if (undo.undone) controller.redoPaste() else controller.undoPaste() }) {
-    Icon(if (undo.undone) Icons.Redo else Icons.Undo, null, Modifier.size(16.dp), tint = colors.accent)
-    Spacer(Modifier.width(8.dp))
-    Text(stringResource(if (undo.undone) R.string.redo else R.string.undo), color = colors.text, fontSize = 15.sp)
+  PillStrip(controller, colors) {
+    Pill(colors, onClick = { if (undo.undone) controller.redoPaste() else controller.undoPaste() }) {
+      Icon(if (undo.undone) Icons.Redo else Icons.Undo, null, Modifier.size(16.dp), tint = colors.accent)
+      Spacer(Modifier.width(8.dp))
+      Text(stringResource(if (undo.undone) R.string.redo else R.string.undo), color = colors.text, fontSize = 15.sp)
+    }
   }
 }
 
-/** The strip with one centred pill in place of the suggestions, between the toolbar and clipboard buttons. */
+/** The strip with centred [Pill]s in place of the suggestions, between the toolbar and clipboard buttons. */
 @Composable
-private fun PillStrip(controller: InputController, colors: KeyboardColors, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+private fun PillStrip(controller: InputController, colors: KeyboardColors, pills: @Composable RowScope.() -> Unit) {
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     ToolButton(Icons.Next, R.string.open_toolbar, colors) { controller.toolbarOpen = true }
-    // A pill as wide as its content, centred; long text stops at about two thirds of the strip
-    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-      Row(
-        Modifier.widthIn(max = 240.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(colors.key)
-          .clickable(onClick = onClick)
-          .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        content = content,
-      )
-    }
+    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically, content = pills)
     ToolButton(Icons.Clipboard, R.string.clipboard, colors) { controller.panel = Panel.CLIPBOARD }
   }
+}
+
+/** A pill as wide as its content; long text stops at [maxWidth], about two thirds of the strip. */
+@Composable
+private fun Pill(colors: KeyboardColors, maxWidth: Dp = 240.dp, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+  Row(
+    Modifier.widthIn(max = maxWidth).height(36.dp).clip(RoundedCornerShape(18.dp)).background(colors.key)
+      .clickable(onClick = onClick)
+      .padding(horizontal = 12.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    content = content,
+  )
 }
 
 private const val STRIP_CHARS = 120
@@ -377,24 +405,40 @@ fun EmojiPanel(controller: InputController, colors: KeyboardColors, modifier: Mo
   }
 
   Column(modifier) {
-    // Search, then the categories beside it
-    Row(Modifier.fillMaxWidth().height(44.dp).padding(start = 8.dp, end = 6.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-      Box(
-        Modifier.size(width = 52.dp, height = 32.dp).clip(RoundedCornerShape(16.dp)).background(colors.key).clickable(onClick = controller::startEmojiSearch),
-        contentAlignment = Alignment.Center,
+    // Back to the keys, search, then the categories, which scroll sideways when they don't all fit
+    val tabs = rememberScrollState()
+    val tabPx = with(LocalDensity.current) { TabSize.roundToPx() }
+    // Keeps the category in view on screen as the grid scrolls through them
+    LaunchedEffect(current) { tabs.animateScrollTo((current - 2).coerceAtLeast(0) * tabPx) }
+    Row(
+      Modifier.fillMaxWidth().height(52.dp).padding(start = 6.dp, end = 6.dp, top = 6.dp),
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Box(Modifier.size(TabSize).clip(CircleShape).background(colors.key).clickable { controller.panel = Panel.KEYS }, contentAlignment = Alignment.Center) {
+        Icon(Icons.Left, stringResource(R.string.back), Modifier.size(20.dp), tint = colors.text)
+      }
+      Row(
+        Modifier.height(TabSize).clip(RoundedCornerShape(20.dp)).background(colors.key).clickable(onClick = controller::startEmojiSearch).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
       ) {
         Icon(Icons.Search, stringResource(R.string.search_emoji), Modifier.size(18.dp), tint = colors.muted)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.search), color = colors.muted, fontSize = 15.sp)
       }
-      sections.forEachIndexed { i, s ->
-        val icon = if (s.title != null) Icons.Recent else Icons.EmojiGroups.getOrElse(groups.indexOfFirst { it.name == s.name }) { Icons.Emoji }
-        Box(
-          Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).clickable {
-            tones = null
-            scope.launch { grid.scrollToItem(s.start) }
-          },
-          contentAlignment = Alignment.Center,
-        ) {
-          Icon(icon, s.title?.let { stringResource(it) } ?: s.name, Modifier.size(18.dp), tint = if (i == current) colors.accent else colors.muted)
+      Row(Modifier.weight(1f).horizontalScroll(tabs), verticalAlignment = Alignment.CenterVertically) {
+        sections.forEachIndexed { i, s ->
+          val icon = if (s.title != null) Icons.Recent else Icons.EmojiGroups.getOrElse(groups.indexOfFirst { it.name == s.name }) { Icons.Emoji }
+          Box(
+            // The category in view gets a filled circle, not just a tint, so it stands out at a glance
+            Modifier.size(TabSize).clip(CircleShape).background(if (i == current) colors.special else Color.Transparent).clickable {
+              tones = null
+              scope.launch { grid.scrollToItem(s.start) }
+            },
+            contentAlignment = Alignment.Center,
+          ) {
+            Icon(icon, s.title?.let { stringResource(it) } ?: s.name, Modifier.size(18.dp), tint = if (i == current) colors.text else colors.muted)
+          }
         }
       }
     }
@@ -415,13 +459,17 @@ fun EmojiPanel(controller: InputController, colors: KeyboardColors, modifier: Mo
       }
       tones?.let { list -> TonePicker(list, colors, Modifier.align(Alignment.TopCenter), pick) }
     }
-    Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 6.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-      PanelKey(colors, Modifier.width(52.dp), onClick = { controller.panel = Panel.KEYS }) { Text("ABC", color = colors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-      Spacer(Modifier.weight(1f))
-      PanelKey(colors, Modifier.width(52.dp), onClick = controller::deleteBackward) { Icon(Icons.Backspace, stringResource(R.string.delete), Modifier.size(20.dp), tint = colors.text) }
+    // Laid out like the keyboard's bottom row, so ABC is where the thumb expects the layer key
+    Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+      PanelKey(colors, Modifier.width(76.dp), onClick = { controller.panel = Panel.KEYS }) { Text("ABC", color = colors.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
+      val space = stringResource(R.string.space)
+      PanelKey(colors, Modifier.weight(1f).semantics { contentDescription = space }, special = false, onClick = { controller.insert(" ") }) {}
+      PanelKey(colors, Modifier.width(76.dp), repeats = true, onClick = controller::deleteBackward) { Icon(Icons.Backspace, stringResource(R.string.delete), Modifier.size(22.dp), tint = colors.text) }
     }
   }
 }
+
+private val TabSize = 40.dp
 
 private class Section(val title: Int?, val name: String?, val entries: List<EmojiEntry>) {
   var start = 0

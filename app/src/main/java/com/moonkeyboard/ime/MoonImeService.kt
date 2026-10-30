@@ -107,12 +107,6 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
     controller.onSelectionUpdate(newSelStart, newSelEnd, candidatesEnd)
   }
 
-  override fun onFinishInputView(finishingInput: Boolean) {
-    // A copy is offered the first time the keyboard opens after it, not every time
-    ClipboardStore.fresh = null
-    super.onFinishInputView(finishingInput)
-  }
-
   override fun onFinishInput() {
     controller.onFinishInput()
     Language.flush()

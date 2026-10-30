@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import com.moonkeyboard.engine.text.oneTimeCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.MainScope
@@ -44,8 +45,8 @@ object ClipboardStore {
   val clips = mutableStateListOf<Clip>()
 
   /**
-   * What was just copied, offered once in the suggestion strip. Cleared when pasted, when the user
-   * starts typing, or when the keyboard closes; see [freshClip] for the age limit.
+   * What was just copied, offered in the suggestion strip until it is pasted (typing only puts it
+   * aside, see [InputController.clipSetAside]); see [freshClip] for the age limit.
    */
   var fresh by mutableStateOf<Clip?>(null)
 
@@ -82,7 +83,11 @@ object ClipboardStore {
     if (identity == Prefs.lastClip.value) return
     Prefs.lastClip.value = identity
     if (text != null) {
-      if (text.isNotBlank()) add(ClipKind.TEXT, text, "text/plain", "t:${sha(text.toByteArray())}")
+      if (text.isBlank()) return
+      // A message's one-time code gets its own clip too, for pasting where the strip didn't offer it;
+      // added first so the message stays on top and is what the strip offers
+      oneTimeCode(text)?.takeIf { it != text.trim() }?.let { add(ClipKind.TEXT, it, "text/plain", "t:${sha(it.toByteArray())}") }
+      add(ClipKind.TEXT, text, "text/plain", "t:${sha(text.toByteArray())}")
       return
     }
     val resolver = context.contentResolver

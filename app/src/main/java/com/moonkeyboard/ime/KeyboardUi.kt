@@ -40,6 +40,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.drawscope.translate
@@ -157,13 +158,15 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
       with(density) {
         // Every layer is as tall as the letters: a layer with fewer rows (symbols next to letters
         // with a number row) spreads them out instead of shrinking the keyboard
-        val k = keyHeight.toPx()
+        var k = keyHeight.toPx()
         fun keysHeight(l: Layout) = l.rows.sumOf { (k * it.height).toDouble() }.toFloat()
         val target = keysHeight(letters) + (letters.rows.size - 1) * vGap.toPx()
+        // A number pad's keys grow taller instead, so they stay big targets
+        if (controller.layerId in InputController.PADS) k = (target - (layout.rows.size - 1) * vGap.toPx()) / layout.rows.sumOf { it.height.toDouble() }.toFloat()
         val gap = if (layout.rows.size > 1) maxOf(vGap.toPx(), (target - keysHeight(layout)) / (layout.rows.size - 1)) else vGap.toPx()
         KeyboardGeometry.compute(
           layout, widthPx, k, HGap.toPx(), gap, SidePadding.toPx(), topPadding = TopPadding.toPx(),
-          splitGap = if (split) widthPx * SPLIT_SHARE else 0f,
+          splitGap = if (split && controller.layerId !in InputController.PADS) widthPx * SPLIT_SHARE else 0f,
         )
       }
     }
@@ -192,7 +195,11 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
       Panel.EDIT -> EditPanel(controller, colors, panelModifier)
       Panel.OPTIONS -> OptionsPanel(controller, colors, panelModifier)
       Panel.KEYS -> Column {
-        Strip(controller, colors)
+        // A hairline along the strip's bottom edge, so the bar reads as separate from the keys
+        Box(Modifier.drawBehind {
+          val y = size.height - 0.5.dp.toPx()
+          drawLine(colors.divider, Offset(12.dp.toPx(), y), Offset(size.width - 12.dp.toPx(), y), 1.dp.toPx())
+        }) { Strip(controller, colors) }
         Row {
           if (oneHanded == OneHanded.RIGHT) OneHandedControls(colors, Modifier.weight(1f).height(height))
           Box(Modifier.width(with(density) { widthPx.toDp() }).height(height)) {
@@ -318,8 +325,8 @@ private fun Strip(controller: InputController, colors: KeyboardColors) {
   when {
     controller.emojiQuery != null -> EmojiSearchStrip(controller, colors)
     // A new copy takes the predictions' place (never a word being typed), if this field can take it
-    fresh != null && !controller.toolbarOpen && controller.suggestions.isPrediction &&
-      (fresh.kind == ClipKind.TEXT || controller.acceptsContent(fresh.mime)) -> FreshClipStrip(controller, colors, fresh)
+    fresh != null && !controller.toolbarOpen && !controller.clipSetAside && controller.suggestions.isPrediction &&
+      (if (fresh.kind == ClipKind.TEXT) controller.copiedTextOffer(fresh.content) != null else controller.acceptsContent(fresh.mime)) -> FreshClipStrip(controller, colors, fresh)
     controller.pasteUndo != null && !controller.toolbarOpen && controller.suggestions.isPrediction ->
       PasteUndoStrip(controller, colors, controller.pasteUndo!!)
     controller.toolbarOpen || controller.suggestions.items.isEmpty() -> Toolbar(controller, colors)
@@ -330,7 +337,10 @@ private fun Strip(controller: InputController, colors: KeyboardColors) {
 @Composable
 private fun Toolbar(controller: InputController, colors: KeyboardColors) {
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    // Opened from the suggestions: back to them. Shown for want of any: a mark of where you are, so
+    // the strip's left end is never bare
     if (controller.toolbarOpen) ToolButton(Icons.Back, R.string.close_toolbar, colors) { controller.toolbarOpen = false }
+    else Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Icon(Icons.Apps, null, Modifier.size(20.dp), tint = colors.muted) }
     // The user's picks; everything is also in the options panel, which is always here
     for (item in Prefs.toolbar().filter { it.isEnabled() }) {
       ToolButton(item.icon, item.label, colors, active = item.isOn()) { item.act(controller, colors) }
@@ -463,6 +473,17 @@ private fun DrawScope.drawKey(
     KeyType.SPACE -> drawLabel(measurer, key.label, center, TextStyle(color = colors.muted, fontSize = 15.sp))
     KeyType.LAYER -> drawLabel(measurer, key.label, center, TextStyle(color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold))
     KeyType.CHAR -> {
+      // Pads write a key's letters beside it (2 ABC), with the digits in one column, as a dial pad does
+      if (controller.layerId in InputController.PADS && (key.hint != null || controller.layerId == InputController.PHONE && key.label[0].isDigit())) {
+        val main = measurer.measure(key.label, TextStyle(color = colors.text, fontSize = 27.sp))
+        val x = bounds.left + bounds.width * 0.36f - main.size.width / 2
+        drawText(main, topLeft = Offset(x, bounds.centerY - main.size.height / 2))
+        key.hint?.let { hint ->
+          val side = measurer.measure(hint, TextStyle(color = colors.muted, fontSize = 15.sp))
+          drawText(side, topLeft = Offset(x + main.size.width + 10.dp.toPx(), bounds.centerY - side.size.height / 2))
+        }
+        return
+      }
       drawLabel(measurer, controller.display(key.label), center, TextStyle(color = colors.text, fontSize = if (functional) 25.sp else 27.sp))
       // Hint that holding this key opens emoji search
       if (key.longPress == "emoji_search") {

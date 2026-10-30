@@ -1,0 +1,27 @@
+{
+  "rows": [
+    {"keys": [
+      {"label": "*"},
+      {"label": "#"},
+      {"label": "+"},
+      {"label": "-", "special": true}
+    ]},
+    {"keys": [
+      {"label": "("},
+      {"label": ")"},
+      {"label": "/"},
+      {"type": "space", "label": "␣", "special": true}
+    ]},
+    {"keys": [
+      {"label": "N"},
+      {"label": ",", "hint": "pause"},
+      {"label": ";", "hint": "wait"},
+      {"type": "backspace"}
+    ]},
+    {"keys": [
+      {"type": "layer", "label": "123", "layer": "phone", "width": 2},
+      {"label": ".", "special": true},
+      {"type": "enter"}
+    ]}
+  ]
+}

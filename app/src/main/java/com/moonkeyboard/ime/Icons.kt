@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 object Icons {
   val Next = icon("M9 6l6 6-6 6")
   val Back = icon("M15 6l-6 6 6 6")
+  val Apps = icon("M5 4h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z", "M15 4h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z", "M5 14h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z", "M15 14h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z")
   val Clipboard = icon("M9 3h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z", "M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2")
   val Emoji = icon(circle(12f, 12f, 9f), "M8 14s1.5 2 4 2 4-2 4-2", "M9 9h.01M15 9h.01")
   val TextEdit = icon("M5 4h4M7 4v16M5 20h4", "M13 12h7M17 9l3 3-3 3")

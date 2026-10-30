@@ -1,0 +1,28 @@
+{
+  "rows": [
+    {"keys": [
+      {"label": "1"},
+      {"label": "2", "hint": "ABC"},
+      {"label": "3", "hint": "DEF"},
+      {"label": "-", "special": true}
+    ]},
+    {"keys": [
+      {"label": "4", "hint": "GHI"},
+      {"label": "5", "hint": "JKL"},
+      {"label": "6", "hint": "MNO"},
+      {"type": "space", "label": "␣", "special": true}
+    ]},
+    {"keys": [
+      {"label": "7", "hint": "PQRS"},
+      {"label": "8", "hint": "TUV"},
+      {"label": "9", "hint": "WXYZ"},
+      {"type": "backspace"}
+    ]},
+    {"keys": [
+      {"type": "layer", "label": "* #", "layer": "phone_symbols"},
+      {"label": "0", "hint": "+", "popup": ["+"]},
+      {"label": ".", "special": true},
+      {"type": "enter"}
+    ]}
+  ]
+}
