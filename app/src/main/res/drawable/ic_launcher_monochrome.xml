@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- White silhouette for Android 13 themed icons (the launcher tints it); the full-colour
+     foreground would be tinted as a solid block. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="108dp"
+        android:height="108dp"
+        android:drawable="@drawable/ic_launcher_cat_mono"
+        android:gravity="center" />
+</layer-list>
