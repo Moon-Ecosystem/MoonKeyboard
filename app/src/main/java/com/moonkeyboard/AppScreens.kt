@@ -443,9 +443,11 @@ fun GlideScreen(onBack: () -> Unit) = Page(R.string.glide_typing, onBack) {
 fun EmojiScreen(onBack: () -> Unit) = Page(R.string.emoji, onBack) {
   Card {
     SwitchRow(R.string.emoji_suggestions, Prefs.emojiSuggestions, stringResource(R.string.emoji_suggestions_detail))
+    Divider()
+    SwitchRow(R.string.emoji_key, Prefs.emojiKey, stringResource(R.string.emoji_key_detail))
   }
   val c = LocalAppColors.current
-  Text(stringResource(R.string.emoji_search_tip), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 13.sp, lineHeight = 19.sp)
+  if (!Prefs.emojiKey.value) Text(stringResource(R.string.emoji_search_tip), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 13.sp, lineHeight = 19.sp)
   DangerButton(stringResource(R.string.clear_recent_emoji), enabled = Prefs.emojiRecents.value.isNotEmpty()) { Prefs.emojiRecents.value = "" }
 }
 

@@ -43,7 +43,9 @@
   <string name="glide_detail">Slide across the letters of a word</string>
   <string name="emoji_suggestions">Emoji suggestions</string>
   <string name="emoji_suggestions_detail">Type \"pizza\" and 🍕 shows in the strip</string>
-  <string name="emoji_search_tip">Hold the comma key to search emoji from anywhere on the keyboard.</string>
+  <string name="emoji_key">Emoji key</string>
+  <string name="emoji_key_detail">Its own key beside the comma, instead of holding the comma</string>
+  <string name="emoji_search_tip">Hold the comma key to open emoji.</string>
   <string name="clear_recent_emoji">Clear recent emoji</string>
   <string name="expiry_note">Text is kept until you delete it. Pinned items are never deleted automatically.</string>
   <string name="offer_copied">Offer what I copy</string>

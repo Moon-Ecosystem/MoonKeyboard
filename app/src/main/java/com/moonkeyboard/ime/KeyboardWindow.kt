@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -80,6 +81,8 @@ fun KeyboardWindow(controller: InputController, onBounds: (Rect) -> Unit) {
     FloatingKeyboard(controller, bounds)
   } else {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+      // Dims the app while the keys type into emoji search instead of it (touches still go through)
+      if (controller.emojiQuery != null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)))
       Box(bounds) { KeyboardUi(controller) }
     }
   }

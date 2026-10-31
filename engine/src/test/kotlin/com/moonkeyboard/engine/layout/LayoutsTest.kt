@@ -66,6 +66,15 @@ class LayoutsTest {
   }
 
   @Test
+  fun emojiKeyGoesAfterTheCommaInSpacesRoom() {
+    val plain = Layouts.load("qwerty").rows.last().keys
+    val keys = Layouts.withEmojiKey(Layouts.load("qwerty")).rows.last().keys
+    assertEquals(listOf(KeyType.LAYER, KeyType.CHAR, KeyType.EMOJI, KeyType.SPACE, KeyType.CHAR, KeyType.ENTER), keys.map { it.type })
+    assertEquals(plain.sumOf { it.width.toDouble() }, keys.sumOf { it.width.toDouble() }, 0.001)
+    assertEquals("comma no longer opens emoji", null, keys[1].longPress)
+  }
+
+  @Test
   fun splitMovesTheRightHalfOverAndStretchesSpace() {
     val layout = Layouts.load("qwerty")
     val whole = KeyboardGeometry.compute(layout, width = 600f, keyHeight = 34f, hGap = 6f, vGap = 6f, sidePadding = 4f)

@@ -195,8 +195,10 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
       Panel.EDIT -> EditPanel(controller, colors, panelModifier)
       Panel.OPTIONS -> OptionsPanel(controller, colors, panelModifier)
       Panel.KEYS -> Column {
+        // Emoji search stands in for the strip, taller: the app above moves up to make room
+        if (controller.emojiQuery != null) EmojiSearch(controller, colors)
         // A hairline along the strip's bottom edge, so the bar reads as separate from the keys
-        Box(Modifier.drawBehind {
+        else Box(Modifier.drawBehind {
           val y = size.height - 0.5.dp.toPx()
           drawLine(colors.divider, Offset(12.dp.toPx(), y), Offset(size.width - 12.dp.toPx(), y), 1.dp.toPx())
         }) { Strip(controller, colors) }
@@ -323,7 +325,6 @@ private fun Strip(controller: InputController, colors: KeyboardColors) {
   // Read here, not in KeyboardUi, so a new suggestion recomposes only the strip
   val fresh = if (Prefs.offerCopied.value) ClipboardStore.freshClip() else null
   when {
-    controller.emojiQuery != null -> EmojiSearchStrip(controller, colors)
     // A new copy takes the predictions' place (never a word being typed), if this field can take it
     fresh != null && !controller.toolbarOpen && !controller.clipSetAside && controller.suggestions.isPrediction &&
       (if (fresh.kind == ClipKind.TEXT) controller.copiedTextOffer(fresh.content) != null else controller.acceptsContent(fresh.mime)) -> FreshClipStrip(controller, colors, fresh)
@@ -470,6 +471,7 @@ private fun DrawScope.drawKey(
     }
     KeyType.BACKSPACE -> drawIcon(BackspaceIcon, center, 24.dp.toPx(), colors.text)
     KeyType.ENTER -> drawIcon(EnterIcon, center, 22.dp.toPx(), colors.onAccent, strokeWidth = 2f)
+    KeyType.EMOJI -> drawIcon(SmileIcon, center, 22.dp.toPx(), colors.text, strokeWidth = 2f)
     KeyType.SPACE -> drawLabel(measurer, key.label, center, TextStyle(color = colors.muted, fontSize = 15.sp))
     KeyType.LAYER -> drawLabel(measurer, key.label, center, TextStyle(color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold))
     KeyType.CHAR -> {
@@ -486,7 +488,7 @@ private fun DrawScope.drawKey(
       }
       drawLabel(measurer, controller.display(key.label), center, TextStyle(color = colors.text, fontSize = if (functional) 25.sp else 27.sp))
       // Hint that holding this key opens emoji search
-      if (key.longPress == "emoji_search") {
+      if (key.longPress == "emoji") {
         drawIcon(SmileIcon, Offset(bounds.right - 9.dp.toPx(), bounds.top + 9.dp.toPx()), 11.dp.toPx(), colors.hint, strokeWidth = 2.2f)
       }
       key.hint?.let { hint ->

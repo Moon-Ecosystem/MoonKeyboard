@@ -36,7 +36,7 @@
     ]},
     {"keys": [
       {"type": "layer", "label": "?123", "layer": "symbols", "width": 1.5},
-      {"label": ",", "special": true, "longPress": "emoji_search"},
+      {"label": ",", "special": true, "longPress": "emoji"},
       {"type": "space", "label": "English", "width": 5},
       {"label": ".", "special": true, "popup": ["?", "!", ",", "'", "\"", ":", ";", "-"]},
       {"type": "enter", "width": 1.5}

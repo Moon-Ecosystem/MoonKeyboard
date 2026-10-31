@@ -59,6 +59,8 @@ object Prefs {
   val theme = Pref("theme", ThemeMode.SYSTEM, ThemeMode::valueOf)
   val borders = Pref("borders", true, String::toBoolean)
   val numberRow = Pref("number_row", false, String::toBoolean)
+  /** A key of its own for emoji beside the comma, instead of holding the comma. */
+  val emojiKey = Pref("emoji_key", false, String::toBoolean)
   val keySize = Pref("key_size", KeySize.NORMAL, KeySize::valueOf)
   val oneHanded = Pref("one_handed", OneHanded.OFF, OneHanded::valueOf)
   /** The side one-handed mode goes back to when switched on from the toolbar. */

@@ -30,7 +30,7 @@ data class Key(
   val layer: String? = null,
   /** Drawn with the functional-key colour (e.g. comma and period). */
   val special: Boolean = false,
-  /** An action a long press runs instead of a popup ("emoji_search"). */
+  /** An action a long press runs instead of a popup ("emoji": the emoji panel). */
   val longPress: String? = null,
 )
 
@@ -42,6 +42,8 @@ enum class KeyType {
   @SerialName("enter") ENTER,
   @SerialName("space") SPACE,
   @SerialName("layer") LAYER,
+  /** Opens the emoji panel. */
+  @SerialName("emoji") EMOJI,
 }
 
 object Layouts {
@@ -66,6 +68,22 @@ object Layouts {
       row.copy(keys = row.keys.map { k -> if (k.hint in digits) k.copy(hint = null, popup = k.popup - k.hint!!) else k })
     }
     return Layout(listOf(numbers) + rows)
+  }
+
+  /**
+   * [layout] with an emoji key after the bottom row's comma, the space bar a key narrower to make
+   * room; the comma no longer opens emoji on a long press.
+   */
+  fun withEmojiKey(layout: Layout): Layout {
+    val bottom = layout.rows.last()
+    val keys = bottom.keys.flatMap { k ->
+      when {
+        k.type == KeyType.SPACE -> listOf(k.copy(width = k.width - 1f))
+        k.longPress == "emoji" -> listOf(k.copy(longPress = null), Key(type = KeyType.EMOJI, special = true))
+        else -> listOf(k)
+      }
+    }
+    return Layout(layout.rows.dropLast(1) + bottom.copy(keys = keys))
   }
 
   private const val NUMBER_ROW_HEIGHT = 0.87f

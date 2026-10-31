@@ -16,6 +16,16 @@ class EmojiEntry(val variants: List<String>, val words: List<String>) {
 
 class EmojiGroup(val name: String, val entries: List<EmojiEntry>)
 
+/**
+ * [items] reordered for a two-row grid that fills column by column, so it reads in order along the
+ * top row a screen of [cols] at a time, then along the bottom row. A short last screen splits evenly.
+ */
+internal fun <T> twoRowOrder(items: List<T>, cols: Int): List<T> = items.chunked(2 * cols).flatMap { page ->
+  val top = page.take(if (page.size == 2 * cols) cols else (page.size + 1) / 2)
+  val bottom = page.drop(top.size)
+  top.indices.flatMap { c -> listOfNotNull(top[c], bottom.getOrNull(c)) }
+}
+
 /** The emoji list from assets/emoji.txt (built by tools/BuildEmoji.kt), minus what this phone's font can't draw. */
 object Emoji {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -109,7 +119,8 @@ object Emoji {
     Prefs.emojiRecents.value = (listOf(emoji) + recents.filter { it != emoji }).take(MAX_RECENTS).joinToString(" ")
   }
 
-  private const val MAX_RECENTS = 27
+  // Four rows of the panel's grid at its usual eight across
+  private const val MAX_RECENTS = 32
   private const val MAX_RESULTS = 40
   private const val MAX_STRIP = 2
   private const val MIN_STRIP_WORD = 3

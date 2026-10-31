@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -47,6 +48,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -503,40 +505,60 @@ private fun TonePicker(tones: List<String>, colors: KeyboardColors, modifier: Mo
   }
 }
 
-/** Emoji search, in the strip over the letter keys: back, the query, and the matches scrolling beside it. */
+/**
+ * Emoji search, over the letter keys: a title with back, then a card of matches in two rows that
+ * scroll sideways (recent emoji before anything is typed) above the query the keys type into.
+ */
 @Composable
-fun EmojiSearchStrip(controller: InputController, colors: KeyboardColors) {
+fun EmojiSearch(controller: InputController, colors: KeyboardColors) {
   val query = controller.emojiQuery.orEmpty()
-  val results = remember(query) { Emoji.search(query) }
+  // Read once: re-sorting under the finger while picking would move what you aim at
+  val recents = remember { Emoji.recents.map { EmojiEntry(listOf(it), emptyList()) } }
+  val results = remember(query) { if (query.isBlank()) recents else Emoji.search(query) }
   var tones by remember { mutableStateOf<List<String>?>(null) }
+  // Picking stays in search with the query kept, so several can go in a row
   val pick = { emoji: String ->
     controller.insert(emoji)
     Emoji.used(emoji)
     tones = null
   }
-  Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-    ToolButton(Icons.Back, R.string.back_to_emoji, colors, onClick = controller::endEmojiSearch)
-    Row(
-      Modifier.widthIn(min = 96.dp, max = 160.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(colors.key).padding(horizontal = 12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Icon(Icons.Search, null, Modifier.size(16.dp), tint = colors.muted)
-      Spacer(Modifier.width(6.dp))
-      if (query.isNotEmpty()) Text(query, Modifier.weight(1f, fill = false), color = colors.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-      // The keys type here, not in the app, so show where the text goes
-      val blink by rememberInfiniteTransition(label = "cursor").animateFloat(
-        1f, 0f, infiniteRepeatable(keyframes { durationMillis = 1000; 1f at 499; 0f at 500 }), label = "cursor",
-      )
-      Box(Modifier.padding(horizontal = 1.dp).size(width = 2.dp, height = 18.dp).alpha(blink).background(colors.accent))
-      if (query.isEmpty()) Text(stringResource(R.string.search_emoji), color = colors.muted, fontSize = 14.sp, maxLines = 1)
+  Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+    Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+      Box(Modifier.size(TabSize).clip(CircleShape).background(colors.key).clickable { controller.endEmojiSearch() }, contentAlignment = Alignment.Center) {
+        Icon(Icons.Left, stringResource(R.string.back_to_emoji), Modifier.size(20.dp), tint = colors.text)
+      }
+      Text(stringResource(R.string.search_emoji), color = colors.text, fontSize = 19.sp, fontWeight = FontWeight.Medium)
     }
-    // A long-pressed match swaps the row for its skin tones
-    val shown = tones?.map { EmojiEntry(listOf(it), emptyList()) } ?: results
-    LazyRow(Modifier.weight(1f).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-      items(shown, key = { it.emoji }) { entry -> EmojiCell(entry, pick, { tones = entry.variants }, size = 44.dp) }
+    Column(Modifier.padding(horizontal = 8.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(colors.key)) {
+      // A long-pressed match swaps the rows for its skin tones
+      val shown = tones?.map { EmojiEntry(listOf(it), emptyList()) } ?: results
+      BoxWithConstraints {
+        val cols = maxOf(1, ((maxWidth - 8.dp) / SearchCell).toInt())
+        val ordered = remember(shown, cols) { twoRowOrder(shown, cols) }
+        LazyHorizontalGrid(GridCells.Fixed(2), Modifier.fillMaxWidth().height(SearchCell * 2 + 8.dp), contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 8.dp)) {
+          items(ordered, key = { it.emoji }) { entry -> EmojiCell(entry, pick, { tones = entry.variants }, size = SearchCell) }
+        }
+      }
+      Box(Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
+      Row(Modifier.fillMaxWidth().height(48.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Search, null, Modifier.size(18.dp), tint = colors.muted)
+        Spacer(Modifier.width(12.dp))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+          if (query.isNotEmpty()) Text(query, Modifier.weight(1f, fill = false), color = colors.text, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          // The keys type here, not in the app, so show where the text goes
+          val blink by rememberInfiniteTransition(label = "cursor").animateFloat(
+            1f, 0f, infiniteRepeatable(keyframes { durationMillis = 1000; 1f at 499; 0f at 500 }), label = "cursor",
+          )
+          Box(Modifier.padding(horizontal = 1.dp).size(width = 2.dp, height = 20.dp).alpha(blink).background(colors.accent))
+          if (query.isEmpty()) Text(stringResource(R.string.search), color = colors.muted, fontSize = 17.sp, maxLines = 1)
+        }
+        if (query.isNotEmpty()) ToolButton(Icons.Close, R.string.clear, colors, onClick = controller::clearEmojiQuery)
+      }
     }
   }
 }
+
+private val SearchCell = 52.dp
 
 // Options
 

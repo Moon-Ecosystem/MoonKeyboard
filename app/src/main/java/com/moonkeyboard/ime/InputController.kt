@@ -123,16 +123,16 @@ class InputController(private val host: KeyboardHost) {
 
   fun onLongPress(action: String) {
     when (action) {
-      "emoji_search" -> startEmojiSearch()
+      "emoji" -> {
+        finishWord()
+        panel = Panel.EMOJI
+      }
     }
   }
 
-  /** Where leaving search goes back to: the emoji panel, or the keys when opened from a long press. */
-  private var searchReturn = Panel.EMOJI
-
+  /** Search from the emoji panel: the letter keys type into the query. */
   fun startEmojiSearch() {
     finishWord()
-    searchReturn = panel
     emojiQuery = ""
     panel = Panel.KEYS
     layerId = LETTERS
@@ -141,11 +141,15 @@ class InputController(private val host: KeyboardHost) {
     syncShift()
   }
 
-  /** Back from search to wherever it was opened from. */
+  /** Back from search to the emoji panel. */
   fun endEmojiSearch() {
     emojiQuery = null
-    panel = searchReturn
+    panel = Panel.EMOJI
     afterSeparator()
+  }
+
+  fun clearEmojiQuery() {
+    if (emojiQuery != null) emojiQuery = ""
   }
 
   /** Letter-key centres from the UI; restored words get synthetic touches from them. */
@@ -183,8 +187,9 @@ class InputController(private val host: KeyboardHost) {
 
   fun layoutFor(id: String): Layout {
     val numbers = id == LETTERS && Prefs.numberRow.value
-    return layouts.getOrPut(if (numbers) "$id+numbers" else id) {
-      Layouts.load(id).let { if (numbers) Layouts.withNumberRow(it) else it }
+    val emoji = id == LETTERS && Prefs.emojiKey.value
+    return layouts.getOrPut(id + (if (numbers) "+numbers" else "") + (if (emoji) "+emoji" else "")) {
+      Layouts.load(id).let { if (numbers) Layouts.withNumberRow(it) else it }.let { if (emoji) Layouts.withEmojiKey(it) else it }
     }
   }
 
@@ -342,7 +347,7 @@ class InputController(private val host: KeyboardHost) {
         KeyType.BACKSPACE -> emojiQuery = query.dropLast(1)
         KeyType.ENTER -> endEmojiSearch()
         KeyType.LAYER -> layerId = key.layer!!
-        KeyType.SHIFT -> Unit
+        KeyType.SHIFT, KeyType.EMOJI -> Unit
       }
       return
     }
@@ -361,6 +366,7 @@ class InputController(private val host: KeyboardHost) {
         syncShift()
       }
       KeyType.LAYER -> layerId = key.layer!!
+      KeyType.EMOJI -> onLongPress("emoji")
     }
   }
 
@@ -895,8 +901,13 @@ class InputController(private val host: KeyboardHost) {
       suggestions = Suggestions.EMPTY
       return
     }
-    val context = WordContext.from(ic.getTextBeforeCursor(CONTEXT_CHARS, 0) ?: "")
-    suggestions = engine.predict(context, capitalize = shift != ShiftState.OFF)
+    val before = ic.getTextBeforeCursor(CONTEXT_CHARS, 0) ?: ""
+    // Nothing written yet: no guesses, so the strip shows the toolbar
+    if (before.isBlank()) {
+      suggestions = Suggestions.EMPTY
+      return
+    }
+    suggestions = engine.predict(WordContext.from(before), capitalize = shift != ShiftState.OFF)
   }
 
   private fun afterSeparator() {
