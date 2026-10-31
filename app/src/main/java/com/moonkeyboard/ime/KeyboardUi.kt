@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.painterResource
 import com.moonkeyboard.R
 import com.moonkeyboard.engine.decode.KeyMap
 import androidx.compose.ui.geometry.CornerRadius
@@ -328,8 +329,9 @@ private fun Strip(controller: InputController, colors: KeyboardColors) {
     // A new copy takes the predictions' place (never a word being typed), if this field can take it
     fresh != null && !controller.toolbarOpen && !controller.clipSetAside && controller.suggestions.isPrediction &&
       (if (fresh.kind == ClipKind.TEXT) controller.copiedTextOffer(fresh.content) != null else controller.acceptsContent(fresh.mime)) -> FreshClipStrip(controller, colors, fresh)
-    controller.pasteUndo != null && !controller.toolbarOpen && controller.suggestions.isPrediction ->
-      PasteUndoStrip(controller, colors, controller.pasteUndo!!)
+    // Keep showing even once backspace reaches the previous word and picks it up for spelling suggestions;
+    // any key other than backspace clears it, so it's never in the way of real typing
+    controller.undo != null && !controller.toolbarOpen -> UndoStrip(controller, colors, controller.undo!!)
     controller.toolbarOpen || controller.suggestions.items.isEmpty() -> Toolbar(controller, colors)
     else -> SuggestionStrip(controller, colors)
   }
@@ -341,7 +343,8 @@ private fun Toolbar(controller: InputController, colors: KeyboardColors) {
     // Opened from the suggestions: back to them. Shown for want of any: a mark of where you are, so
     // the strip's left end is never bare
     if (controller.toolbarOpen) ToolButton(Icons.Back, R.string.close_toolbar, colors) { controller.toolbarOpen = false }
-    else Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Icon(Icons.Apps, null, Modifier.size(20.dp), tint = colors.muted) }
+    // The app's cat, its themed-icon silhouette; the cat fills about half of that square
+    else Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_launcher_cat_mono), null, Modifier.size(42.dp), tint = colors.muted) }
     // The user's picks; everything is also in the options panel, which is always here
     for (item in Prefs.toolbar().filter { it.isEnabled() }) {
       ToolButton(item.icon, item.label, colors, active = item.isOn()) { item.act(controller, colors) }

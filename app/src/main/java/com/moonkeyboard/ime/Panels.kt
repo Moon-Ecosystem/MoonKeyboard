@@ -273,11 +273,11 @@ fun FreshClipStrip(controller: InputController, colors: KeyboardColors, clip: Cl
   }
 }
 
-/** After the copied-item pill pastes, the same spot takes it back, then puts it back again. */
+/** After the copied-item pill pastes, or backspace deletes words, one pill takes that back, then redoes it. */
 @Composable
-fun PasteUndoStrip(controller: InputController, colors: KeyboardColors, undo: InputController.PasteUndo) {
+fun UndoStrip(controller: InputController, colors: KeyboardColors, undo: InputController.EditUndo) {
   PillStrip(controller, colors) {
-    Pill(colors, onClick = { if (undo.undone) controller.redoPaste() else controller.undoPaste() }) {
+    Pill(colors, onClick = controller::toggleUndo) {
       Icon(if (undo.undone) Icons.Redo else Icons.Undo, null, Modifier.size(16.dp), tint = colors.accent)
       Spacer(Modifier.width(8.dp))
       Text(stringResource(if (undo.undone) R.string.redo else R.string.undo), color = colors.text, fontSize = 15.sp)

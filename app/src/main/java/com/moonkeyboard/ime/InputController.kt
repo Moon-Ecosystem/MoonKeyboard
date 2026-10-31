@@ -102,10 +102,24 @@ class InputController(private val host: KeyboardHost) {
   var emojiQuery by mutableStateOf<String?>(null)
     private set
   /** Text the copied-item pill just pasted: the strip offers to undo it, then to redo it, until the user moves on. */
-  var pasteUndo by mutableStateOf<PasteUndo?>(null)
+  var undo by mutableStateOf<EditUndo?>(null)
     private set
 
-  data class PasteUndo(val text: String, val undone: Boolean)
+  /**
+   * What the strip offers to take back: text the copied-item pill pasted ([inserted]), or words
+   * backspace deleted; [undone] once it has been, and the offer becomes redo.
+   */
+  data class EditUndo(val text: String, val inserted: Boolean, val undone: Boolean = false) {
+    /** The text is in the field now, so the next tap deletes it. */
+    val present get() = inserted != undone
+  }
+
+  /** What the backspaces since the last other key deleted, oldest first, for [undo]. */
+  private val deletedRun = StringBuilder()
+  private fun dropUndo() {
+    undo = null
+    deletedRun.clear()
+  }
 
   /**
    * The cursor stopped inside this word: the strip offers fixes for all of it, and picking one
@@ -209,7 +223,7 @@ class InputController(private val host: KeyboardHost) {
    */
   fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
     forgetAsk = null
-    pasteUndo = null
+    dropUndo()
     midWord = null
     field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
     val kind = info.inputType and InputType.TYPE_MASK_CLASS
@@ -315,7 +329,7 @@ class InputController(private val host: KeyboardHost) {
     if (composing.isEmpty()) {
       // Our own commits echo back here too; only a cursor the user (or app) moved is acted on
       if (selStart == selEnd && !isEcho()) {
-        pasteUndo = null
+        dropUndo()
         revert = null
         autoSpaced = false
         lastWasSpace = false
@@ -353,13 +367,14 @@ class InputController(private val host: KeyboardHost) {
     }
     if (key.type != KeyType.SHIFT && key.type != KeyType.LAYER) {
       forgetAsk = null
-      pasteUndo = null
       midWord = null
+      // Backspace adds to what it can undo; anything else ends that
+      if (key.type != KeyType.BACKSPACE) dropUndo()
     }
     when (key.type) {
       KeyType.CHAR -> typeText(display(key.label), x, y)
       KeyType.SPACE -> space()
-      KeyType.BACKSPACE -> backspace()
+      KeyType.BACKSPACE -> deleted(backspace())
       KeyType.ENTER -> enter()
       KeyType.SHIFT -> {
         shiftController.onShiftTap(nowMs)
@@ -381,28 +396,54 @@ class InputController(private val host: KeyboardHost) {
   /** The copied-item pill's paste, which the strip then offers to undo. */
   fun pasteFresh(text: String) {
     insert(text)
-    pasteUndo = PasteUndo(text, undone = false)
+    undo = EditUndo(text, inserted = true)
   }
 
-  fun undoPaste() {
-    val undo = pasteUndo ?: return
+  /** The strip's undo or redo: deletes [undo]'s text if it is in the field, else puts it back. */
+  fun toggleUndo() {
+    val u = undo ?: return
     val ic = host.inputConnection ?: return
     finishWord()
-    // Only while it's still just before the cursor; the app may have changed the text since
-    if (textBefore(ic, undo.text.length) != undo.text) {
-      pasteUndo = null
-      return
+    deletedRun.clear()
+    if (u.present) {
+      // Only while it's still just before the cursor; the app may have changed the text since
+      if (textBefore(ic, u.text.length) != u.text) {
+        undo = null
+        return
+      }
+      ic.deleteSurroundingText(u.text.length, 0)
+    } else {
+      ic.commitText(u.text, 1)
     }
-    ic.deleteSurroundingText(undo.text.length, 0)
-    pasteUndo = undo.copy(undone = true)
+    undo = u.copy(undone = !u.undone)
     afterSeparator()
   }
 
-  fun redoPaste() {
-    pasteUndo?.let { pasteFresh(it.text) }
+  /**
+   * A backspace took [removed] away (null: it wasn't a plain deletion, or the field didn't say
+   * what went). Once the run has taken a whole finished word (crossed back to a space or the
+   * field start), the strip offers to put back all this run deleted.
+   */
+  private fun deleted(removed: String?) {
+    // Starting over from a paste's undo, or from words just put back
+    if (undo?.let { it.inserted || it.undone } == true) dropUndo()
+    val ic = host.inputConnection
+    // Still held at the start of the field, with nothing left to delete: keep the offer
+    if (removed.isNullOrEmpty() && ic != null && composing.isEmpty() && textBefore(ic, 1).isEmpty()) return
+    if (removed.isNullOrEmpty() || ic == null || field.secret) return dropUndo()
+    deletedRun.insert(0, removed)
+    val before = textBefore(ic, 1)
+    val atWordStart = composing.isEmpty() && (before.isEmpty() || before[0].isWhitespace())
+    // Once offered, it stays and grows while the run goes on, rather than blinking at each word
+    val offer = undo != null || atWordStart && deletedRun.any(Char::isLetterOrDigit)
+    undo = if (offer) EditUndo(deletedRun.toString(), inserted = false) else null
   }
 
-  fun deleteBackward() = backspace()
+  /** The emoji and edit panels' delete key, which the strip's undo doesn't follow. */
+  fun deleteBackward() {
+    dropUndo()
+    backspace()
+  }
 
   /** Commits the word in progress as typed, before the cursor moves or a panel acts on the text. */
   fun finishWord() {
@@ -635,7 +676,7 @@ class InputController(private val host: KeyboardHost) {
     decodeJob?.cancel()
     clipSetAside = true
     forgetAsk = null
-    pasteUndo = null
+    dropUndo()
     midWord = null
     revert = null
     lastWasSpace = false
@@ -664,7 +705,7 @@ class InputController(private val host: KeyboardHost) {
     val ic = host.inputConnection ?: return
     clipSetAside = true
     forgetAsk = null
-    pasteUndo = null
+    dropUndo()
     midWord = null
     revert = null
     lastWasSpace = false
@@ -741,8 +782,9 @@ class InputController(private val host: KeyboardHost) {
     afterSeparator()
   }
 
-  private fun backspace() {
-    val ic = host.inputConnection ?: return
+  /** Returns the text it deleted, or null when it undid a correction or can't tell what went. */
+  private fun backspace(): String? {
+    val ic = host.inputConnection ?: return null
     phantomSpace = false
     lastWasSpace = false
     autoSpaced = false
@@ -759,18 +801,20 @@ class InputController(private val host: KeyboardHost) {
         // Undoing a correction means the user meant it
         learn(r.typed, context, weight = LEARN_AS_WORD)
         afterSeparator()
-        return
+        return null
       }
     }
     if (composing.isNotEmpty() && glided) {
       // A glide put the whole word down at once, so one backspace takes it all back
+      val word = composing.toString()
       ic.commitText("", 1)
       clearWord()
       afterSeparator()
-      return
+      return word
     }
     if (composing.isNotEmpty()) {
       val n = lastGraphemeLength(composing)
+      val gone = composing.substring(composing.length - n)
       composing.setLength(composing.length - n)
       repeat(minOf(n, touches.size)) { touches.removeAt(touches.lastIndex) }
       if (composing.isEmpty()) {
@@ -781,17 +825,22 @@ class InputController(private val host: KeyboardHost) {
         ic.compose(composing)
         requestSuggestions()
       }
-      return
+      return gone
     }
-    if (!ic.getSelectedText(0).isNullOrEmpty()) {
+    val selected = ic.getSelectedText(0)?.toString()
+    val gone = if (!selected.isNullOrEmpty()) {
       ic.commitText("", 1)
+      selected
     } else {
-      val n = lastGraphemeLength(ic.getTextBeforeCursor(GRAPHEME_LOOKBEHIND, 0) ?: "")
+      val before = ic.getTextBeforeCursor(GRAPHEME_LOOKBEHIND, 0)?.toString() ?: ""
+      val n = lastGraphemeLength(before)
       // Fields that don't expose their text still understand a raw delete key
       if (n > 0) ic.deleteSurroundingText(n, 0) else host.sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+      before.takeLast(n).ifEmpty { null }
     }
     if (field.suggest) resumeWord(ic)
     if (composing.isEmpty()) afterSeparator() else requestSuggestions()
+    return gone
   }
 
   private fun enter() {
