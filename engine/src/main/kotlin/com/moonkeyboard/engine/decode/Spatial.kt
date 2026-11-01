@@ -67,10 +67,13 @@ class Spatial(val touches: List<Touch>, keys: KeyMap?, private val config: Decod
   fun cost(i: Int, c: Char): Float {
     val base = baseChar(c)
     val typed = touches[i].char
+    val typedBase = baseChar(typed)
     val slot = slotOf(base)
-    var cost = if (slot >= 0) table[i][slot] else if (base == baseChar(typed)) 0f else config.maxSubstitution
+    var cost = if (slot >= 0) table[i][slot] else if (base == typedBase) 0f else config.maxSubstitution
+    // Classic spelling confusions: cost no more than a near miss, even when the keys are far apart
+    if (base != typedBase && confuses(typedBase, base)) cost = minOf(cost, config.softSubstitution)
     // Same key, different accent ("cafe" typed, "café" in the dictionary, or the reverse)
-    if (c.lowercaseChar() != typed.lowercaseChar() && base == baseChar(typed)) cost += config.accent
+    if (c.lowercaseChar() != typed.lowercaseChar() && base == typedBase) cost += config.accent
     return cost
   }
 
@@ -82,6 +85,11 @@ class Spatial(val touches: List<Touch>, keys: KeyMap?, private val config: Decod
       else -> -1
     }
     fun slotChar(slot: Int) = if (slot < 26) 'a' + slot else '\''
+
+    private val VOWELS = setOf('a', 'e', 'i', 'o', 'u')
+    private val SOFT_PAIRS = setOf('s' to 'c', 'c' to 's', 'z' to 's', 's' to 'z')
+    /** Classic spelling confusions from the Wikipedia misspellings list: vowel swaps and silent-letter mixups. */
+    fun confuses(a: Char, b: Char): Boolean = (a in VOWELS && b in VOWELS) || (a to b) in SOFT_PAIRS
   }
 }
 
@@ -89,6 +97,8 @@ class Spatial(val touches: List<Touch>, keys: KeyMap?, private val config: Decod
 data class DecoderConfig(
   val spatialScale: Float = 1.2f,
   val maxSubstitution: Float = 6f,
+  /** Cap on classic spelling confusions (vowel swaps, s↔c, z↔s): what their cost shrinks to even when the keys sit far apart. */
+  val softSubstitution: Float = 2.5f,
   val insert: Float = 3f,
   val delete: Float = 3f,
   val transpose: Float = 1.8f,
