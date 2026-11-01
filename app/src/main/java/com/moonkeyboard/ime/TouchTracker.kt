@@ -136,13 +136,13 @@ class TouchTracker(
         }
       }
       key.longPress != null -> holds[id] = scope.launch {
-        delay(LONG_PRESS_MS)
+        delay(Prefs.longPressMs.value.toLong())
         // The hold did its job: lifting the finger mustn't also type the key
         pressed.remove(id)
         controller.onLongPress(key.longPress!!)
       }
       key.popup.isNotEmpty() -> holds[id] = scope.launch {
-        delay(LONG_PRESS_MS)
+        delay(Prefs.longPressMs.value.toLong())
         popup = popupFor(bounds)
         popupOwner = id
       }
@@ -297,7 +297,6 @@ class TouchTracker(
   }
 
   companion object {
-    private const val LONG_PRESS_MS = 300L
     const val BACKSPACE_REPEAT_DELAY_MS = 400L
     const val BACKSPACE_REPEAT_MS = 50L
     private const val PREVIEW_INTERVAL_MS = 80L

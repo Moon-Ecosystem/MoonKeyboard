@@ -173,6 +173,7 @@
   <string name="haptics">Vibrate on key press</string>
   <string name="key_sound">Sound on key press</string>
   <string name="vibration_strength">Vibration strength</string>
+  <string name="long_press_duration">Long press duration</string>
   <string name="auto_caps">Auto-capitalise</string>
   <string name="auto_caps_detail">Starts each sentence with a capital letter</string>
   <string name="glide_trail">Show glide trail</string>

@@ -9,6 +9,7 @@ import android.text.InputType
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.BackgroundColorSpan
+import android.text.style.SuggestionSpan
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
@@ -129,8 +130,15 @@ class InputController(private val host: KeyboardHost) {
   var midWord by mutableStateOf<MidWord?>(null)
     private set
 
-  /** [start]: where the word begins in the text. */
-  data class MidWord(val start: Int, val word: String, val context: WordContext)
+  /**
+   * [start]: where the word begins in the text. [hostFixes]: spell or grammar replacements the
+   * host app's own checker put on this word (or a phrase that includes it), surfaced in the strip
+   * so the viewer never has to open the host's own popup.
+   */
+  data class MidWord(val start: Int, val word: String, val context: WordContext, val hostFixes: List<HostFix> = emptyList())
+
+  /** A replacement a `SuggestionSpan` offers, covering absolute offsets [spanStart, spanEnd). */
+  data class HostFix(val text: String, val spanStart: Int, val spanEnd: Int)
 
   /** The last live glide preview; while [suggestions] is still it, the finger hasn't lifted. */
   var glidePreview: Suggestions? = null
@@ -311,17 +319,21 @@ class InputController(private val host: KeyboardHost) {
     val engine = Language.engine ?: return
     val keys = keyMap
     val wordTouches = m.word.map { keys?.touchFor(it) ?: Touch.exact(it) }
+    val hostTexts = m.hostFixes.map { it.text }
     decodeJob?.cancel()
     decodeJob = scope.launch {
       // No autocorrect: space doesn't apply these, it types a space where the cursor is. No completions
       // either: the whole word is already there, longer words would read as other words, not fixes
       val result = withContext(decodeDispatcher) { engine.suggest(m.word, wordTouches, keys, m.context, allowAutocorrect = false, allowCompletions = false) }
       if (midWord != m) return@launch
-      // A real word already in the field has the typed form in the middle with similar words either
-      // side; a typed non-word has itself on the left and the closer alternatives in the middle and right.
-      // In both cases the engine already laid out items as the strip wants them, so pass them through.
-      if (result.items.isNotEmpty()) {
-        suggestions = result
+      // The host's own fixes come first — the system spell checker (and whatever grammar correction
+      // it has) already looked at this word; we trust its picks more than our edit-distance guesses.
+      // A real word already in the field otherwise has the typed form in the middle with similar words
+      // either side; a typed non-word has itself on the left and the closer alternatives in the middle
+      // and right. In both cases the engine already laid out items as the strip wants them.
+      val merged = mergeHostFixes(hostTexts, result.items)
+      if (merged.isNotEmpty()) {
+        suggestions = if (merged == result.items) result else result.copy(items = merged)
         return@launch
       }
       // Nothing close enough edit-distance-wise ("banananana" is five keystrokes away from any word):
@@ -333,8 +345,21 @@ class InputController(private val host: KeyboardHost) {
         engine.suggest(prefix, wordTouches.take(cut), keys, m.context, allowAutocorrect = false)
       }.items.filter { !it.equals(m.word, ignoreCase = true) && !it.equals(prefix, ignoreCase = true) }.take(3)
       if (midWord != m) return@launch
-      if (similar.isNotEmpty()) suggestions = result.copy(items = similar) else refreshPredictions()
+      val fallback = mergeHostFixes(hostTexts, similar)
+      if (fallback.isNotEmpty()) suggestions = result.copy(items = fallback) else refreshPredictions()
     }
+  }
+
+  /** Host-reported fixes come first (deduped), then as many of [engineItems] as still fit in 3 slots. */
+  private fun mergeHostFixes(hostTexts: List<String>, engineItems: List<String>): List<String> {
+    if (hostTexts.isEmpty()) return engineItems
+    val seen = HashSet<String>()
+    val out = ArrayList<String>(3)
+    for (t in hostTexts + engineItems) {
+      if (out.size >= 3) break
+      if (seen.add(t.lowercase())) out += t
+    }
+    return out
   }
 
   /** The space-bar slide let go: the word the cursor stopped after is picked up, as a tap in the text would. */
@@ -592,10 +617,14 @@ class InputController(private val host: KeyboardHost) {
     val word = suggestions.items.getOrNull(index) ?: return
     val ic = host.inputConnection ?: return
     midWord?.let { m ->
-      // The whole word the cursor sits in gives way to the pick; the cursor ends up after it
+      // A host fix may replace a phrase ("is struggling" → "are struggling"), not just this one word;
+      // its span range is kept so the whole phrase gives way. Otherwise the word under the cursor does.
+      val fix = m.hostFixes.firstOrNull { it.text == word }
+      val replaceStart = fix?.spanStart ?: m.start
+      val replaceEnd = fix?.spanEnd ?: (m.start + m.word.length)
       midWord = null
       ic.beginBatchEdit()
-      ic.setSelection(m.start, m.start + m.word.length)
+      ic.setSelection(replaceStart, replaceEnd)
       ic.commitText(word, 1)
       ic.endBatchEdit()
       learn(word, m.context)
@@ -955,7 +984,9 @@ class InputController(private val host: KeyboardHost) {
       if (cursor < word.length) return
       // Set the mid-word even for a real word: the strip offers similar ones in case the user put the cursor there to swap it
       val textBefore = ic.getTextBeforeCursor(CONTEXT_CHARS + word.length, 0)?.toString() ?: ""
-      midWord = MidWord(cursor - word.length, word + after.substring(0, end), WordContext.from(textBefore.dropLast(word.length)))
+      val wordStart = cursor - word.length
+      val wordEnd = cursor + end
+      midWord = MidWord(wordStart, word + after.substring(0, end), WordContext.from(textBefore.dropLast(word.length)), hostFixesIn(text, wordStart, wordEnd))
       return
     }
     ic.beginBatchEdit()
@@ -970,6 +1001,28 @@ class InputController(private val host: KeyboardHost) {
     ic.endBatchEdit()
     composing.append(word)
     word.forEach { touches += keyMap?.touchFor(it) ?: Touch.exact(it) }
+  }
+
+  /**
+   * Spell or grammar fixes the host app's own checker has already placed on the word (or a phrase
+   * that includes it): read them out of the extracted text's spans. A span may cover more than one
+   * word ("is struggling" → "are struggling"); its range is kept so a pick replaces the whole span.
+   */
+  private fun hostFixesIn(extracted: android.view.inputmethod.ExtractedText?, wordStart: Int, wordEnd: Int): List<HostFix> {
+    val spanned = extracted?.text as? Spanned ?: return emptyList()
+    val offset = extracted.startOffset
+    val relStart = wordStart - offset
+    val relEnd = wordEnd - offset
+    if (relStart < 0 || relEnd > spanned.length) return emptyList()
+    return spanned.getSpans(relStart, relEnd, SuggestionSpan::class.java).asSequence()
+      .flatMap { span ->
+        val spanStart = offset + spanned.getSpanStart(span)
+        val spanEnd = offset + spanned.getSpanEnd(span)
+        span.suggestions.asSequence().filter { it.isNotEmpty() }.map { HostFix(it, spanStart, spanEnd) }
+      }
+      .distinctBy { it.text }
+      .take(5)
+      .toList()
   }
 
   private fun requestSuggestions() {

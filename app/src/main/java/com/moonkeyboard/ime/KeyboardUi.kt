@@ -89,7 +89,9 @@ private val VGap = 15.dp
 private val SidePadding = 4.dp
 internal val StripHeight = 48.dp
 private val TopPadding = 6.dp
-private val BottomPadding = 8.dp
+// Some devices under-report the navigation-bar inset for the IME nav strip (gesture nav + a
+// dismiss/switcher icon drawn above it); the extra breathing room keeps the bottom row clear
+private val BottomPadding = 16.dp
 private val KeyRadius = 8.dp
 private const val ONE_HANDED_SHARE = 0.84f
 private val EmojiExtraHeight = 96.dp

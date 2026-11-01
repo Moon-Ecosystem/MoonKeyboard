@@ -184,7 +184,7 @@ fun switchColors(): SwitchColors {
 
 /** A whole-number setting on a slider; [valueText] names the current value, [onSettled] runs when the finger lifts. */
 @Composable
-fun SliderRow(label: Int, pref: Prefs.Pref<Int>, range: IntRange, valueText: String, onSettled: () -> Unit = {}) {
+fun SliderRow(label: Int, pref: Prefs.Pref<Int>, range: IntRange, valueText: String, step: Int = 1, onSettled: () -> Unit = {}) {
   val c = LocalAppColors.current
   Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -193,9 +193,9 @@ fun SliderRow(label: Int, pref: Prefs.Pref<Int>, range: IntRange, valueText: Str
     }
     Slider(
       pref.value.toFloat(),
-      { pref.value = it.roundToInt() },
+      { pref.value = ((it.roundToInt() - range.first) / step * step + range.first).coerceIn(range.first, range.last) },
       valueRange = range.first.toFloat()..range.last.toFloat(),
-      steps = range.last - range.first - 1,
+      steps = (range.last - range.first) / step - 1,
       onValueChangeFinished = onSettled,
       colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.switchOff, activeTickColor = c.onAccent, inactiveTickColor = c.muted),
     )

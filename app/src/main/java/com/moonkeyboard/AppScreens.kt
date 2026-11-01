@@ -428,6 +428,9 @@ fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
     Divider()
     SwitchRow(R.string.key_sound, Prefs.sound)
   }
+  Card {
+    SliderRow(R.string.long_press_duration, Prefs.longPressMs, 100..700, "${Prefs.longPressMs.value} ms", step = 50)
+  }
 }
 
 @Composable
