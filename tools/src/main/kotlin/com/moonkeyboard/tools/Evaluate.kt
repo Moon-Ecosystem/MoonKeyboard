@@ -13,8 +13,9 @@ import com.moonkeyboard.engine.suggest.WordContext
 import java.io.File
 
 /**
- * Accuracy on held-out sentences with simulated typists:
+ * Accuracy on held-out sentences with simulated typists, and (optionally) on a flat typo→correct list:
  *   --dict <en.dict> --eval <sentences.txt> [--offset 0] [--limit 600] [--errors 25] [--grid true] [--hinglish false]
+ *   --dict <en.dict> --typos <pairs.tsv> [--errors 25]
  * Run: ./gradlew :tools:run -PmainClass=com.moonkeyboard.tools.EvaluateKt --args="..."
  */
 fun main(args: Array<String>) {
@@ -22,11 +23,16 @@ fun main(args: Array<String>) {
   val lexicon = Lexicon.read(File(opts.getValue("dict")).readBytes())
   // --hinglish false measures the pack the way it types with Hinglish turned off
   lexicon.hinglish = opts["hinglish"] != "false"
+  val geometry = KeyboardGeometry.compute(Layouts.load("qwerty"), 390f, 46f, 6f, 10f, 4f)
+  val errors = opts["errors"]?.toInt() ?: 25
+
+  opts["typos"]?.let { path ->
+    print(typosReport(lexicon, File(path).readLines().filter { it.isNotBlank() }, geometry, Setup(), errors))
+    return
+  }
   // --offset skips the sentences the grid tuned on, to check the result on unseen ones
   val sentences = File(opts.getValue("eval")).readLines().filter { it.isNotBlank() }
     .drop(opts["offset"]?.toInt() ?: 0).take(opts["limit"]?.toInt() ?: 600)
-  val geometry = KeyboardGeometry.compute(Layouts.load("qwerty"), 390f, 46f, 6f, 10f, 4f)
-  val errors = opts["errors"]?.toInt() ?: 25
 
   if (opts["learning-grid"] == "true") {
     learningGrid(lexicon, sentences)
@@ -37,6 +43,41 @@ fun main(args: Array<String>) {
     return
   }
   println(report(lexicon, sentences, geometry, Setup(), errors).summary)
+}
+
+/**
+ * Autocorrect accuracy on a flat list of real-world "typo<TAB>correct" pairs (e.g. the Wikipedia
+ * common misspellings list). Each pair is one trial: the typo's letters are tapped at their key
+ * centres and the engine's autocorrect is checked against the intended word. Measures a specific
+ * failure mode the sentence simulator never produces: the user typed a non-word that looks like
+ * another word on the keyboard, and the engine has to pick the right one.
+ */
+fun typosReport(lexicon: Lexicon, lines: List<String>, geometry: KeyboardGeometry, setup: Setup, showErrors: Int = 0): String {
+  val engine = SuggestionEngine(lexicon, UserHistory(), setup.engine, setup.decoder, setup.glide)
+  val sim = com.moonkeyboard.engine.eval.TypingSimulator(geometry, seed = 1)
+  val out = StringBuilder()
+  var total = 0; var fixed = 0; var inStrip = 0; var alreadyAWord = 0
+  val examples = ArrayList<String>()
+  for (line in lines) {
+    val parts = line.split('\t')
+    if (parts.size != 2) continue
+    val (typo, target) = parts
+    if (typo.isBlank() || target.isBlank()) continue
+    val (typed, touches) = sim.tap(typo, 0f)
+    val s = engine.suggest(typed, touches, sim.keys, WordContext.START, allowAutocorrect = true)
+    val result = s.autocorrect ?: typed
+    total++
+    if (engine.isValid(typed)) alreadyAWord++
+    if (result.equals(target, ignoreCase = true)) fixed++
+    if (s.items.any { it.equals(target, ignoreCase = true) }) inStrip++
+    if (!result.equals(target, ignoreCase = true) && examples.size < showErrors) {
+      examples += "  %-16s → %-16s (want %s)  strip %s".format(typo, result, target, s.items)
+    }
+  }
+  out.appendLine("typos: autocorrected %5.1f%%  in strip %5.1f%%  (also-a-word %4.1f%%, so unfixable without context)  (%d pairs)"
+    .format(pct(fixed, total), pct(inStrip, total), pct(alreadyAWord, total), total))
+  examples.forEach(out::appendLine)
+  return out.toString()
 }
 
 /** Every tunable in one place, so the grid can vary one at a time. */

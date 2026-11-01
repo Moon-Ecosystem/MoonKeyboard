@@ -58,6 +58,8 @@ data class EngineConfig(
   val learnedAt: Int = 2,
   /** How much a glide path straying from a word's ideal path (in key widths) counts against it. */
   val glideWeight: Float = 4.5f,
+  /** Per letter a word differs in length from what was typed: a prior that same-length fixes beat completions. */
+  val lengthPenalty: Float = 0.5f,
 )
 
 class SuggestionEngine(
@@ -75,8 +77,8 @@ class SuggestionEngine(
 
   private class Candidate(val word: String, val cost: Float, val score: Float, val completion: Boolean)
 
-  /** Suggestions for a partly typed word. */
-  fun suggest(typed: String, touches: List<Touch>, keys: KeyMap?, context: WordContext, allowAutocorrect: Boolean): Suggestions {
+  /** Suggestions for a partly typed word. [allowCompletions] off keeps longer words out, for fixes to a word the user has fully typed. */
+  fun suggest(typed: String, touches: List<Touch>, keys: KeyMap?, context: WordContext, allowAutocorrect: Boolean, allowCompletions: Boolean = true): Suggestions {
     if (typed.isEmpty()) return predict(context, capitalize = false)
     val spatial = Spatial(touches, keys, decoder.config)
     val lm = Lm(context)
@@ -87,9 +89,12 @@ class SuggestionEngine(
     fun offer(word: String, id: Int, cost: Float, completion: Boolean) {
       if (history.isBlocked(word)) return
       val penalty = if (isProper(word) && !typedCapital) config.capitalPenalty else 0f
-      val score = -cost + config.lmWeight * (lm.logProb(word, id) - penalty)
+      // Short prefixes are still being typed; a length prior there kills ordinary completions
+      val diff = if (typed.length >= 3) kotlin.math.abs(word.length - typed.length) else 0
+      val adjusted = cost + config.lengthPenalty * diff
+      val score = -adjusted + config.lmWeight * (lm.logProb(word, id) - penalty)
       val old = best[word]
-      if (old == null || score > old.score) best[word] = Candidate(word, cost, score, completion)
+      if (old == null || score > old.score) best[word] = Candidate(word, adjusted, score, completion)
     }
 
     decoder.search(spatial) { hit ->
@@ -114,7 +119,7 @@ class SuggestionEngine(
       else if (prefixCost <= limit) offer(word, id, prefixCost, true)
     }
 
-    val ranked = best.values.sortedByDescending { it.score }
+    val ranked = best.values.asSequence().filter { allowCompletions || !it.completion }.sortedByDescending { it.score }.toList()
     val autocorrect = if (allowAutocorrect) autocorrectFor(typed, ranked) else null
 
     val shown = ArrayList<String>()

@@ -106,10 +106,11 @@ class InputController(private val host: KeyboardHost) {
     private set
 
   /**
-   * What the strip offers to take back: text the copied-item pill pasted ([inserted]), or words
-   * backspace deleted; [undone] once it has been, and the offer becomes redo.
+   * What the strip offers to take back: text the copied-item pill pasted ([inserted]), words
+   * backspace deleted, or an autocorrect that put [text] in place of [original]. [undone] once the
+   * offer has been taken, and the offer becomes redo.
    */
-  data class EditUndo(val text: String, val inserted: Boolean, val undone: Boolean = false) {
+  data class EditUndo(val text: String, val inserted: Boolean, val undone: Boolean = false, val original: String? = null) {
     /** The text is in the field now, so the next tap deletes it. */
     val present get() = inserted != undone
   }
@@ -301,8 +302,9 @@ class InputController(private val host: KeyboardHost) {
     val wordTouches = m.word.map { keys?.touchFor(it) ?: Touch.exact(it) }
     decodeJob?.cancel()
     decodeJob = scope.launch {
-      // No autocorrect: space doesn't apply these, it types a space where the cursor is
-      val result = withContext(decodeDispatcher) { engine.suggest(m.word, wordTouches, keys, m.context, false) }
+      // No autocorrect: space doesn't apply these, it types a space where the cursor is. No completions
+      // either: the whole word is already there, longer words would read as other words, not fixes
+      val result = withContext(decodeDispatcher) { engine.suggest(m.word, wordTouches, keys, m.context, allowAutocorrect = false, allowCompletions = false) }
       // Only fixes, best first: the word as typed would change nothing. The best goes in the middle,
       // the runner-up on the left ("" leaves a slot empty)
       val fixes = result.items.filter { it != m.word }
@@ -405,6 +407,24 @@ class InputController(private val host: KeyboardHost) {
     val ic = host.inputConnection ?: return
     finishWord()
     deletedRun.clear()
+    if (u.original != null) {
+      // Autocorrect revert: swap between the correction and what the user typed
+      val have = if (u.undone) u.original else u.text
+      val want = if (u.undone) u.text else u.original
+      if (textBefore(ic, have.length) != have) {
+        undo = null
+        return
+      }
+      ic.beginBatchEdit()
+      ic.deleteSurroundingText(have.length, 0)
+      ic.commitText(want, 1)
+      ic.endBatchEdit()
+      // The space-triggered revert is now spent; backspace shouldn't try the same thing
+      revert = null
+      undo = u.copy(undone = !u.undone)
+      afterSeparator()
+      return
+    }
     if (u.present) {
       // Only while it's still just before the cursor; the app may have changed the text since
       if (textBefore(ic, u.text.length) != u.text) {
@@ -745,7 +765,7 @@ class InputController(private val host: KeyboardHost) {
       return
     }
     ic.beginBatchEdit()
-    if (composing.isNotEmpty()) commitWord(autocorrect = c != null && c in AUTOCORRECT_TRIGGERS)
+    val corrected = if (composing.isNotEmpty()) commitWord(autocorrect = c != null && c in AUTOCORRECT_TRIGGERS) else null
     if (autoSpaced && c != null && c in SPACE_SWAPPING && textBefore(ic, 1) == " ") {
       // "word " + "." → "word. ": punctuation goes before the space we added
       ic.deleteSurroundingText(1, 0)
@@ -755,6 +775,10 @@ class InputController(private val host: KeyboardHost) {
       autoSpaced = false
     }
     ic.endBatchEdit()
+    if (corrected != null) {
+      revert = corrected.copy(separator = text)
+      undo = EditUndo(corrected.corrected + text, inserted = false, original = corrected.typed + text)
+    }
     shiftController.onCharTyped()
     afterSeparator()
   }
@@ -762,12 +786,15 @@ class InputController(private val host: KeyboardHost) {
   private fun space() {
     val ic = host.inputConnection ?: return
     revert = null
+    // The previous autocorrect's pill is about this space; a new one takes its place or none does
+    if (undo?.original != null) undo = null
     phantomSpace = false
     ic.beginBatchEdit()
     if (composing.isNotEmpty()) {
       val corrected = commitWord(autocorrect = true)
       ic.commitText(" ", 1)
       revert = corrected?.copy(separator = " ")
+      undo = corrected?.let { EditUndo(it.corrected + " ", inserted = false, original = it.typed + " ") }
       lastWasSpace = true
     } else if (lastWasSpace && doubleSpaceApplies(ic)) {
       ic.deleteSurroundingText(1, 0)
