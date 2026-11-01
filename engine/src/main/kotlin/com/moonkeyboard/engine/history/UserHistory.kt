@@ -10,7 +10,8 @@ data class LearnedPhrase(val prev2: String, val prev: String, val word: String, 
  * for a sentence start).
  */
 class UserHistory {
-  private val words = HashMap<String, Int>()
+  // Insertion-ordered so the Learned screen can show what was typed most recently first
+  private val words = LinkedHashMap<String, Int>()
   private val pairs = HashMap<String, HashMap<String, Int>>()
   private val triples = HashMap<String, HashMap<String, Int>>()
   private val blocked = HashSet<String>()
@@ -25,7 +26,9 @@ class UserHistory {
   fun record(prev: String?, word: String, weight: Int = 1, prev2: String? = null) {
     if (word.isBlank()) return
     blocked.remove(word)
-    words[word] = (words[word] ?: 0) + weight
+    // Remove then re-insert so the latest word always sits at the end of the ordered map
+    val count = (words.remove(word) ?: 0) + weight
+    words[word] = count
     total += weight
     if (prev != null) {
       pairs.getOrPut(prev) { HashMap() }.merge(word, weight, Int::plus)
@@ -91,9 +94,9 @@ class UserHistory {
     if (blocked.remove(word)) version++
   }
 
-  /** Every learned word with how often it was typed, most used first. */
+  /** Every learned word with how often it was typed, most recently typed first. */
   @Synchronized
-  fun learnedWords(): List<Pair<String, Int>> = words.toList().sortedByDescending { it.second }
+  fun learnedWords(): List<Pair<String, Int>> = words.toList().asReversed()
 
   /** Three-word phrases used at least [minCount] times, most used first. */
   @Synchronized

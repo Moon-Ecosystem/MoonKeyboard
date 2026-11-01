@@ -362,7 +362,7 @@ private fun ForgetButton(icon: ImageVector, label: String, colors: KeyboardColor
   }
 }
 
-/** Three slots: the best word in the middle, bold when space will autocorrect to it. Long-press offers to forget a word. */
+/** Three slots side by side, best in the middle. The middle goes bold only when space will autocorrect to it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SuggestionStrip(controller: InputController, colors: KeyboardColors) {
@@ -371,9 +371,6 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
   val onForget = controller::askForget
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     ToolButton(Icons.Next, R.string.open_toolbar, colors) { controller.toolbarOpen = true }
-    // Fixes for the word the cursor is inside: the best one is a filled pill, so it reads as "replace with"
-    // Not the predictions shown until the fixes arrive
-    val fixing = controller.midWord != null && !suggestions.isPrediction
     for (i in 0 until 3) {
       if (i > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
       val word = suggestions.items.getOrNull(i)?.takeIf { it.isNotEmpty() }
@@ -390,13 +387,12 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
       }
       Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(22.dp)).then(clickable), contentAlignment = Alignment.Center) {
         if (word != null) {
-          val pill = fixing && i == 1
           Text(
             word,
-            if (pill) Modifier.clip(RoundedCornerShape(18.dp)).background(colors.accent).padding(horizontal = 16.dp, vertical = 6.dp) else Modifier.padding(horizontal = 6.dp),
-            color = if (pill) colors.onAccent else if (i == 1) colors.text else colors.muted,
+            Modifier.padding(horizontal = 6.dp),
+            color = if (i == 1) colors.text else colors.muted,
             fontSize = 19.sp,
-            fontWeight = if (pill || (i == 1 && suggestions.autocorrect != null)) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (i == 1 && suggestions.autocorrect != null) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )

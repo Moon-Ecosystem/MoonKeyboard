@@ -291,9 +291,20 @@ class InputController(private val host: KeyboardHost) {
     val ic = host.inputConnection
     if (ic != null && (bySlide || !isEcho()) && composing.isEmpty() && panel == Panel.KEYS && emojiQuery == null && field.suggest) resumeWord(ic)
     if (composing.isNotEmpty()) return requestSuggestions()
-    afterSeparator()
-    // After the predictions, which would otherwise replace these fixes
-    midWord?.let(::suggestMidWord)
+    // Auto-caps syncs either way; one of mid-word similar words or next-word predictions takes the strip,
+    // not both — predictions in between would flash before the async mid-word decode replaces them
+    syncCaps()
+    val m = midWord
+    if (m == null) refreshPredictions() else suggestMidWord(m)
+  }
+
+  private fun syncCaps() {
+    if (field.autoCaps && Prefs.autoCaps.value) {
+      host.inputConnection?.let { ic ->
+        shiftController.autoCapitalize(ic.getCursorCapsMode(host.editorInfo.inputType) != 0)
+      }
+    }
+    syncShift()
   }
 
   private fun suggestMidWord(m: MidWord) {
@@ -305,10 +316,24 @@ class InputController(private val host: KeyboardHost) {
       // No autocorrect: space doesn't apply these, it types a space where the cursor is. No completions
       // either: the whole word is already there, longer words would read as other words, not fixes
       val result = withContext(decodeDispatcher) { engine.suggest(m.word, wordTouches, keys, m.context, allowAutocorrect = false, allowCompletions = false) }
-      // Only fixes, best first: the word as typed would change nothing. The best goes in the middle,
-      // the runner-up on the left ("" leaves a slot empty)
-      val fixes = result.items.filter { it != m.word }
-      if (midWord == m) suggestions = result.copy(items = if (fixes.isEmpty()) emptyList() else listOf(fixes.getOrElse(1) { "" }, fixes[0]))
+      if (midWord != m) return@launch
+      // A real word already in the field has the typed form in the middle with similar words either
+      // side; a typed non-word has itself on the left and the closer alternatives in the middle and right.
+      // In both cases the engine already laid out items as the strip wants them, so pass them through.
+      if (result.items.isNotEmpty()) {
+        suggestions = result
+        return@launch
+      }
+      // Nothing close enough edit-distance-wise ("banananana" is five keystrokes away from any word):
+      // fall back to similar words from the start of what was typed, so the strip still offers a way out
+      val cut = (m.word.length / 2).coerceIn(2, SIMILAR_PREFIX)
+      if (cut >= m.word.length) return@launch
+      val prefix = m.word.take(cut)
+      val similar = withContext(decodeDispatcher) {
+        engine.suggest(prefix, wordTouches.take(cut), keys, m.context, allowAutocorrect = false)
+      }.items.filter { !it.equals(m.word, ignoreCase = true) && !it.equals(prefix, ignoreCase = true) }.take(3)
+      if (midWord != m) return@launch
+      if (similar.isNotEmpty()) suggestions = result.copy(items = similar) else refreshPredictions()
     }
   }
 
@@ -927,8 +952,8 @@ class InputController(private val host: KeyboardHost) {
     val text = ic.getExtractedText(ExtractedTextRequest(), 0)
     val cursor = if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
     if (end > 0) {
-      // A real word has nothing to fix: the predictions stay, without a flash of the fixes' look first
-      if (cursor < word.length || Language.engine?.isValid(word + after.substring(0, end)) != false) return
+      if (cursor < word.length) return
+      // Set the mid-word even for a real word: the strip offers similar ones in case the user put the cursor there to swap it
       val textBefore = ic.getTextBeforeCursor(CONTEXT_CHARS + word.length, 0)?.toString() ?: ""
       midWord = MidWord(cursor - word.length, word + after.substring(0, end), WordContext.from(textBefore.dropLast(word.length)))
       return
@@ -1081,6 +1106,8 @@ class InputController(private val host: KeyboardHost) {
     private const val FORGET_ASK_MS = 4_000L
     private const val CONTEXT_CHARS = 64
     private const val RESUME_CHARS = 48
+    /** Letters of a stuck mid-word kept as a prefix to look up similar words from. */
+    private const val SIMILAR_PREFIX = 5
     /** Apps echo our edits back well within this; a cursor move later than it came from elsewhere. */
     private const val ECHO_MS = 500L
     private const val LEARN_AS_WORD = 2

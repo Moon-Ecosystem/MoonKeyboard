@@ -22,7 +22,14 @@ class UserHistoryTest {
   fun listsPhrasesUsedMoreThanOnce() {
     val h = typed("see you soon", "see you soon", "see me")
     assertEquals(listOf(LearnedPhrase("see", "you", "soon", 2), LearnedPhrase("<s>", "see", "you", 2)), h.learnedPhrases().sortedBy { it.word })
-    assertEquals("see" to 3, h.learnedWords().first())
+    assertEquals(3, h.count("see"))
+  }
+
+  @Test
+  fun learnedWordsListsTheLatestFirst() {
+    // "see" was typed last of all repeated words, "me" after that, so "me" tops the list
+    val h = typed("see you soon", "see you soon", "see me")
+    assertEquals(listOf("me" to 1, "see" to 3, "soon" to 2, "you" to 2), h.learnedWords())
   }
 
   @Test
