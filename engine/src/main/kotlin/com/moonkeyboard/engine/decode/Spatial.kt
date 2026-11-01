@@ -101,6 +101,9 @@ data class DecoderConfig(
   val softSubstitution: Float = 2.5f,
   val insert: Float = 3f,
   val delete: Float = 3f,
+  /** A missing or extra vowel: the Wikipedia misspellings skip and double vowels far more than any other letter. */
+  val vowelInsert: Float = 2.25f,
+  val vowelDelete: Float = 2.25f,
   val transpose: Float = 1.8f,
   /** Inserting an apostrophe the user skipped ("dont" → "don't") is nearly free. */
   val apostropheInsert: Float = 0.3f,

@@ -65,14 +65,19 @@ class TapDecoder(private val lexicon: Lexicon, val config: DecoderConfig = Decod
   /** One trie level: [out] = alignment costs after adding [c]. Returns the row minimum for pruning. */
   private fun step(prev: FloatArray, prevPrev: FloatArray?, prevChar: Char, c: Char, out: FloatArray, sp: Spatial): Float {
     val n = sp.size
-    val ins = if (c == '\'') config.apostropheInsert else config.insert
+    val ins = when {
+      c == '\'' -> config.apostropheInsert
+      c in VOWELS -> config.vowelInsert
+      else -> config.insert
+    }
     out[0] = prev[0] + ins
     var min = out[0]
     for (j in 1..n) {
       var v = prev[j - 1] + sp.cost(j - 1, c)
       val insert = prev[j] + ins
       if (insert < v) v = insert
-      val delete = out[j - 1] + config.delete
+      val del = if (baseChar(sp.touches[j - 1].char) in VOWELS) config.vowelDelete else config.delete
+      val delete = out[j - 1] + del
       if (delete < v) v = delete
       if (prevPrev != null && j >= 2) {
         val swap = prevPrev[j - 2] + config.transpose + sp.cost(j - 1, prevChar) + sp.cost(j - 2, c)
@@ -113,5 +118,6 @@ class TapDecoder(private val lexicon: Lexicon, val config: DecoderConfig = Decod
 
   private companion object {
     const val MAX_DEPTH = 48
+    val VOWELS = setOf('a', 'e', 'i', 'o', 'u')
   }
 }
