@@ -13,6 +13,11 @@ Glide typing, autocorrect and next-word prediction in English and Hinglish. The 
 [![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?labelColor=27303D)](#download)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?labelColor=27303D)](LICENSE)
 
+<img src=".github/assets/screenshots/home.webp" alt="The app's home screen, with the keyboard active and a tap-to-try field at the top" width="160"/>
+<img src=".github/assets/screenshots/typing.webp" alt="Typing in the test pad with next-word predictions in the suggestion strip" width="160"/>
+<img src=".github/assets/screenshots/glide.webp" alt="Glide typing with the trail drawn across the letters" width="160"/>
+<img src=".github/assets/screenshots/emoji.webp" alt="The emoji panel with recent emoji on top and categories below" width="160"/>
+
 </div>
 
 ## Download
