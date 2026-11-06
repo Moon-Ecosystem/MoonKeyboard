@@ -26,8 +26,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      - name: Install Android platform 36.1
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36.1" > /dev/null
+      - name: Install Android platform 37
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
 
       - name: Unit tests
         run: ./gradlew :engine:test

@@ -48,7 +48,7 @@ _Requires Android 7.0 (API 24) or higher._
 
 ## Building from source
 
-You need JDK 17 or newer and an Android SDK with platform 36.1. The Gradle wrapper (Gradle 9.9.0) is included.
+You need JDK 17 or newer and an Android SDK with platform 37. The Gradle wrapper (Gradle 9.9.0) is included.
 
 ```sh
 ./gradlew :engine:test           # typing engine unit tests
