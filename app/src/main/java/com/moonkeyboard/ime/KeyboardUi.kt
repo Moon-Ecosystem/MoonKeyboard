@@ -10,6 +10,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.key
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -71,6 +86,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextGeometricTransform
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -81,8 +98,9 @@ import com.moonkeyboard.engine.layout.KeyBounds
 import com.moonkeyboard.engine.layout.KeyType
 import com.moonkeyboard.engine.layout.KeyboardGeometry
 import com.moonkeyboard.engine.layout.Layout
+import com.moonkeyboard.engine.layout.Layouts
 
-private val KeyHeight = 46.dp
+private val KeyHeight = 48.dp
 private val HGap = 6.dp
 // Roomy rows: with the larger labels a tighter gap looked cramped
 private val VGap = 15.dp
@@ -104,7 +122,22 @@ private val ShiftIcon = icon("M12 4l8 8h-5v8H9v-8H4z")
 // The × sits a little left of the box's middle, so it looks centred in the whole shape, point included
 private val BackspaceIcon = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM11 9l6 6M17 9l-6 6")
 private val EnterIcon = icon("M20 5v7a2 2 0 0 1-2 2H5M9 10l-4 4 4 4")
+private val SearchIcon = icon("M15 15l5 5M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0")
+private val GoIcon = icon("M4 12h16M14 6l6 6-6 6")
+private val SendIcon = icon("M4 12l17-8-7 18-3-7z")
+private val DoneIcon = icon("M5 12l5 5 10-11")
+private val PrevIcon = icon("M20 12H4M10 6l-6 6 6 6")
 private val SmileIcon = icon("M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01")
+
+private fun enterIcon(action: Int): Path = when (action) {
+  android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH -> SearchIcon
+  android.view.inputmethod.EditorInfo.IME_ACTION_SEND -> SendIcon
+  android.view.inputmethod.EditorInfo.IME_ACTION_GO -> GoIcon
+  android.view.inputmethod.EditorInfo.IME_ACTION_DONE -> DoneIcon
+  android.view.inputmethod.EditorInfo.IME_ACTION_NEXT -> GoIcon
+  android.view.inputmethod.EditorInfo.IME_ACTION_PREVIOUS -> PrevIcon
+  else -> EnterIcon
+}
 
 private fun icon(d: String): Path = PathParser().parsePathString(d).toPath()
 
@@ -139,7 +172,9 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
   val audio = remember { view.context.getSystemService(AudioManager::class.java) }
   val scope = rememberCoroutineScope()
   val measurer = rememberTextMeasurer(cacheSize = 64)
-  val layout = controller.layout
+  val raw = controller.layout
+  // Landscape rows are roomy, so the space bar takes some of that width
+  val layout = remember(raw, landscape) { if (landscape) Layouts.wideSpace(raw) else raw }
 
   BoxWithConstraints(
     Modifier.fillMaxWidth().background(colors.background).then(if (floating) Modifier else Modifier.windowInsetsPadding(WindowInsets.navigationBars))
@@ -327,7 +362,11 @@ private fun OneHandedControls(colors: KeyboardColors, modifier: Modifier) {
 private fun Strip(controller: InputController, colors: KeyboardColors) {
   // Read here, not in KeyboardUi, so a new suggestion recomposes only the strip
   val fresh = if (Prefs.offerCopied.value) ClipboardStore.freshClip() else null
+  val chips = controller.inlineChips
   when {
+    // Autofill chips from the system (a password manager, etc.) take the strip over the predictions;
+    // tapping one fills the field — the autofill service drew it and owns the touch
+    chips.isNotEmpty() && !controller.toolbarOpen -> InlineChipStrip(controller, colors, chips)
     // A new copy takes the predictions' place (never a word being typed), if this field can take it
     fresh != null && !controller.toolbarOpen && !controller.clipSetAside && controller.suggestions.isPrediction &&
       (if (fresh.kind == ClipKind.TEXT) controller.copiedTextOffer(fresh.content) != null else controller.acceptsContent(fresh.mime)) -> FreshClipStrip(controller, colors, fresh)
@@ -336,6 +375,83 @@ private fun Strip(controller: InputController, colors: KeyboardColors) {
     controller.undo != null && !controller.toolbarOpen -> UndoStrip(controller, colors, controller.undo!!)
     controller.toolbarOpen || controller.suggestions.items.isEmpty() -> Toolbar(controller, colors)
     else -> SuggestionStrip(controller, colors)
+  }
+}
+
+/** Where the chip row and each chip are, so every chip can be told how much of it is in view. */
+private class ChipClip {
+  var row: LayoutCoordinates? = null
+  val chips = HashMap<android.view.View, LayoutCoordinates>()
+}
+
+/**
+ * An autofill chip draws on its own surface, which the row's clip doesn't reach: a chip scrolled
+ * partly out of the row would paint over the icons beside it. Its setClipBounds crops that
+ * surface, so it gets the part of it that is inside the row (none when fully in view).
+ */
+private fun clipChip(view: android.view.View, chip: LayoutCoordinates, row: LayoutCoordinates, clip: ChipClip) {
+  if (!chip.isAttached || !row.isAttached) return
+  val inRow = row.localBoundingBoxOf(chip, clipBounds = false)
+  val left = (maxOf(0f, inRow.left) - inRow.left).toInt()
+  val right = (minOf(row.size.width.toFloat(), inRow.right) - inRow.left).toInt()
+  // A chip wholly out of the row keeps its surface but crops it to a pixel off the chip: an empty
+  // clip reads as no clip at all, and hiding the view tears the surface down, which then showed
+  // for a frame unclipped when it came back
+  val hidden = right <= left
+  val bounds = when {
+    hidden -> OFF_CHIP
+    left <= 0 && right >= chip.size.width -> null
+    else -> android.graphics.Rect(left, 0, right, chip.size.height)
+  }
+  if (bounds != view.clipBounds) view.clipBounds = bounds
+  // Hidden only until its first clip (see setInlineSuggestions), never again after
+  if (view.visibility != android.view.View.VISIBLE) view.visibility = android.view.View.VISIBLE
+}
+
+private val OFF_CHIP = android.graphics.Rect(-2, -2, -1, -1)
+
+@Composable
+private fun InlineChipStrip(controller: InputController, colors: KeyboardColors, chips: List<android.view.View>) {
+  Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Same left/right leaders as the suggestion strip, so nothing moves when autofill chips come and go
+    ToolButton(Icons.Next, R.string.open_toolbar, colors) { controller.toolbarOpen = true }
+    val clip = remember { ChipClip() }
+    // A plain scrolling Row, not a LazyRow: a chip the lazy list dropped once scrolled away left
+    // its surface stranded at the window's top left corner
+    BoxWithConstraints(
+      Modifier.weight(1f).fillMaxHeight().clipToBounds().onGloballyPositioned { row ->
+        clip.row = row
+        for ((view, coords) in clip.chips) clipChip(view, coords, row, clip)
+      },
+      contentAlignment = Alignment.CenterStart,
+    ) {
+      Row(
+        // At least as wide as the row, so one chip sits centred; wider ones scroll
+        // No stretch at the ends: it's drawn as an effect the chips' clip bounds can't follow
+        Modifier.horizontalScroll(rememberScrollState(), overscrollEffect = null).widthIn(min = maxWidth).padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(InputController.CHIP_GAP_DP.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+      for (view in chips) key(view) {
+        DisposableEffect(view) { onDispose { clip.chips.remove(view) } }
+        // Fade in and slide in slightly from the right
+        val enter = remember(view) { MutableTransitionState(false).apply { targetState = true } }
+        AnimatedVisibility(
+          visibleState = enter,
+          enter = fadeIn(tween(200)) + slideInHorizontally(tween(220)) { it / 3 },
+        ) {
+          AndroidView(
+            factory = { view },
+            modifier = Modifier.onGloballyPositioned { coords ->
+              clip.chips[view] = coords
+              clip.row?.let { clipChip(view, coords, it, clip) }
+            },
+          )
+        }
+      }
+      }
+    }
+    ToolButton(Icons.Clipboard, R.string.clipboard, colors) { controller.panel = Panel.CLIPBOARD }
   }
 }
 
@@ -357,6 +473,38 @@ private fun Toolbar(controller: InputController, colors: KeyboardColors) {
   }
 }
 
+/** One suggestion: squeezed to fit its [textWidth] px, cut in the middle only past the limit. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SuggestionSlot(controller: InputController, colors: KeyboardColors, measurer: TextMeasurer, i: Int, word: String?, bold: Boolean, textWidth: Int, modifier: Modifier) {
+  // Long-pressed: the slot asks whether to forget the word, the rest of the strip stays
+  if (word != null && word == controller.forgetAsk) {
+    Row(modifier.fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+      ForgetButton(Icons.Trash, stringResource(R.string.forget_word), colors, controller::forgetSuggestion)
+      ForgetButton(Icons.Close, stringResource(android.R.string.cancel), colors, controller::cancelForget)
+    }
+    return
+  }
+  val clickable = if (word == null) Modifier else {
+    Modifier.combinedClickable(onClick = { controller.pickSuggestion(i) }, onLongClick = { controller.askForget(i) }, onLongClickLabel = stringResource(R.string.forget_word))
+  }
+  Box(modifier.fillMaxHeight().clip(RoundedCornerShape(22.dp)).then(clickable), contentAlignment = Alignment.Center) {
+    if (word != null) {
+      val style = suggestionStyle(colors, i, bold)
+      val scale = remember(word, style, textWidth) { fitScale(measurer, word, style, textWidth) }
+      Text(
+        word,
+        Modifier.padding(horizontal = SlotPadding),
+        style = style.copy(textGeometricTransform = TextGeometricTransform(scaleX = maxOf(scale, MIN_TEXT_SCALE))),
+        maxLines = 1,
+        softWrap = false,
+        // Similar suggestions (implementation, implementations) differ at the end, so the middle goes
+        overflow = if (scale < MIN_TEXT_SCALE) TextOverflow.MiddleEllipsis else TextOverflow.Clip,
+      )
+    }
+  }
+}
+
 @Composable
 private fun ForgetButton(icon: ImageVector, label: String, colors: KeyboardColors, onClick: () -> Unit) {
   Box(Modifier.size(36.dp).clip(CircleShape).background(colors.key).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
@@ -364,40 +512,51 @@ private fun ForgetButton(icon: ImageVector, label: String, colors: KeyboardColor
   }
 }
 
+// As in AOSP's strip: the middle slot is 40% of the strip and the sides 30% each, whatever the words
+private const val CENTER_SHARE = 0.4f
+// A word too wide for its slot is first squeezed, down to this much of its width, and only then cut in the middle
+private const val MIN_TEXT_SCALE = 0.7f
+private val SlotPadding = 6.dp
+
+private fun suggestionStyle(colors: KeyboardColors, i: Int, bold: Boolean) = TextStyle(
+  color = if (i == 1) colors.text else colors.muted,
+  fontSize = 19.sp,
+  fontWeight = if (i == 1 && bold) FontWeight.SemiBold else FontWeight.Normal,
+)
+
+/** How much [word] has to be squeezed to fit [width] px: 1 when it fits as it is. */
+private fun fitScale(measurer: TextMeasurer, word: String, style: TextStyle, width: Int): Float {
+  val natural = measurer.measure(word, style, maxLines = 1, softWrap = false).size.width
+  return if (natural <= width) 1f else width.toFloat() / natural
+}
+
 /** Three slots side by side, best in the middle. The middle goes bold only when space will autocorrect to it. */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SuggestionStrip(controller: InputController, colors: KeyboardColors) {
   val suggestions = controller.suggestions
-  val onPick = controller::pickSuggestion
-  val onForget = controller::askForget
+  val measurer = rememberTextMeasurer()
   Row(Modifier.fillMaxWidth().height(StripHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
     ToolButton(Icons.Next, R.string.open_toolbar, colors) { controller.toolbarOpen = true }
-    for (i in 0 until 3) {
-      if (i > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
-      val word = suggestions.items.getOrNull(i)?.takeIf { it.isNotEmpty() }
-      // Long-pressed: the slot asks whether to forget the word, the rest of the strip stays
-      if (word != null && word == controller.forgetAsk) {
-        Row(Modifier.weight(1f).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-          ForgetButton(Icons.Trash, stringResource(R.string.forget_word), colors, controller::forgetSuggestion)
-          ForgetButton(Icons.Close, stringResource(android.R.string.cancel), colors, controller::cancelForget)
-        }
-        continue
-      }
-      val clickable = if (word == null) Modifier else {
-        Modifier.combinedClickable(onClick = { onPick(i) }, onLongClick = { onForget(i) }, onLongClickLabel = stringResource(R.string.forget_word))
-      }
-      Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(22.dp)).then(clickable), contentAlignment = Alignment.Center) {
-        if (word != null) {
-          Text(
-            word,
-            Modifier.padding(horizontal = 6.dp),
-            color = if (i == 1) colors.text else colors.muted,
-            fontSize = 19.sp,
-            fontWeight = if (i == 1 && suggestions.autocorrect != null) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
+    BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+      val words = List(3) { suggestions.items.getOrNull(it)?.takeIf(String::isNotEmpty) }
+      val bold = suggestions.autocorrect != null
+      val density = LocalDensity.current
+      val pad = with(density) { (SlotPadding * 2).roundToPx() }
+      val fullWidth = constraints.maxWidth
+      val slots = fullWidth - 2 * with(density) { 1.dp.roundToPx() }
+      val center = words[1]
+      // As in AOSP: a middle word that would have to be squeezed past the limit gets the whole strip
+      val centerOnly = center != null && center != controller.forgetAsk &&
+        fitScale(measurer, center, suggestionStyle(colors, 1, bold), (slots * CENTER_SHARE).toInt() - pad) < MIN_TEXT_SCALE
+      Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+        if (centerOnly) {
+          SuggestionSlot(controller, colors, measurer, 1, center, bold, fullWidth - pad, Modifier.weight(1f))
+        } else {
+          for (i in 0 until 3) {
+            if (i > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
+            val share = if (i == 1) CENTER_SHARE else (1 - CENTER_SHARE) / 2
+            SuggestionSlot(controller, colors, measurer, i, words[i], bold, (slots * share).toInt() - pad, Modifier.weight(share))
+          }
         }
       }
     }
@@ -471,7 +630,7 @@ private fun DrawScope.drawKey(
       }
     }
     KeyType.BACKSPACE -> drawIcon(BackspaceIcon, center, 24.dp.toPx(), colors.text)
-    KeyType.ENTER -> drawIcon(EnterIcon, center, 22.dp.toPx(), colors.onAccent, strokeWidth = 2f)
+    KeyType.ENTER -> drawIcon(enterIcon(controller.enterAction), center, 22.dp.toPx(), colors.onAccent, strokeWidth = 2f)
     KeyType.EMOJI -> drawIcon(SmileIcon, center, 22.dp.toPx(), colors.text, strokeWidth = 2f)
     KeyType.SPACE -> drawLabel(measurer, key.label, center, TextStyle(color = colors.muted, fontSize = 15.sp))
     KeyType.LAYER -> drawLabel(measurer, key.label, center, TextStyle(color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold))

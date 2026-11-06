@@ -86,5 +86,16 @@ object Layouts {
     return Layout(layout.rows.dropLast(1) + bottom.copy(keys = keys))
   }
 
+  /** [layout] with the space bar [extra] units wider, the rest of its row shrunk to keep the row's width, for landscape's roomy rows. */
+  fun wideSpace(layout: Layout, extra: Float = 1.5f): Layout {
+    val bottom = layout.rows.last()
+    val space = bottom.keys.firstOrNull { it.type == KeyType.SPACE } ?: return layout
+    val rest = bottom.keys.sumOf { it.width.toDouble() }.toFloat() - space.width
+    if (rest <= extra) return layout
+    val shrink = 1 - extra / rest
+    val keys = bottom.keys.map { if (it === space) it.copy(width = it.width + extra) else it.copy(width = it.width * shrink) }
+    return Layout(layout.rows.dropLast(1) + bottom.copy(keys = keys))
+  }
+
   private const val NUMBER_ROW_HEIGHT = 0.87f
 }

@@ -78,6 +78,8 @@ internal class TestPadHost(view: View) : KeyboardHost {
     override fun getEditable(): Editable = buffer
   }
 
+  override val context = view.context
+
   override fun sendDownUpKeyEvents(keyCode: Int) = Unit
 
   fun clear() = buffer.clear()

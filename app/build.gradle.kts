@@ -18,8 +18,8 @@ android {
     applicationId = "com.moonkeyboard"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "0.3"
+    versionCode = 4
+    versionName = "0.4"
   }
 
   signingConfigs {
@@ -53,6 +53,8 @@ dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.activity.compose)
+  // For the inline suggestion UI style passed to the autofill service, e.g. a password manager's chip
+  implementation(libs.androidx.autofill)
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.compose.material3)

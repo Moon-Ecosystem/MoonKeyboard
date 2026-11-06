@@ -155,6 +155,12 @@ class TouchTracker(
       slideCursor(id, at.x)
       return
     }
+    pressed[id]?.let { b ->
+      if (b.key.type == KeyType.BACKSPACE && b.distanceSq(at.x, at.y) > 0f) {
+        cancel(id)
+        return
+      }
+    }
     val p = popup
     if (p != null && popupOwner == id) {
       p.selected = ((at.x - p.left) / p.cellWidth).toInt().coerceIn(0, p.items.lastIndex)

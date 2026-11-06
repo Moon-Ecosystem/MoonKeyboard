@@ -40,9 +40,10 @@ class KeyboardGeometry(val keys: List<KeyBounds>, val width: Float, val height: 
         val mid = (width - splitGap) / 2
         val keys = narrow.keys.map {
           when {
+            // Space always stretches across the gap, even when the emoji key has pushed its centre past the middle
+            it.key.type == KeyType.SPACE && it.right > mid -> it.copy(right = it.right + splitGap)
             // A key straddling the middle ("g", "v") stays with the left half
             it.centerX > mid + 1f -> it.copy(left = it.left + splitGap, right = it.right + splitGap)
-            it.key.type == KeyType.SPACE && it.right > mid -> it.copy(right = it.right + splitGap)
             else -> it
           }
         }

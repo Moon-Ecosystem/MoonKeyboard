@@ -88,6 +88,16 @@ class LayoutsTest {
     assertEquals("y", split.keyAt(key(split, "y").centerX, key(split, "y").centerY)?.key?.label)
   }
 
+  @Test
+  fun wideSpaceGrowsTheSpaceBarAndKeepsTheRowWidth() {
+    val plain = Layouts.load("qwerty").rows.last().keys
+    val keys = Layouts.wideSpace(Layouts.load("qwerty")).rows.last().keys
+    val before = plain.first { it.type == KeyType.SPACE }.width
+    val after = keys.first { it.type == KeyType.SPACE }.width
+    assertTrue("space is wider", after > before)
+    assertEquals(plain.sumOf { it.width.toDouble() }, keys.sumOf { it.width.toDouble() }, 0.001)
+  }
+
   private fun geometry(layout: Layout) =
     KeyboardGeometry.compute(layout, width = 390f, keyHeight = 46f, hGap = 6f, vGap = 10f, sidePadding = 4f)
 }

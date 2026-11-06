@@ -69,7 +69,7 @@ object Prefs {
   // Portrait and landscape each keep their own spot: one rarely fits the other
   val floatPortrait = Pref("float_portrait", FloatSpot.UNSET, FloatSpot::parse)
   val floatLandscape = Pref("float_landscape", FloatSpot.UNSET, FloatSpot::parse)
-  val splitLandscape = Pref("split_landscape", false, String::toBoolean)
+  val splitLandscape = Pref("split_landscape", true, String::toBoolean)
   /** Toolbar items as comma-separated names, in the bar's order; use [toolbar] and [setToolbar]. */
   val toolbarItems = Pref("toolbar", "EMOJI,THEME,FLOATING") { it }
 

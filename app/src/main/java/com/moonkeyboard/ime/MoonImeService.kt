@@ -2,11 +2,25 @@ package com.moonkeyboard.ime
 
 import android.content.ClipboardManager
 import android.graphics.Rect
+import android.graphics.drawable.Icon
 import android.inputmethodservice.InputMethodService
+import android.os.Build
+import android.os.Bundle
+import android.util.Size
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.RequiresApi
+import androidx.autofill.inline.UiVersions
+import androidx.autofill.inline.common.TextViewStyle
+import androidx.autofill.inline.common.ViewStyle
+import androidx.autofill.inline.v1.InlineSuggestionUi
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.view.updateLayoutParams
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InlineSuggestionsRequest
+import android.view.inputmethod.InlineSuggestionsResponse
+import android.widget.inline.InlinePresentationSpec
+import com.moonkeyboard.R
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -111,6 +125,55 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
     controller.onFinishInput()
     Language.flush()
     super.onFinishInput()
+  }
+
+  /**
+   * Opts in to the system's inline-autofill suggestions: a password manager (or similar) draws its
+   * own chip into our strip, and tapping it fills the field. Returns null on older Android, where
+   * the system falls back to its own dropdown.
+   */
+  @RequiresApi(Build.VERSION_CODES.R)
+  override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest {
+    val density = resources.displayMetrics.density
+    // Follow the keyboard's own theme so the chip blends in; services may ignore the hint
+    val dark = when (Prefs.theme.value) {
+      ThemeMode.SYSTEM -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+      ThemeMode.LIGHT -> false
+      ThemeMode.DARK -> true
+    }
+    val colors = if (dark) KeyboardColors.Dark else KeyboardColors.Light
+    val chipBg = Icon.createWithResource(this, if (dark) R.drawable.inline_chip_background else R.drawable.inline_chip_background_light)
+    val titleStyle = TextViewStyle.Builder()
+      .setTextColor(colors.text.toArgb())
+      .setTextSize(14f)
+      .build()
+    val subtitleStyle = TextViewStyle.Builder()
+      .setTextColor(colors.muted.toArgb())
+      .setTextSize(12f)
+      .build()
+    val chipStyle = ViewStyle.Builder()
+      .setBackground(chipBg)
+      .build()
+    val style = UiVersions.newStylesBuilder()
+      .addStyle(
+        InlineSuggestionUi.newStyleBuilder()
+          .setChipStyle(chipStyle)
+          .setTitleStyle(titleStyle)
+          .setSubtitleStyle(subtitleStyle)
+          .build()
+      )
+      .build()
+    val minSize = Size((60 * density).toInt(), (36 * density).toInt())
+    val maxSize = Size((InputController.CHIP_MAX_DP * density).toInt(), (InputController.CHIP_HEIGHT_DP * density).toInt())
+    val spec = InlinePresentationSpec.Builder(minSize, maxSize).setStyle(style).build()
+    // Strip is small; only two chips comfortably fit beside the leader icons
+    return InlineSuggestionsRequest.Builder(List(2) { spec }).build()
+  }
+
+  @RequiresApi(Build.VERSION_CODES.R)
+  override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
+    controller.setInlineSuggestions(response.inlineSuggestions)
+    return true
   }
 
   override fun onDestroy() {

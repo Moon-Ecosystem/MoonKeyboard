@@ -1,19 +1,26 @@
 package com.moonkeyboard.ime
 
 import android.content.ClipDescription
+import android.content.Context
 import android.graphics.Color
 import android.inputmethodservice.InputMethodService
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import android.text.InputType
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.BackgroundColorSpan
 import android.text.style.SuggestionSpan
+import android.util.Size
 import android.view.KeyEvent
+import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
+import android.view.inputmethod.InlineSuggestion
 import android.view.inputmethod.InputConnection
+import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -51,12 +58,14 @@ import java.util.Locale
 interface KeyboardHost {
   val inputConnection: InputConnection?
   val editorInfo: EditorInfo
+  val context: Context
   fun sendDownUpKeyEvents(keyCode: Int)
 }
 
 fun InputMethodService.asKeyboardHost() = object : KeyboardHost {
   override val inputConnection: InputConnection? get() = currentInputConnection
   override val editorInfo: EditorInfo get() = currentInputEditorInfo
+  override val context: Context get() = this@asKeyboardHost
   override fun sendDownUpKeyEvents(keyCode: Int) = this@asKeyboardHost.sendDownUpKeyEvents(keyCode)
 }
 
@@ -143,6 +152,47 @@ class InputController(private val host: KeyboardHost) {
   /** The last live glide preview; while [suggestions] is still it, the finger hasn't lifted. */
   var glidePreview: Suggestions? = null
     private set
+
+  /**
+   * Views the system's autofill service (e.g. a password manager) wants shown in the strip. They
+   * are inflated by the service into our strip height, and tapping one triggers autofill. Empty
+   * unless the field invites it and an autofill service responds.
+   */
+  var inlineChips by mutableStateOf<List<View>>(emptyList())
+    private set
+  @RequiresApi(Build.VERSION_CODES.R)
+  fun setInlineSuggestions(suggestions: List<InlineSuggestion>) {
+    releaseInlineChips()
+    if (suggestions.isEmpty()) return
+    val ctx = host.context
+    val executor = ContextCompat.getMainExecutor(ctx)
+    val density = ctx.resources.displayMetrics.density
+    // Each chip as wide as its own content, up to the request's maximum; ones that run past the
+    // row scroll in, cut off at its ends by their clip bounds (see clipChip)
+    // The request's spec still caps each chip at CHIP_MAX_DP
+    val size = Size(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, (CHIP_HEIGHT_DP * density).toInt())
+    val shown = suggestions
+    // Inflation is asynchronous and callbacks fire out of order; slot each view by its original
+    // index and only publish once every slot has settled, matching the AOSP sample IME
+    val slots = arrayOfNulls<View>(shown.size)
+    val remaining = java.util.concurrent.atomic.AtomicInteger(shown.size)
+    fun arrived() {
+      if (remaining.decrementAndGet() == 0) inlineChips = slots.filterNotNull()
+    }
+    for ((i, suggestion) in shown.withIndex()) {
+      runCatching {
+        suggestion.inflate(ctx, size, executor) { view ->
+          // Hidden until the strip has worked out how much of it is in view (see clipChip)
+          if (view != null) slots[i] = view.apply { visibility = View.INVISIBLE }
+          arrived()
+        }
+      }.onFailure { arrived() }
+    }
+  }
+
+  fun releaseInlineChips() {
+    inlineChips = emptyList()
+  }
 
   fun onLongPress(action: String) {
     when (action) {
@@ -369,6 +419,7 @@ class InputController(private val host: KeyboardHost) {
     if (composing.isNotEmpty()) host.inputConnection?.finishComposingText()
     clearWord()
     suggestions = Suggestions.EMPTY
+    releaseInlineChips()
   }
 
   /** The editor's selection moved; if the user moved it away from the word, stop composing it. */
@@ -924,6 +975,18 @@ class InputController(private val host: KeyboardHost) {
     return gone
   }
 
+  /**
+   * What ENTER does in the focused field: 0 means newline (multi-line field, or the field opts
+   * out), otherwise the editor action to perform. The drawn icon follows this too.
+   */
+  val enterAction: Int get() {
+    val info = host.editorInfo
+    val multiLine = info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
+    val noAction = info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
+    if (multiLine || noAction) return EditorInfo.IME_ACTION_NONE
+    return info.imeOptions and EditorInfo.IME_MASK_ACTION
+  }
+
   private fun enter() {
     val ic = host.inputConnection ?: return
     revert = null
@@ -935,11 +998,8 @@ class InputController(private val host: KeyboardHost) {
       commitWord(autocorrect = true)
       ic.endBatchEdit()
     }
-    val info = host.editorInfo
-    val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
-    val multiLine = info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
-    val noAction = info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
-    if (!multiLine && !noAction && action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
+    val action = enterAction
+    if (action != EditorInfo.IME_ACTION_NONE) {
       ic.performEditorAction(action)
     } else {
       ic.commitText("\n", 1)
@@ -1145,6 +1205,10 @@ class InputController(private val host: KeyboardHost) {
   }
 
   companion object {
+    // Autofill chips
+    const val CHIP_MAX_DP = 280f
+    const val CHIP_HEIGHT_DP = 40f
+    const val CHIP_GAP_DP = 6f
     const val LETTERS = "qwerty"
     const val SYMBOLS = "symbols"
     // Pads for fields that only take digits; no way to letters, as in AOSP
