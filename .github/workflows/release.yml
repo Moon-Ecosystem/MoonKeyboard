@@ -63,6 +63,9 @@ jobs:
             echo "name=Moon Keyboard $version" >> "$GITHUB_OUTPUT"
             echo "apk=MoonKeyboard-$version.apk" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            # Hand-written notes for the version, when there are any; GitHub's own changelog link follows them
+            notes=".github/release-notes/$GITHUB_REF_NAME.md"
+            if [ -f "$notes" ]; then echo "notes=$notes" >> "$GITHUB_OUTPUT"; fi
           else
             echo "tag=build-$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
             echo "name=Moon Keyboard build $GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
@@ -79,5 +82,6 @@ jobs:
           name: ${{ steps.meta.outputs.name }}
           target_commitish: ${{ github.sha }}
           prerelease: ${{ steps.meta.outputs.prerelease }}
+          body_path: ${{ steps.meta.outputs.notes }}
           generate_release_notes: true
           files: ${{ steps.meta.outputs.apk }}
