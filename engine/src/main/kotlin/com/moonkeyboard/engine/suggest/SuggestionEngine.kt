@@ -7,6 +7,7 @@ import com.moonkeyboard.engine.decode.KeyMap
 import com.moonkeyboard.engine.decode.Spatial
 import com.moonkeyboard.engine.decode.TapDecoder
 import com.moonkeyboard.engine.decode.Touch
+import com.moonkeyboard.engine.decode.trimOffLetters
 import com.moonkeyboard.engine.dict.Lexicon
 import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.trace.TracePoint
@@ -146,7 +147,9 @@ class SuggestionEngine(
    * Words for a glide [path] (key-area pixels). The best is [Suggestions.typed] and sits in the
    * middle of [Suggestions.items]; nothing is autocorrected because the glide already chose.
    */
-  fun glide(path: List<TracePoint>, keys: KeyMap, context: WordContext, firstUpper: Boolean, allUpper: Boolean): Suggestions {
+  fun glide(swipe: List<TracePoint>, keys: KeyMap, context: WordContext, firstUpper: Boolean, allUpper: Boolean): Suggestions {
+    // A finger that wandered off the letters before lifting ends the word where it left them
+    val path = trimOffLetters(swipe, keys, glideDecoder.config.endRadius)
     val lm = Lm(context)
     val scores = HashMap<String, Pair<Float, Float>>()
     fun offer(word: String, id: Int, cost: Float) {

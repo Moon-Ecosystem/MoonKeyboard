@@ -190,6 +190,19 @@ data class GlideConfig(
   val unexplainedTurnCost: Float = 0.25f,
 )
 
+/**
+ * [path] without the stretch at its end after the finger left the letters (drifting towards the
+ * space bar before lifting): it ends at the last point within [reach] key widths of a letter key,
+ * so a lift off the letters still ends the word where the finger left them.
+ */
+fun trimOffLetters(path: List<TracePoint>, keys: KeyMap, reach: Float): List<TracePoint> {
+  val limit = reach * keys.keyWidth
+  fun nearLetter(p: TracePoint) = ('a'..'z').any { c -> keys.center(c)?.let { hypot(p.x - it.first, p.y - it.second) <= limit } == true }
+  var end = path.size
+  while (end > 1 && !nearLetter(path[end - 1])) end--
+  return if (end == path.size) path else path.subList(0, end)
+}
+
 /** [count] points evenly spaced along the polyline [points] (all equal if it has no length). */
 fun resample(points: List<Pair<Float, Float>>, count: Int): List<Pair<Float, Float>> {
   if (points.size == 1) return List(count) { points[0] }

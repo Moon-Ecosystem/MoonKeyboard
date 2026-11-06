@@ -158,6 +158,23 @@ class EnglishTest {
     }
   }
 
+  /**
+   * A finger that drifts down off the letters (towards the space bar) before lifting still types
+   * the word. Words ending on the bottom row: drifting down from a higher row crosses other letters.
+   */
+  @Test
+  fun glideKeepsTheWordWhenTheFingerDriftsOffTheLetters() {
+    val sim = TypingSimulator(geometry)
+    for (word in listOf("moon", "from", "public", "seven")) {
+      val path = sim.glide(word, 0f, 0f)
+      val end = path.last()
+      for (rows in listOf(1.5f, 3f)) {
+        val drift = (1..10).map { i -> TracePoint(end.x, end.y + rows * keys.keyWidth * i / 10, end.t + i * 8L) }
+        assertEquals("$word drifting $rows key widths down", word, engine.glide(path + drift, keys, WordContext("the", false), false, false).typed)
+      }
+    }
+  }
+
   /** Turning back before reaching "a" (n → almost a → m → e) used to type "be". */
   @Test
   fun glideForgivesTurningBeforeTheKey() {
