@@ -2,7 +2,8 @@
 # Downloads the source data for the English language pack into tools/data/ (git-ignored), then:
 #   ./gradlew :tools:run --args="--words $PWD/tools/data/en_US_wordlist.combined.gz \
 #       --sentences $PWD/tools/data/eng_sentences.tsv --hinglish $PWD/tools/data/hingcorpus.15m.txt.gz \
-#       --extra oanc=$PWD/tools/data/oanc.txt.gz,soda=$PWD/tools/data/soda.txt.gz --extra-lines 2000000 \
+#       --extra oanc=$PWD/tools/data/oanc.txt.gz,soda=$PWD/tools/data/soda.txt.gz,dailydialog=$PWD/tools/data/dailydialog.txt.gz,empathetic=$PWD/tools/data/empathetic.txt.gz,personachat=$PWD/tools/data/personachat.txt.gz,bst=$PWD/tools/data/bst.txt.gz \
+#       --extra-lines 2000000 \
 #       --out $PWD/app/src/main/assets/dict/en.dict --eval-out $PWD/engine/src/test/resources/eval/en.txt \
 #       --hinglish-eval-out $PWD/engine/src/test/resources/eval/hi.txt"
 set -euo pipefail
@@ -25,8 +26,14 @@ for s in train valid test; do
   curl -sSfL -o soda/$s.parquet "https://huggingface.co/datasets/allenai/soda/resolve/main/$s.parquet"
 done
 curl -sSfL -o oanc.zip https://github.com/nancyide/anc-website/releases/download/datasets-2026-09-25/OANC-1.0.1-UTF8.zip
+# Small human-written chat sets: DailyDialog (CC BY-NC-SA 4.0; the authors' site is gone, so
+# ConvLab's copy), EmpatheticDialogues (CC BY-NC 4.0), PersonaChat (MIT), Blended Skill Talk (CC0)
+curl -sSfL -o dailydialog.zip https://huggingface.co/datasets/ConvLab/dailydialog/resolve/main/data.zip
+curl -sSfL -o empatheticdialogues.tar.gz https://dl.fbaipublicfiles.com/parlai/empatheticdialogues/empatheticdialogues.tar.gz
+curl -sSfL -o personachat.tgz http://parl.ai/downloads/personachat/personachat.tgz
+curl -sSfL -o blended_skill_talk.tar.gz http://parl.ai/downloads/blended_skill_talk/blended_skill_talk.tar.gz
 python3 ../convert_corpora.py .
-rm -rf soda oanc.zip
+rm -rf soda oanc.zip dailydialog.zip empatheticdialogues.tar.gz personachat.tgz blended_skill_talk.tar.gz
 
 # Unicode emoji list for the emoji panel, Unicode License v3 (see BuildEmoji.kt for the command)
 curl -sSf -o emoji-test.txt https://www.unicode.org/Public/18.0.0/emoji/emoji-test.txt
