@@ -13,6 +13,13 @@ CC BY-NC-SA 4.0 (non-commercial); the code stays MIT.
 - Word-pair counts derived from Tatoeba English sentences (https://tatoeba.org)
   Licensed under CC BY 2.0 FR: https://creativecommons.org/licenses/by/2.0/fr/
 
+- Word-pair counts derived from SODA dialogues (Kim et al., "SODA: Million-scale Dialogue
+  Distillation with Social Commonsense Contextualization", EMNLP 2023) https://huggingface.co/datasets/allenai/soda
+  Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+- Word-pair counts derived from the Open American National Corpus spoken transcripts
+  (Switchboard and Charlotte Narratives) https://anc.org/data/oanc/ (no restrictions on use)
+
 - Hinglish words and word-pair counts derived from L3Cube-HingCorpus (romanised Hindi-English tweets)
   Nayak and Joshi, "L3Cube-HingCorpus and HingBERT", WILDRE 2022. https://github.com/l3cube-pune/code-mixed-nlp
   Licensed under CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/

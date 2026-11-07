@@ -2,6 +2,7 @@
 # Downloads the source data for the English language pack into tools/data/ (git-ignored), then:
 #   ./gradlew :tools:run --args="--words $PWD/tools/data/en_US_wordlist.combined.gz \
 #       --sentences $PWD/tools/data/eng_sentences.tsv --hinglish $PWD/tools/data/hingcorpus.15m.txt.gz \
+#       --extra oanc=$PWD/tools/data/oanc.txt.gz,soda=$PWD/tools/data/soda.txt.gz --extra-lines 2000000 \
 #       --out $PWD/app/src/main/assets/dict/en.dict --eval-out $PWD/engine/src/test/resources/eval/en.txt \
 #       --hinglish-eval-out $PWD/engine/src/test/resources/eval/hi.txt"
 set -euo pipefail
@@ -15,6 +16,17 @@ curl -sSf "https://android.googlesource.com/platform/packages/inputmethods/Latin
 # Tatoeba English sentences, CC BY 2.0 FR
 curl -sSf -o eng_sentences.tsv.bz2 https://downloads.tatoeba.org/exports/per_language/eng/eng_sentences.tsv.bz2
 bunzip2 -f eng_sentences.tsv.bz2
+
+# Everyday conversation for next-word prediction, one utterance per line (convert_corpora.py):
+# SODA dialogues, CC BY 4.0, and OANC spoken transcripts (Switchboard, Charlotte), no restrictions.
+# Only the first 2M SODA lines are used: all 11M outweigh everything else and hurt plain sentences.
+mkdir -p soda
+for s in train valid test; do
+  curl -sSfL -o soda/$s.parquet "https://huggingface.co/datasets/allenai/soda/resolve/main/$s.parquet"
+done
+curl -sSfL -o oanc.zip https://github.com/nancyide/anc-website/releases/download/datasets-2026-09-25/OANC-1.0.1-UTF8.zip
+python3 ../convert_corpora.py .
+rm -rf soda oanc.zip
 
 # Unicode emoji list for the emoji panel, Unicode License v3 (see BuildEmoji.kt for the command)
 curl -sSf -o emoji-test.txt https://www.unicode.org/Public/18.0.0/emoji/emoji-test.txt

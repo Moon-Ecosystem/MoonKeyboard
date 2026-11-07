@@ -119,6 +119,7 @@ Each row: `id, kind (text|image|gif), content (the text, or the image's file nam
 The code is MIT. Bundled data files keep their own licences, listed in a `NOTICE` file.
 
 - English word frequencies: the AOSP LatinIME word lists (Apache 2.0, which can ship inside an MIT app with attribution), plus a corpus for n-grams (Wikipedia, CC BY-SA). If CC BY-SA applies to the compiled model, that file is licensed CC BY-SA on its own and the code stays MIT.
+- English word pairs and triples: Tatoeba sentences, plus everyday conversation from SODA dialogues (CC BY 4.0, first 2M utterances) and OANC spoken transcripts (no restrictions). Tested on held-out lines of each: the conversation data lifted next-word prediction on real phone calls by about 6 points before typing and 10 after the first letter, at a cost of about 5 points on Tatoeba's short textbook sentences. All 11M SODA lines did worse on both.
 - Hinglish: L3Cube-HingCorpus, 52M romanised Hindi-English tweets (CC BY-NC-SA 4.0). A word is Hinglish when it isn't English, turns up mostly in tweets with two or more unmistakably Hindi words ("hai", "nahi", "kya"…) and mostly in lower case. Because of this data the pack file is non-commercial; the code stays MIT.
 
 ### Testing

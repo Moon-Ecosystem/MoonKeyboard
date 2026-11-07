@@ -16,6 +16,7 @@ import java.io.File
  * Accuracy on held-out sentences with simulated typists, and (optionally) on a flat typo→correct list:
  *   --dict <en.dict> --eval <sentences.txt> [--offset 0] [--limit 600] [--errors 25] [--grid true] [--hinglish false]
  *   --dict <en.dict> --typos <pairs.tsv> [--errors 25]
+ *   --dict <a.dict> --compare <b.dict> --eval <sentences.txt> [--limit 600]   next-word prediction, paired, with McNemar's test
  * Run: ./gradlew :tools:run -PmainClass=com.moonkeyboard.tools.EvaluateKt --args="..."
  */
 fun main(args: Array<String>) {
@@ -34,6 +35,12 @@ fun main(args: Array<String>) {
   val sentences = File(opts.getValue("eval")).readLines().filter { it.isNotBlank() }
     .drop(opts["offset"]?.toInt() ?: 0).take(opts["limit"]?.toInt() ?: 600)
 
+  // --compare <other.dict>: the --dict one is A, this one B
+  opts["compare"]?.let { other ->
+    val b = Lexicon.read(File(other).readBytes()).also { it.hinglish = lexicon.hinglish }
+    print(compareReport(lexicon, b, sentences, geometry, Setup()))
+    return
+  }
   if (opts["learning-grid"] == "true") {
     learningGrid(lexicon, sentences)
     return
@@ -179,6 +186,60 @@ fun report(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry
   out.appendLine("next word: in strip before typing %5.1f%%, after its first letter %5.1f%% (words of 3+ letters)".format(pct(predicted, words), pct(afterOne, long)))
   out.append(learningReport(lexicon, sentences, setup))
   return Report(tapSum / TAP_NOISE.size, harmSum / TAP_NOISE.size, glideSum / GLIDE_NOISE.size, predicted.toDouble() / words, out.toString())
+}
+
+/**
+ * Next-word prediction of two dictionaries on the same sentences, word by word, with McNemar's
+ * test on the words only one of them got: a difference counts only if it's unlikely to be noise.
+ */
+fun compareReport(a: Lexicon, b: Lexicon, sentences: List<String>, geometry: KeyboardGeometry, setup: Setup): String {
+  val engines = listOf(a, b).map { SuggestionEngine(it, UserHistory(), setup.engine, setup.decoder, setup.glide) }
+  val keys = TypingSimulator(geometry).keys
+  // [before typing, after the first letter]: words only A got, only B got, and each one's hits
+  val onlyA = IntArray(2); val onlyB = IntArray(2); val hitsA = IntArray(2); val hitsB = IntArray(2)
+  var words = 0; var long = 0
+  for (sentence in sentences) {
+    var context = WordContext.START
+    for (target in sentence.split(' ')) {
+      words++
+      val before = engines.map { e -> e.predict(context, capitalize = false).items.any { it.equals(target, ignoreCase = true) } }
+      tally(before, 0, hitsA, hitsB, onlyA, onlyB)
+      if (target.length >= 3) {
+        long++
+        val first = target.substring(0, 1)
+        val after = engines.map { e -> e.suggest(first, first.map(keys::touchFor), keys, context, allowAutocorrect = false).items.any { it.equals(target, ignoreCase = true) } }
+        tally(after, 1, hitsA, hitsB, onlyA, onlyB)
+      }
+      context = context.then(target)
+    }
+  }
+  val out = StringBuilder()
+  for ((i, label) in listOf("before typing", "after 1st letter").withIndex()) {
+    val n = if (i == 0) words else long
+    val disagree = onlyA[i] + onlyB[i]
+    // Continuity-corrected McNemar statistic, chi-squared with one degree of freedom
+    val chi2 = if (disagree == 0) 0.0 else (kotlin.math.abs(onlyA[i] - onlyB[i]) - 1.0).coerceAtLeast(0.0).let { it * it } / disagree
+    val p = chiSquared1Tail(chi2)
+    out.appendLine("%-17s A %5.1f%%  B %5.1f%%  diff %+5.1f pts  (only A %d, only B %d, p=%.3g, %d words)".format(
+      label, pct(hitsA[i], n), pct(hitsB[i], n), pct(hitsB[i] - hitsA[i], n), onlyA[i], onlyB[i], p, n))
+  }
+  return out.toString()
+}
+
+private fun tally(hit: List<Boolean>, i: Int, hitsA: IntArray, hitsB: IntArray, onlyA: IntArray, onlyB: IntArray) {
+  if (hit[0]) hitsA[i]++
+  if (hit[1]) hitsB[i]++
+  if (hit[0] && !hit[1]) onlyA[i]++
+  if (hit[1] && !hit[0]) onlyB[i]++
+}
+
+/** P(X ≥ x) for chi-squared with one degree of freedom: erfc(sqrt(x/2)). */
+private fun chiSquared1Tail(x: Double): Double {
+  val z = kotlin.math.sqrt(x / 2)
+  // Abramowitz–Stegun 7.1.26, accurate to about 1e-7
+  val t = 1 / (1 + 0.3275911 * z)
+  val poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))))
+  return poly * kotlin.math.exp(-z * z)
 }
 
 /** Things one person types again and again; every fourth sentence of the learning run is one of these. */

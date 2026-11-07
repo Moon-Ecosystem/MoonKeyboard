@@ -29,7 +29,7 @@ _Requires Android 7.0 (API 24) or higher._
 ## Features
 
 - **Glide typing:** slide across the letters of a word, with an optional trail that fades as you go. Sliding off the letters before lifting still types the word.
-- **Suggestions and autocorrect:** typos are fixed when you press space, and backspace or the undo pill puts back what you typed. Next-word prediction uses the last two words for context. Long suggestions squeeze to stay readable.
+- **Suggestions and autocorrect:** typos are fixed when you press space, and backspace or the undo pill puts back what you typed; a word you undo once is never corrected again. Next-word prediction uses the last two words for context and is learned from everyday conversation as well as written sentences. Long suggestions squeeze to stay readable.
 - **Spelling and grammar fixes:** tap into an underlined word and your phone's spell checker's fixes show in the strip.
 - **Password managers:** Bitwarden, Google Password Manager and other autofill services show their sign-in suggestions in the strip (Android 11 and newer).
 - **The enter key matches the field:** search, send, next or done where the app asks for it, and it does that action.
