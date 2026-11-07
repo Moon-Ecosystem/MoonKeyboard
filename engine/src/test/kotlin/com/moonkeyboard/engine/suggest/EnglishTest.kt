@@ -88,6 +88,19 @@ class EnglishTest {
     assertTrue(suggest("moonke", engine = e).items.contains("moonkey"))
   }
 
+  @Test
+  fun oneUndoneCorrectionStopsItForGood() {
+    val history = UserHistory()
+    val e = SuggestionEngine(lexicon, history)
+    // A fixed spelling, and a word undone at a sentence start (learned in lower case)
+    assertTrue(suggest("im", engine = e).autocorrect != null)
+    assertTrue(suggest("Moonkey", engine = e).autocorrect != null)
+    history.record(null, "im", weight = 2)
+    history.record(null, "moonkey", weight = 2)
+    assertNull(suggest("im", engine = e).autocorrect)
+    assertNull(suggest("Moonkey", engine = e).autocorrect)
+  }
+
   /**
    * Accuracy floors on held-out sentences (never seen by the pair model) typed by a simulated
    * typist. The full report and tuning live in tools/Evaluate.kt; this guards against regressions.
