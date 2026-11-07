@@ -36,6 +36,8 @@
   <string name="autocorrect">Autocorrect</string>
   <string name="autocorrect_detail">Fixes typos when you press space. Backspace undoes a fix.</string>
   <string name="hinglish">Hinglish</string>
+  <string name="neural_predictions">Smarter predictions</string>
+  <string name="neural_predictions_detail">An on-device AI model helps guess the next word</string>
   <string name="hinglish_detail">Suggest Hindi words typed in English letters, like \"kya kar rahe ho\"</string>
   <string name="block_offensive">Block offensive words</string>
   <string name="block_offensive_detail">Never suggest or swipe-type swear words</string>

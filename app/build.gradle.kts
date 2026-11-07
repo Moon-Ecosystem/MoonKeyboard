@@ -20,6 +20,8 @@ android {
     targetSdk = 36
     versionCode = 4
     versionName = "0.4"
+    // ONNX Runtime's native code for phones only: no x86 copies (emulators) to carry in the APK
+    ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
   }
 
   signingConfigs {
@@ -37,7 +39,7 @@ android {
     debug { signingConfigs.findByName("upload")?.let { signingConfig = it } }
     release {
       isMinifyEnabled = true
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfigs.findByName("upload")?.let { signingConfig = it }
     }
   }
@@ -60,6 +62,8 @@ dependencies {
   implementation(libs.androidx.compose.material3)
   // Installs the baseline profiles bundled with Compose so its code is compiled ahead of time, not JIT-ed while typing
   implementation(libs.androidx.profileinstaller)
+  // Runs the neural next-word model (assets/dict/en-lm.onnx)
+  implementation(libs.onnxruntime.android)
   debugImplementation(libs.androidx.compose.ui.tooling)
   testImplementation(libs.junit)
 }

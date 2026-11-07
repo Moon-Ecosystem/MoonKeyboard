@@ -19,4 +19,8 @@ application { mainClass = providers.gradleProperty("mainClass").orElse("com.moon
 // Pair and triple counts over millions of tweets don't fit the default heap
 tasks.named<JavaExec>("run") { maxHeapSize = "3g" }
 
-dependencies { implementation(project(":engine")) }
+dependencies {
+  implementation(project(":engine"))
+  // Runs the neural next-word model for Evaluate --neural
+  implementation(libs.onnxruntime)
+}

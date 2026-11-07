@@ -7,7 +7,11 @@ import com.moonkeyboard.engine.eval.TypingSimulator
 import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.layout.KeyboardGeometry
 import com.moonkeyboard.engine.layout.Layouts
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import com.moonkeyboard.engine.suggest.EngineConfig
+import com.moonkeyboard.engine.suggest.NeuralLm
 import com.moonkeyboard.engine.suggest.SuggestionEngine
 import com.moonkeyboard.engine.suggest.WordContext
 import java.io.File
@@ -17,6 +21,7 @@ import java.io.File
  *   --dict <en.dict> --eval <sentences.txt> [--offset 0] [--limit 600] [--errors 25] [--grid true] [--hinglish false]
  *   --dict <en.dict> --typos <pairs.tsv> [--errors 25]
  *   --dict <a.dict> --compare <b.dict> --eval <sentences.txt> [--limit 600]   next-word prediction, paired, with McNemar's test
+ *   --dict <en.dict> --neural <dir> --eval <sentences.txt>   everything without, with (next word only) and with the neural model
  * Run: ./gradlew :tools:run -PmainClass=com.moonkeyboard.tools.EvaluateKt --args="..."
  */
 fun main(args: Array<String>) {
@@ -41,6 +46,31 @@ fun main(args: Array<String>) {
     print(compareReport(lexicon, b, sentences, geometry, Setup()))
     return
   }
+  // --hits <file>: each word's next-word result, to pair with another model's on the same words
+  opts["hits"]?.let { path ->
+    File(path).writeText(hitsReport(lexicon, sentences, geometry, Setup()))
+    return
+  }
+  // --lm-dump <file>: the 3-gram's view at each word, for blending with another model offline
+  opts["lm-dump"]?.let { path ->
+    lmDump(lexicon, sentences, File(path))
+    return
+  }
+  // --neural <dir with en-lm.onnx and en-lm.vocab>: the full report without the model, with it for
+  // next-word predictions only, and with it everywhere (typing and autocorrect too)
+  opts["neural"]?.let { dir ->
+    val neural = loadNeural(File(dir))
+    val setups = listOf(
+      "3-gram only" to Setup(),
+      "neural blend, next word only" to Setup(engine = EngineConfig(neuralWhileTyping = false), neural = neural),
+      "neural blend everywhere" to Setup(neural = neural),
+    )
+    for ((label, setup) in setups) {
+      println("== $label")
+      println(report(lexicon, sentences, geometry, setup, opts["errors"]?.toInt() ?: 0).summary)
+    }
+    return
+  }
   if (opts["learning-grid"] == "true") {
     learningGrid(lexicon, sentences)
     return
@@ -60,7 +90,7 @@ fun main(args: Array<String>) {
  * another word on the keyboard, and the engine has to pick the right one.
  */
 fun typosReport(lexicon: Lexicon, lines: List<String>, geometry: KeyboardGeometry, setup: Setup, showErrors: Int = 0): String {
-  val engine = SuggestionEngine(lexicon, UserHistory(), setup.engine, setup.decoder, setup.glide)
+  val engine = SuggestionEngine(lexicon, UserHistory(), setup.engine, setup.decoder, setup.glide, setup.neural)
   val sim = com.moonkeyboard.engine.eval.TypingSimulator(geometry, seed = 1)
   val out = StringBuilder()
   var total = 0; var fixed = 0; var inStrip = 0; var alreadyAWord = 0
@@ -92,7 +122,22 @@ data class Setup(
   val engine: EngineConfig = EngineConfig(),
   val decoder: DecoderConfig = DecoderConfig(),
   val glide: GlideConfig = GlideConfig(),
+  val neural: NeuralLm? = null,
 )
+
+/** The app's neural model (en-lm.onnx and en-lm.vocab in [dir]) on the desktop ONNX Runtime. */
+fun loadNeural(dir: File): NeuralLm {
+  val env = OrtEnvironment.getEnvironment()
+  val session = env.createSession(File(dir, "en-lm.onnx").path, OrtSession.SessionOptions())
+  return NeuralLm(File(dir, "en-lm.vocab").readLines()) { ids ->
+    OnnxTensor.createTensor(env, arrayOf(ids)).use { input ->
+      session.run(mapOf("ids" to input)).use {
+        @Suppress("UNCHECKED_CAST")
+        (it[0].value as Array<Array<FloatArray>>)[0][0]
+      }
+    }
+  }
+}
 
 class Report(val tap: Double, val tapHarm: Double, val glide: Double, val predict: Double, val summary: String) {
   /** One number to optimise: committed words right, with wrong "fixes" of correct words counted double. */
@@ -104,7 +149,7 @@ private val TAP_NOISE = listOf(0.35f, 0.5f)
 private val GLIDE_NOISE = listOf(Triple(0.2f, 0.4f, 0f), Triple(0.3f, 0.6f, 0.35f))
 
 fun report(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry, setup: Setup, showErrors: Int = 0): Report {
-  val engine = SuggestionEngine(lexicon, UserHistory(), setup.engine, setup.decoder, setup.glide)
+  val engine = SuggestionEngine(lexicon, UserHistory(), setup.engine, setup.decoder, setup.glide, setup.neural)
   val out = StringBuilder()
   var tapSum = 0.0
   var harmSum = 0.0
@@ -193,7 +238,7 @@ fun report(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry
  * test on the words only one of them got: a difference counts only if it's unlikely to be noise.
  */
 fun compareReport(a: Lexicon, b: Lexicon, sentences: List<String>, geometry: KeyboardGeometry, setup: Setup): String {
-  val engines = listOf(a, b).map { SuggestionEngine(it, UserHistory(), setup.engine, setup.decoder, setup.glide) }
+  val engines = listOf(a, b).map { SuggestionEngine(it, UserHistory(), setup.engine, setup.decoder, setup.glide, setup.neural) }
   val keys = TypingSimulator(geometry).keys
   // [before typing, after the first letter]: words only A got, only B got, and each one's hits
   val onlyA = IntArray(2); val onlyB = IntArray(2); val hitsA = IntArray(2); val hitsB = IntArray(2)
@@ -224,6 +269,44 @@ fun compareReport(a: Lexicon, b: Lexicon, sentences: List<String>, geometry: Key
       label, pct(hitsA[i], n), pct(hitsB[i], n), pct(hitsB[i] - hitsA[i], n), onlyA[i], onlyB[i], p, n))
   }
   return out.toString()
+}
+
+/** One line per sentence, one code per word: in the strip before typing (1/0), then after its first letter (1/0, "-" under 3 letters). */
+fun hitsReport(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry, setup: Setup): String {
+  val engine = SuggestionEngine(lexicon, UserHistory(), setup.engine, setup.decoder, setup.glide, setup.neural)
+  val keys = TypingSimulator(geometry).keys
+  return sentences.joinToString("\n", postfix = "\n") { sentence ->
+    var context = WordContext.START
+    sentence.split(' ').joinToString(" ") { target ->
+      val before = engine.predict(context, capitalize = false).items.any { it.equals(target, ignoreCase = true) }
+      val first = target.substring(0, 1)
+      val after = if (target.length < 3) "-" else if (engine.suggest(first, first.map(keys::touchFor), keys, context, allowAutocorrect = false).items.any { it.equals(target, ignoreCase = true) }) "1" else "0"
+      context = context.then(target)
+      (if (before) "1" else "0") + after
+    }
+  }
+}
+
+/**
+ * One line per word: "target<TAB>backoff<TAB>word logProb<TAB>...", the words the context expects and
+ * the log factor on every other word's unigram. unigram.tsv beside it has each suggestable word's.
+ */
+fun lmDump(lexicon: Lexicon, sentences: List<String>, file: File) {
+  val engine = SuggestionEngine(lexicon, UserHistory(), Setup().engine, Setup().decoder, Setup().glide)
+  File(file.parentFile, "unigram.tsv").printWriter().use { out ->
+    for (id in 0 until lexicon.wordCount) if (lexicon.isSuggestable(id)) out.println("${lexicon.word(id)}\t${lexicon.unigramLogProb(id)}")
+  }
+  file.printWriter().use { out ->
+    for (sentence in sentences) {
+      var context = WordContext.START
+      for (target in sentence.split(' ')) {
+        val (scores, backoff) = engine.contextScores(context)
+        out.println(listOf(target, backoff.toString()).plus(scores.map { (w, lp) -> "$w $lp" }).joinToString("\t"))
+        context = context.then(target)
+      }
+      out.println()
+    }
+  }
 }
 
 private fun tally(hit: List<Boolean>, i: Int, hitsA: IntArray, hitsB: IntArray, onlyA: IntArray, onlyB: IntArray) {
@@ -280,7 +363,7 @@ private fun learning(lexicon: Lexicon, sentences: List<String>, setup: Setup): L
   val stream = sentences.mapIndexed { i, s -> if (i % 4 == 3) HABITS[random.nextInt(HABITS.size)] to true else s to false }
   fun run(learn: Boolean): Pair<Double, Double> {
     val history = UserHistory()
-    val engine = SuggestionEngine(lexicon, history, setup.engine, setup.decoder, setup.glide)
+    val engine = SuggestionEngine(lexicon, history, setup.engine, setup.decoder, setup.glide, setup.neural)
     val hits = IntArray(2)
     val totals = IntArray(2)
     for ((sentence, habit) in stream) {

@@ -305,6 +305,7 @@ class InputController(private val host: KeyboardHost) {
       it.blockOffensive = Prefs.blockOffensive.value
       it.hinglish = Prefs.hinglish.value
     }
+    Language.applyNeural()
     selAnchor = info.initialSelStart
     selCursor = info.initialSelEnd
     phantomSpace = false
@@ -1230,7 +1231,8 @@ class InputController(private val host: KeyboardHost) {
     // How far ↑ ↓ look for a line break; past this, a field with none is treated as ending there
     private const val LINE_LOOKAROUND = 10_000
     private const val FORGET_ASK_MS = 4_000L
-    private const val CONTEXT_CHARS = 64
+    // Enough for the neural model's 32 words of context
+    private const val CONTEXT_CHARS = 200
     private const val RESUME_CHARS = 48
     /** Letters of a stuck mid-word kept as a prefix to look up similar words from. */
     private const val SIMILAR_PREFIX = 5
