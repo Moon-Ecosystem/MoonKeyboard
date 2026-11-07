@@ -15,6 +15,9 @@ import kotlin.math.ln
  *   --out                lexicon file to write
  *   --eval-out           where to write held-out English sentences for accuracy tests (never counted)
  *   --hinglish-eval-out  the same for Hinglish
+ *   --extra              more plain corpora, one sentence per line: name=file[,name=file...]
+ *   --extra-eval-dir     where each extra corpus's held-out sentences go, as <name>.txt
+ *   --extra-lines        read at most this many lines of each extra corpus
  *
  * See tools/fetch-data.sh for where the inputs come from.
  */
@@ -30,6 +33,12 @@ fun main(args: Array<String>) {
   println("words: ${builder.size}")
   val ngrams = Ngrams(builder)
   if (sentences != null) writeEval(opts["eval-out"], addTatoeba(sentences, builder, ngrams))
+  // --extra soda=/path/soda.txt.gz,oanc=/path/oanc.txt.gz: each one's test lines go to --extra-eval-dir/<name>.txt
+  val extraLines = opts["extra-lines"]?.toInt() ?: Int.MAX_VALUE
+  opts["extra"]?.split(',')?.forEach { spec ->
+    val name = spec.substringBefore('=')
+    writeEval(opts["extra-eval-dir"]?.let { "$it/$name.txt" }, addLines(File(spec.substringAfter('=')), builder, ngrams, extraLines))
+  }
   if (hinglish != null) {
     addHinglishWords(hinglish, builder)
     writeEval(opts["hinglish-eval-out"], addHinglishPairs(hinglish, builder, ngrams, opts["hinglish-lines"]?.toInt() ?: 3_000_000))
@@ -43,7 +52,7 @@ fun main(args: Array<String>) {
 }
 
 private fun usage(): Nothing {
-  System.err.println("usage: --words <aosp.combined.gz> [--sentences <tatoeba.tsv>] [--hinglish <hingcorpus.txt.gz>] --out <file> [--eval-out <file>] [--hinglish-eval-out <file>]")
+  System.err.println("usage: --words <aosp.combined.gz> [--sentences <tatoeba.tsv>] [--hinglish <hingcorpus.txt.gz>] [--extra name=file,...] --out <file> [--eval-out <file>] [--hinglish-eval-out <file>] [--extra-eval-dir <dir>] [--extra-lines <n>]")
   kotlin.system.exitProcess(2)
 }
 
@@ -136,7 +145,17 @@ private class Ngrams(private val builder: LexiconBuilder) {
       prev = id
     }
     sentences++
+    // Large corpora would outgrow the heap: drop what has only been seen once. Lossy (a pair seen
+    // once on each side of a prune is lost), but pairs need MIN_COUNT and triples MIN_TRIPLE anyway
+    if (pairs.size > MAX_COUNTED || triples.size > MAX_COUNTED || contextTotals.size > MAX_COUNTED) {
+      pairs.prune(2)
+      triples.prune(2)
+      contextTotals.prune(2)
+      prunes++
+    }
   }
+
+  private var prunes = 0
 
   fun finish() {
     addTriples(builder, triples, contextTotals)
@@ -152,7 +171,7 @@ private class Ngrams(private val builder: LexiconBuilder) {
         kept++
       }
     }
-    println("sentences: $sentences, distinct pairs: ${pairs.size}, kept: $kept")
+    println("sentences: $sentences, distinct pairs: ${pairs.size}, kept: $kept, prunes: $prunes")
   }
 }
 
@@ -167,6 +186,24 @@ private fun addTatoeba(file: File, builder: LexiconBuilder, ngrams: Ngrams): Lis
     }
     ngrams.count(text)
   }
+  return heldOut
+}
+
+/**
+ * A plain corpus, one sentence or utterance per line (SODA dialogues, OANC spoken transcripts);
+ * every HOLD_OUT-th line is test data instead, kept out of the counts.
+ */
+private fun addLines(file: File, builder: LexiconBuilder, ngrams: Ngrams, limit: Int): List<String> {
+  val heldOut = ArrayList<String>()
+  var n = 0
+  for (line in lines(file).take(limit)) {
+    if (n++ % HOLD_OUT == 0) {
+      if (heldOut.size < MAX_HELD_OUT) testSentence(builder, line)?.let { heldOut += it }
+      continue
+    }
+    ngrams.count(line)
+  }
+  println("${file.name}: $n lines")
   return heldOut
 }
 
@@ -338,6 +375,8 @@ private const val MIN_TRIPLE = 4
 private const val PER_CONTEXT = 6
 private const val HOLD_OUT = 50
 private const val MAX_HELD_OUT = 3000
+/** Entries a pair or triple counter may hold before singletons are pruned (~26 bytes each). */
+private const val MAX_COUNTED = 16_000_000
 private const val MIN_HINGLISH = 40
 /** Added to Hinglish frequencies on the AOSP scale; below 0 favours English when both fit. */
 private const val HINGLISH_BIAS = 0.0
@@ -366,6 +405,28 @@ private class LongCounter {
   }
 
   fun get(k: Long): Int = slot(k).let { if (used[it]) counts[it] else 0 }
+
+  /** Drops keys seen fewer than [min] times and shrinks the table to fit what is left. */
+  fun prune(min: Int) {
+    val oldKeys = keys
+    val oldCounts = counts
+    val oldUsed = used
+    val keep = oldKeys.indices.count { oldUsed[it] && oldCounts[it] >= min }
+    var capacity = 1 shl 20
+    while (capacity <= keep * 2) capacity = capacity shl 1
+    keys = LongArray(capacity)
+    counts = IntArray(capacity)
+    used = BooleanArray(capacity)
+    size = 0
+    for (i in oldKeys.indices) {
+      if (!oldUsed[i] || oldCounts[i] < min) continue
+      val j = slot(oldKeys[i])
+      used[j] = true
+      keys[j] = oldKeys[i]
+      counts[j] = oldCounts[i]
+      size++
+    }
+  }
 
   fun forEach(action: (Long, Int) -> Unit) {
     for (i in keys.indices) if (used[i]) action(keys[i], counts[i])

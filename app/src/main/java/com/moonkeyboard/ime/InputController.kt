@@ -449,7 +449,11 @@ class InputController(private val host: KeyboardHost) {
       autoSpaced = false
       lastWasSpace = false
       phantomSpace = false
-      afterSeparator()
+      // The cursor left the word being typed for a point (into its middle, or another word): pick up
+      // the word it's in, as any tap would, rather than predicting the next word as after a space.
+      // Forced past the echo check: the finger is often still down, and the editor may not report
+      // the cursor again once the composing word is finished
+      if (selStart == selEnd) cursorPlaced(bySlide = true) else afterSeparator()
     }
   }
 
@@ -516,10 +520,13 @@ class InputController(private val host: KeyboardHost) {
         undo = null
         return
       }
+      val context = WordContext.from(ic.getTextBeforeCursor(CONTEXT_CHARS + have.length, 0)?.dropLast(have.length) ?: "")
       ic.beginBatchEdit()
       ic.deleteSurroundingText(have.length, 0)
       ic.commitText(want, 1)
       ic.endBatchEdit()
+      // Undoing a correction means the user meant it, as with backspace
+      if (!u.undone) learn(want.trimEnd { !isWordChar(it) }, context, weight = LEARN_AS_WORD)
       // The space-triggered revert is now spent; backspace shouldn't try the same thing
       revert = null
       undo = u.copy(undone = !u.undone)
@@ -993,12 +1000,14 @@ class InputController(private val host: KeyboardHost) {
     phantomSpace = false
     lastWasSpace = false
     autoSpaced = false
+    val action = enterAction
     if (composing.isNotEmpty()) {
       ic.beginBatchEdit()
-      commitWord(autocorrect = true)
+      // An action (search, go, send...) sends the text at once, leaving no chance to undo a
+      // correction, so it sends what was typed, as AOSP's keyboard does; a new line still corrects
+      commitWord(autocorrect = action == EditorInfo.IME_ACTION_NONE)
       ic.endBatchEdit()
     }
-    val action = enterAction
     if (action != EditorInfo.IME_ACTION_NONE) {
       ic.performEditorAction(action)
     } else {
