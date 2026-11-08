@@ -1,5 +1,8 @@
 <resources>
   <string name="app_name">Moon Keyboard</string>
+  <!-- The home header's name, its first word in the accent colour -->
+  <string name="app_name_first">Moon</string>
+  <string name="app_name_rest">Keyboard</string>
   <string name="subtype_en_us">English (US)</string>
   <string name="forget_word">Don\'t suggest this word</string>
   <string name="welcome_pitch">A fast keyboard with glide typing and smart suggestions. It works fully offline, so nothing you type leaves your phone.</string>
@@ -53,8 +56,24 @@
   <string name="offer_copied">Offer what I copy</string>
   <string name="offer_copied_detail">In the suggestion strip, once</string>
   <string name="tap_again_to_clear">Tap again to clear</string>
-  <string name="learned_words_explain">Learned from what you type, so suggestions fit how you write. Nothing is learned in password or incognito fields.</string>
-  <string name="search_learned">Search learned words</string>
+  <string name="learned_words_explain">Learned from what you type, so suggestions fit how you write, with the email addresses you use. Nothing is learned in password or incognito fields.</string>
+  <string name="search_learned">Search or add a word</string>
+  <string name="add">Add</string>
+  <string name="add_word_detail">Add “%1$s” as your word</string>
+  <string name="add_email_detail">Save “%1$s” as your email</string>
+  <plurals name="email_used">
+    <item quantity="one">Email, used once</item>
+    <item quantity="other">Email, used %d times</item>
+  </plurals>
+  <string name="shortcuts">Shortcuts</string>
+  <string name="shortcuts_explain">Type a shortcut and its text shows in the middle of the suggestion strip; tap it to use it. Space keeps the shortcut as typed.</string>
+  <string name="shortcut_key">Shortcut, e.g. omw</string>
+  <string name="shortcut_text">Text, e.g. on my way</string>
+  <string name="no_shortcuts">No shortcuts yet</string>
+  <plurals name="shortcut_count">
+    <item quantity="one">%d shortcut</item>
+    <item quantity="other">%d shortcuts</item>
+  </plurals>
   <string name="loading">Loading…</string>
   <string name="nothing_learned">Nothing learned yet.</string>
   <string name="forget_item">Forget %1$s</string>
@@ -174,6 +193,24 @@
   <string name="typing">Typing</string>
   <string name="haptics">Vibrate on key press</string>
   <string name="key_sound">Sound on key press</string>
+  <string name="incognito">Incognito</string>
+  <string name="pitch_black">Pitch black</string>
+  <string name="pitch_black_detail">True black in dark mode, for OLED screens</string>
+  <string name="accent_colour">Accent colour</string>
+  <string name="accent_current">Current: %1$s</string>
+  <string name="accent_moon">Moon blue</string>
+  <string name="accent_emerald">Emerald</string>
+  <string name="accent_amber">Amber</string>
+  <string name="accent_cyan">Cyan</string>
+  <string name="accent_coral">Coral</string>
+  <string name="accent_violet">Violet</string>
+  <string name="accent_wallpaper">From wallpaper</string>
+  <string name="key_preview">Pop up on key press</string>
+  <string name="key_preview_detail">Shows the letter above your finger</string>
+  <string name="space_slide">Slide on space to move the cursor</string>
+  <string name="space_slide_detail">Hold space and slide left or right</string>
+  <string name="backspace_slide">Slide from backspace to delete words</string>
+  <string name="backspace_slide_detail">Hold backspace and slide left; lift to delete</string>
   <string name="vibration_strength">Vibration strength</string>
   <string name="long_press_duration">Long press duration</string>
   <string name="auto_caps">Auto-capitalise</string>

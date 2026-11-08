@@ -60,6 +60,12 @@ fun main(args: Array<String>) {
   // next-word predictions only, and with it everywhere (typing and autocorrect too)
   opts["neural"]?.let { dir ->
     val neural = loadNeural(File(dir))
+    // --grid true with --neural: retune only the knobs the blend shifts, starting from the shipped setup
+    if (opts["grid"] == "true") {
+      // shortcut: one pass, as each report takes ~5 minutes with the model; two passes if a retune ever moves far
+      grid(lexicon, sentences, geometry, Setup(neural = neural), setOf("neuralLmWeight", "neuralTypingShare", "autocorrectMargin", "realWordMargin", "glideWeight"), passes = 1)
+      return
+    }
     val setups = listOf(
       "3-gram only" to Setup(),
       "neural blend, next word only" to Setup(engine = EngineConfig(neuralWhileTyping = false), neural = neural),
@@ -388,8 +394,10 @@ private fun learning(lexicon: Lexicon, sentences: List<String>, setup: Setup): L
 }
 
 /** Coordinate descent: try each value of each knob, keep whatever scores best, two passes. */
-private fun grid(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry) {
+private fun grid(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry, start: Setup = Setup(), only: Set<String>? = null, passes: Int = 2) {
   val knobs: List<Pair<String, List<(Setup) -> Setup>>> = listOf(
+    "neuralLmWeight" to listOf(0.3f, 0.4f, 0.5f, 0.65f, 0.8f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(neuralLmWeight = v)) } },
+    "neuralTypingShare" to listOf(0.3f, 0.4f, 0.5f, 0.6f, 0.7f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(neuralTypingShare = v)) } },
     "lmWeight" to listOf(0.15f, 0.2f, 0.25f, 0.3f, 0.4f, 0.5f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(lmWeight = v)) } },
     "autocorrectMargin" to listOf(0.2f, 0.4f, 0.6f, 0.9f, 1.3f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(autocorrectMargin = v)) } },
     "realWordMargin" to listOf(1.5f, 2f, 3f, 4f, 6f, 99f).map { v -> { s: Setup -> s.copy(engine = s.engine.copy(realWordMargin = v)) } },
@@ -410,11 +418,12 @@ private fun grid(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGe
     "unexplainedTurnCost" to listOf(0f, 0.15f, 0.25f, 0.4f, 0.6f).map { v -> { s: Setup -> s.copy(glide = s.glide.copy(unexplainedTurnCost = v)) } },
     "turnDegrees" to listOf(35f, 50f, 65f).map { v -> { s: Setup -> s.copy(glide = s.glide.copy(turnDegrees = v)) } },
     "undershootReach" to listOf(1.5f, 2.5f, 3.5f).map { v -> { s: Setup -> s.copy(glide = s.glide.copy(undershootReach = v)) } },
-  )
-  var best = Setup()
+  // Without a model the neural knobs change nothing
+  ).filter { if (only == null) !it.first.startsWith("neural") else it.first in only }
+  var best = start
   var bestScore = report(lexicon, sentences, geometry, best).score
   println("start %.4f".format(bestScore))
-  repeat(2) { pass ->
+  repeat(passes) { pass ->
     for ((name, options) in knobs) {
       for (option in options) {
         val candidate = option(best)

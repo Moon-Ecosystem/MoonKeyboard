@@ -73,6 +73,9 @@ class TouchTracker(
   /** The finger sliding along the space bar to move the cursor, and where it last moved it. */
   private var cursorOwner: PointerId? = null
   private var cursorAnchorX = 0f
+  /** The finger sliding left from backspace to select whole words, and how many it has taken. */
+  private var deleteOwner: PointerId? = null
+  private var deleteWords = 0
   private val keyWidth = geometry.keys.minOf { it.width }
   private val glidePath = ArrayList<TracePoint>()
   private var lastPreviewMs = 0L
@@ -110,6 +113,7 @@ class TouchTracker(
       downAt.clear()
       downTime.clear()
       glideOwner = null
+      deleteOwner = null
       clearTrail()
       popup = null
     }
@@ -152,14 +156,12 @@ class TouchTracker(
   private fun move(id: PointerId, samples: List<Pair<Offset, Long>>) {
     val (at, nowMs) = samples.last()
     if (cursorOwner == id || pressed[id]?.key?.type == KeyType.SPACE) {
-      slideCursor(id, at.x)
+      if (Prefs.spaceSlide.value) slideCursor(id, at.x)
       return
     }
-    pressed[id]?.let { b ->
-      if (b.key.type == KeyType.BACKSPACE && b.distanceSq(at.x, at.y) > 0f) {
-        cancel(id)
-        return
-      }
+    if (deleteOwner == id || pressed[id]?.key?.type == KeyType.BACKSPACE) {
+      slideDelete(id, at)
+      return
     }
     val p = popup
     if (p != null && popupOwner == id) {
@@ -213,6 +215,29 @@ class TouchTracker(
     }
   }
 
+  /**
+   * Sliding left from backspace selects a word per step back from the cursor, and lifting deletes
+   * them; sliding back right gives words back. Leaving the key any other way only stops the repeat.
+   */
+  private fun slideDelete(id: PointerId, at: Offset) {
+    val start = downAt[id] ?: return
+    if (deleteOwner != id) {
+      if (Prefs.backspaceSlide.value && start.x - at.x >= keyWidth * CURSOR_SLOP) {
+        holds.remove(id)?.cancel()
+        deleteOwner = id
+        deleteWords = 0
+      } else {
+        pressed[id]?.let { b -> if (b.distanceSq(at.x, at.y) > 0f) cancel(id) }
+        return
+      }
+    }
+    val words = ((start.x - at.x) / (keyWidth * DELETE_STEP)).toInt().coerceAtLeast(0)
+    if (words == deleteWords) return
+    deleteWords = words
+    controller.selectWordsBack(words)
+    feedback(KeyType.BACKSPACE)
+  }
+
   /** Only a single finger that started on a letter, and only once it has clearly left the key. */
   private fun startsGlide(id: PointerId, at: Offset): Boolean {
     if (!Prefs.glideTyping.value || pressed.size != 1) return false
@@ -232,6 +257,15 @@ class TouchTracker(
       downTime.remove(id)
       recorder?.up(id, at.x, at.y, nowMs, "cursor")
       controller.cursorSlideEnded()
+      return
+    }
+    if (deleteOwner == id) {
+      deleteOwner = null
+      pressed.remove(id)
+      downAt.remove(id)
+      downTime.remove(id)
+      recorder?.up(id, at.x, at.y, nowMs, "delete words")
+      controller.deleteSelectedWords()
       return
     }
     if (glideOwner == id) {
@@ -270,6 +304,12 @@ class TouchTracker(
     downTime.remove(id)
     if (glideOwner == id) glideOwner = null
     if (cursorOwner == id) cursorOwner = null
+    if (deleteOwner == id) {
+      // Taken over by the system: put the cursor back rather than delete
+      deleteOwner = null
+      controller.selectWordsBack(0)
+      controller.deleteSelectedWords()
+    }
     if (popupOwner == id) {
       popup = null
       popupOwner = null
@@ -309,5 +349,7 @@ class TouchTracker(
     // In key widths: how far to slide before space becomes a cursor, and the slide per character
     private const val CURSOR_SLOP = 0.5f
     private const val CURSOR_STEP = 0.35f
+    // Slide per word when deleting from backspace, in key widths
+    private const val DELETE_STEP = 0.8f
   }
 }

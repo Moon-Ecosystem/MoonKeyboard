@@ -29,6 +29,7 @@ import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
 import com.moonkeyboard.engine.decode.KeyMap
 import com.moonkeyboard.engine.decode.Touch
+import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.input.ShiftController
 import com.moonkeyboard.engine.input.ShiftState
 import com.moonkeyboard.engine.layout.Key
@@ -417,6 +418,17 @@ class InputController(private val host: KeyboardHost) {
   fun cursorSlideEnded() = cursorPlaced(bySlide = true)
 
   fun onFinishInput() {
+    // Leaving an email field: keep the address typed there, for the next email field
+    if (field.email && !Prefs.incognito.value) {
+      host.inputConnection?.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString()?.trim()?.let { address ->
+        Language.engine?.history?.let { h ->
+          if (UserHistory.isEmail(address)) {
+            h.recordEmail(address)
+            Language.historyChanged()
+          }
+        }
+      }
+    }
     if (composing.isNotEmpty()) host.inputConnection?.finishComposingText()
     clearWord()
     suggestions = Suggestions.EMPTY
@@ -568,6 +580,41 @@ class InputController(private val host: KeyboardHost) {
     undo = if (offer) EditUndo(deletedRun.toString(), inserted = false) else null
   }
 
+  /** Where a backspace slide started (the cursor) and the text before it; -1 when none is under way. */
+  private var slideEnd = -1
+  private var slideBefore = ""
+
+  /** A backspace slide: selects the last [words] words before where it started (0 selects nothing). */
+  fun selectWordsBack(words: Int) {
+    val ic = host.inputConnection ?: return
+    if (slideEnd < 0) {
+      if (words == 0) return
+      finishWord()
+      // From the editor: the backspace that started the slide may not have echoed back yet
+      val text = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return
+      if (text.selectionEnd < 0) return
+      slideEnd = text.startOffset + text.selectionEnd
+      slideBefore = ic.getTextBeforeCursor(SLIDE_LOOKBEHIND, 0)?.toString() ?: ""
+    }
+    var start = slideBefore.length
+    repeat(words) {
+      while (start > 0 && slideBefore[start - 1].isWhitespace()) start--
+      while (start > 0 && !slideBefore[start - 1].isWhitespace()) start--
+    }
+    selAnchor = slideEnd - (slideBefore.length - start)
+    selCursor = slideEnd
+    ic.setSelection(selAnchor, selCursor)
+  }
+
+  /** The backspace slide lifted: delete what it selected, with the strip's undo offer as for backspace. */
+  fun deleteSelectedWords() {
+    if (slideEnd < 0) return
+    val selected = selCursor != selAnchor
+    slideEnd = -1
+    slideBefore = ""
+    if (selected) deleted(backspace())
+  }
+
   /** The emoji and edit panels' delete key, which the strip's undo doesn't follow. */
   fun deleteBackward() {
     dropUndo()
@@ -675,6 +722,18 @@ class InputController(private val host: KeyboardHost) {
   fun pickSuggestion(index: Int) {
     val word = suggestions.items.getOrNull(index) ?: return
     val ic = host.inputConnection ?: return
+    emailPrefix?.let { prefix ->
+      // A saved address takes the place of the start typed, with no space after it
+      emailPrefix = null
+      ic.beginBatchEdit()
+      if (composing.isNotEmpty()) ic.finishComposingText()
+      clearWord()
+      if (textBefore(ic, prefix.length).equals(prefix, ignoreCase = true)) ic.deleteSurroundingText(prefix.length, 0)
+      ic.commitText(word, 1)
+      ic.endBatchEdit()
+      afterSeparator()
+      return
+    }
     midWord?.let { m ->
       // A host fix may replace a phrase ("is struggling" → "are struggling"), not just this one word;
       // its span range is kept so the whole phrase gives way. Otherwise the word under the cursor does.
@@ -898,6 +957,7 @@ class InputController(private val host: KeyboardHost) {
 
   private fun space() {
     val ic = host.inputConnection ?: return
+    learnEmailBefore(ic)
     revert = null
     // The previous autocorrect's pill is about this space; a new one takes its place or none does
     if (undo?.original != null) undo = null
@@ -997,6 +1057,7 @@ class InputController(private val host: KeyboardHost) {
 
   private fun enter() {
     val ic = host.inputConnection ?: return
+    learnEmailBefore(ic)
     revert = null
     phantomSpace = false
     lastWasSpace = false
@@ -1095,9 +1156,44 @@ class InputController(private val host: KeyboardHost) {
       .toList()
   }
 
+  /**
+   * In an email field: the saved addresses that start with what's typed so far (all of them in an
+   * empty field), most used first. False when none match, so the usual strip shows instead.
+   */
+  private fun showEmails(ic: InputConnection): Boolean {
+    if (!field.email) return false
+    val history = Language.engine?.history ?: return false
+    val prefix = (ic.getTextBeforeCursor(EMAIL_LOOKBEHIND, 0) ?: "").toString().takeLastWhile { !it.isWhitespace() }
+    val matches = history.emailsStartingWith(prefix)
+    if (matches.isEmpty()) return false
+    emailPrefix = prefix
+    // Best in the middle, like the word suggestions
+    suggestions = Suggestions(prefix, listOfNotNull(matches.getOrNull(1), matches[0], matches.getOrNull(2)), null, isPrediction = true)
+    return true
+  }
+
+  /**
+   * An address just finished with space or enter, in any field that learns: kept like one typed in an
+   * email field, so "rish" can offer it later. Email fields save the whole field when left instead.
+   */
+  private fun learnEmailBefore(ic: InputConnection) {
+    if (!field.learn || Prefs.incognito.value) return
+    val token = (ic.getTextBeforeCursor(EMAIL_LOOKBEHIND, 0) ?: "").toString().takeLastWhile { !it.isWhitespace() }
+      // A sentence ending on an address ("mail rishabh@gmail.com.") leaves its full stop out
+      .trimEnd('.', ',', ';', ':', '!', '?', ')', '"', '\'')
+    if (!UserHistory.isEmail(token)) return
+    Language.engine?.history?.recordEmail(token) ?: return
+    Language.historyChanged()
+  }
+
+  /** What the strip's addresses would replace, while it shows them. */
+  private var emailPrefix: String? = null
+
   private fun requestSuggestions() {
     val engine = Language.engine ?: return
     val ic = host.inputConnection ?: return
+    emailPrefix = null
+    if (showEmails(ic)) return
     val typed = composing.toString()
     val typedTouches = touches.toList()
     val context = contextBeforeWord(ic)
@@ -1125,6 +1221,8 @@ class InputController(private val host: KeyboardHost) {
       suggestions = Suggestions.EMPTY
       return
     }
+    emailPrefix = null
+    if (showEmails(ic)) return
     val before = ic.getTextBeforeCursor(CONTEXT_CHARS, 0) ?: ""
     // Nothing written yet: no guesses, so the strip shows the toolbar
     if (before.isBlank()) {
@@ -1145,7 +1243,15 @@ class InputController(private val host: KeyboardHost) {
   }
 
   private fun learn(word: String, context: WordContext, weight: Int = 1) {
-    if (!field.learn) return
+    if (!field.learn || Prefs.incognito.value) return
+    // A picked address counts as one more use of it, not a word
+    if (UserHistory.isEmail(word)) {
+      Language.engine?.history?.recordEmail(word)
+      Language.historyChanged()
+      return
+    }
+    // A picked shortcut's text ("on my way") isn't a word to learn
+    if (word.any(Char::isWhitespace)) return
     val engine = Language.engine ?: return
     // "The" at the start of a sentence is the word "the"; "I" and names keep their capital
     val lower = word.lowercase()
@@ -1183,7 +1289,7 @@ class InputController(private val host: KeyboardHost) {
   }
 
   /** What the focused field allows, from its input type. */
-  private data class FieldFlags(val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false, val number: Boolean = false) {
+  private data class FieldFlags(val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false, val number: Boolean = false, val email: Boolean = false) {
     companion object {
       val NONE = FieldFlags(suggest = false, autocorrect = false, learn = false, autoCaps = false)
 
@@ -1209,7 +1315,9 @@ class InputController(private val host: KeyboardHost) {
           variation == InputType.TYPE_TEXT_VARIATION_PERSON_NAME
         val learn = suggest && !noSuggestions && info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING == 0
         val caps = type and (InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_CAP_WORDS or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS) != 0
-        return FieldFlags(suggest, autocorrect = suggest && !literal, learn = learn, autoCaps = caps, secret = password)
+        val email = variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS || variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
+        // An address's pieces ("rishabh123", "gmail") aren't words to learn; the whole address is kept instead
+        return FieldFlags(suggest, autocorrect = suggest && !literal, learn = learn && !email, autoCaps = caps, secret = password, email = email && learn)
       }
     }
   }
@@ -1234,6 +1342,10 @@ class InputController(private val host: KeyboardHost) {
     // Enough for the neural model's 32 words of context
     private const val CONTEXT_CHARS = 200
     private const val RESUME_CHARS = 48
+    // How far back a backspace slide can select: a long paragraph's worth of words
+    private const val SLIDE_LOOKBEHIND = 2_000
+    // Longer than any address someone types
+    private const val EMAIL_LOOKBEHIND = 256
     /** Letters of a stuck mid-word kept as a prefix to look up similar words from. */
     private const val SIMILAR_PREFIX = 5
     /** Apps echo our edits back well within this; a cursor move later than it came from elsewhere. */

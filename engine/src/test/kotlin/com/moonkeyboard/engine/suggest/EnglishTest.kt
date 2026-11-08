@@ -90,6 +90,50 @@ class EnglishTest {
   }
 
   @Test
+  fun anAddedWordIsLearnedAtOnce() {
+    val e = SuggestionEngine(lexicon, UserHistory())
+    e.addWord("moonlite")
+    assertNull(suggest("moonlite", engine = e).autocorrect)
+    assertTrue(suggest("moonlit", engine = e).items.contains("moonlite"))
+  }
+
+  @Test
+  fun aShortcutIsOfferedInTheMiddleAndNeverForced() {
+    val history = UserHistory()
+    val e = SuggestionEngine(lexicon, history)
+    history.setShortcut("omw", "on my way")
+    val s = suggest("omw", engine = e)
+    assertEquals("on my way", s.items[1])
+    assertEquals("omw", s.items[0])
+    assertNull("space keeps what was typed", s.autocorrect)
+    assertEquals("On my way", suggest("Omw", prev = null, engine = e).items[1])
+  }
+
+  @Test
+  fun aSavedEmailIsOfferedFromTheFourthLetterOnTheSide() {
+    val history = UserHistory()
+    val e = SuggestionEngine(lexicon, history)
+    history.recordEmail("rishabh@gmail.com")
+    assertTrue("three letters match too much", "rishabh@gmail.com" !in suggest("ris", engine = e).items)
+    val s = suggest("rish", engine = e)
+    assertEquals("rishabh@gmail.com", s.items[2])
+    assertTrue("the middle stays a word", s.items[1] != "rishabh@gmail.com")
+  }
+
+  @Test
+  fun fromTheSeventhLetterEveryMatchingEmailTakesTheStrip() {
+    val history = UserHistory()
+    val e = SuggestionEngine(lexicon, history)
+    history.recordEmail("rishabh@gmail.com")
+    repeat(2) { history.recordEmail("rishabh@work.example") }
+    history.recordEmail("rishabhj@x.org")
+    val s = suggest("rishabh", engine = e)
+    assertEquals("most used in the middle", "rishabh@work.example", s.items[1])
+    assertEquals(setOf("rishabh@gmail.com", "rishabhj@x.org", "rishabh@work.example"), s.items.toSet())
+    assertNull("space keeps what was typed", s.autocorrect)
+  }
+
+  @Test
   fun oneUndoneCorrectionStopsItForGood() {
     val history = UserHistory()
     val e = SuggestionEngine(lexicon, history)

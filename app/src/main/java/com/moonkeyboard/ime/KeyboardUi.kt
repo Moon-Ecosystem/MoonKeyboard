@@ -3,6 +3,7 @@ package com.moonkeyboard.ime
 import android.content.res.Configuration
 import android.os.SystemClock
 import android.media.AudioManager
+import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -45,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -65,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.painterResource
 import com.moonkeyboard.R
 import com.moonkeyboard.engine.decode.KeyMap
+import com.moonkeyboard.engine.history.UserHistory
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -265,7 +268,11 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
             // Not clipped, so popups can rise over the strip
             Canvas(Modifier.matchParentSize()) {
               if (recorder != null && recorder.showPaths) drawTouchPaths(recorder, colors)
-              touches.popup?.let { drawPopup(it, controller, colors, measurer) }
+              val popup = touches.popup
+              if (popup != null) drawPopup(popup, controller, colors, measurer)
+              else if (Prefs.keyPreview.value) {
+                for (bounds in touches.pressed.values) if (bounds.key.type == KeyType.CHAR) drawKeyPreview(bounds, controller, colors, measurer)
+              }
             }
           }
           if (oneHanded == OneHanded.LEFT) OneHandedControls(colors, Modifier.weight(1f).height(height))
@@ -282,6 +289,7 @@ internal val ToolbarItem.icon get() = when (this) {
   ToolbarItem.ONE_HANDED -> Icons.OneHanded
   ToolbarItem.TEXT_EDIT -> Icons.TextEdit
   ToolbarItem.SPLIT -> Icons.Split
+  ToolbarItem.INCOGNITO -> Icons.Incognito
 }
 
 internal val ToolbarItem.label get() = when (this) {
@@ -291,6 +299,7 @@ internal val ToolbarItem.label get() = when (this) {
   ToolbarItem.ONE_HANDED -> R.string.one_handed_short
   ToolbarItem.TEXT_EDIT -> R.string.text_editing
   ToolbarItem.SPLIT -> R.string.split_short
+  ToolbarItem.INCOGNITO -> R.string.incognito
 }
 
 /** A setting that is on, shown highlighted. */
@@ -298,6 +307,7 @@ internal fun ToolbarItem.isOn() = when (this) {
   ToolbarItem.FLOATING -> Prefs.floating.value
   ToolbarItem.ONE_HANDED -> !Prefs.floating.value && Prefs.oneHanded.value != OneHanded.OFF
   ToolbarItem.SPLIT -> Prefs.splitLandscape.value
+  ToolbarItem.INCOGNITO -> Prefs.incognito.value
   else -> false
 }
 
@@ -319,12 +329,13 @@ internal fun ToolbarItem.act(controller: InputController, colors: KeyboardColors
     }
     ToolbarItem.TEXT_EDIT -> controller.panel = Panel.EDIT
     ToolbarItem.SPLIT -> Prefs.splitLandscape.value = !Prefs.splitLandscape.value
+    ToolbarItem.INCOGNITO -> Prefs.incognito.value = !Prefs.incognito.value
   }
 }
 
 // Flips what's on screen; cycling through "follow system" looked like a dead tap when that matched
 internal fun flipTheme(colors: KeyboardColors) {
-  Prefs.theme.value = if (colors == KeyboardColors.Dark) ThemeMode.LIGHT else ThemeMode.DARK
+  Prefs.theme.value = if (colors.isDark) ThemeMode.LIGHT else ThemeMode.DARK
 }
 
 @Composable
@@ -334,7 +345,15 @@ internal fun keyboardColors(): KeyboardColors {
     ThemeMode.LIGHT -> false
     ThemeMode.DARK -> true
   }
-  return if (dark) KeyboardColors.Dark else KeyboardColors.Light
+  val wallpaper = Prefs.accent.value == Accent.WALLPAPER && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+  val colors = if (wallpaper) {
+    // Read again when the configuration changes, which is how a new wallpaper's palette arrives
+    LocalConfiguration.current
+    KeyboardColors.dynamic(LocalContext.current, dark)
+  } else {
+    (if (dark) KeyboardColors.Dark else KeyboardColors.Light).withAccent(Prefs.accent.value)
+  }
+  return if (dark && Prefs.pitchBlack.value) colors.pitchBlack(neutralKeys = !wallpaper) else colors
 }
 
 private fun soundFor(type: KeyType) = when (type) {
@@ -498,8 +517,13 @@ private fun SuggestionSlot(controller: InputController, colors: KeyboardColors, 
         style = style.copy(textGeometricTransform = TextGeometricTransform(scaleX = maxOf(scale, MIN_TEXT_SCALE))),
         maxLines = 1,
         softWrap = false,
-        // Similar suggestions (implementation, implementations) differ at the end, so the middle goes
-        overflow = if (scale < MIN_TEXT_SCALE) TextOverflow.MiddleEllipsis else TextOverflow.Clip,
+        // Similar suggestions (implementation, implementations) differ at the end, so the middle goes;
+        // addresses differ before the "@" and share their domain, so the end goes
+        overflow = when {
+          scale >= MIN_TEXT_SCALE -> TextOverflow.Clip
+          '@' in word -> TextOverflow.Ellipsis
+          else -> TextOverflow.MiddleEllipsis
+        },
       )
     }
   }
@@ -545,11 +569,20 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
       val fullWidth = constraints.maxWidth
       val slots = fullWidth - 2 * with(density) { 1.dp.roundToPx() }
       val center = words[1]
+      // Several saved addresses: each would be too long for its slot, and the whole-strip rule below
+      // would show only one, so the addresses alone share the strip equally
+      val emails = words.indices.filter { words[it]?.let(UserHistory::isEmail) == true }
       // As in AOSP: a middle word that would have to be squeezed past the limit gets the whole strip
-      val centerOnly = center != null && center != controller.forgetAsk &&
+      val centerOnly = emails.size < 2 && center != null && center != controller.forgetAsk &&
         fitScale(measurer, center, suggestionStyle(colors, 1, bold), (slots * CENTER_SHARE).toInt() - pad) < MIN_TEXT_SCALE
       Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-        if (centerOnly) {
+        if (emails.size >= 2) {
+          val share = 1f / emails.size
+          emails.forEachIndexed { n, i ->
+            if (n > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
+            SuggestionSlot(controller, colors, measurer, i, words[i], bold, (slots * share).toInt() - pad, Modifier.weight(share))
+          }
+        } else if (centerOnly) {
           SuggestionSlot(controller, colors, measurer, 1, center, bold, fullWidth - pad, Modifier.weight(1f))
         } else {
           for (i in 0 until 3) {
@@ -674,6 +707,16 @@ private fun DrawScope.drawPopup(popup: Popup, controller: InputController, color
     val center = Offset(left + popup.cellWidth / 2, popup.top + popup.cellHeight / 2)
     drawLabel(measurer, controller.display(item), center, TextStyle(color = if (selected) colors.onAccent else colors.text, fontSize = 24.sp))
   }
+}
+
+/** The pressed key's letter, enlarged in a bubble above it: the finger hides the key itself. */
+private fun DrawScope.drawKeyPreview(bounds: KeyBounds, controller: InputController, colors: KeyboardColors, measurer: TextMeasurer) {
+  val width = bounds.width.coerceAtMost(bounds.height * 1.4f)
+  val topLeft = Offset(bounds.centerX - width / 2, bounds.top - bounds.height - 8.dp.toPx())
+  val size = Size(width, bounds.height)
+  drawRoundRect(Color.Black.copy(alpha = 0.18f), topLeft + Offset(0f, 3.dp.toPx()), size, CornerRadius(12.dp.toPx()))
+  drawRoundRect(colors.popup, topLeft, size, CornerRadius(12.dp.toPx()))
+  drawLabel(measurer, controller.display(bounds.key.label), topLeft + Offset(width / 2, bounds.height / 2), TextStyle(color = colors.text, fontSize = 26.sp))
 }
 
 /**

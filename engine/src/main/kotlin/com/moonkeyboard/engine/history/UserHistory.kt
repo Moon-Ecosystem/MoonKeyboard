@@ -15,6 +15,10 @@ class UserHistory {
   private val pairs = HashMap<String, HashMap<String, Int>>()
   private val triples = HashMap<String, HashMap<String, Int>>()
   private val blocked = HashSet<String>()
+  /** The user's text shortcuts ("omw" → "on my way"), keyed by the shortcut in lower case. */
+  private val shortcuts = LinkedHashMap<String, String>()
+  /** Email addresses typed in email fields (or added by hand), keyed in lower case, with how often each was used. */
+  private val emails = HashMap<String, Int>()
   private var total = 0
 
   /** Bumped on every change so callers know when to save. */
@@ -108,8 +112,59 @@ class UserHistory {
   @Synchronized
   fun blockedWords(): List<String> = blocked.sorted()
 
+  /** What [typed] expands to, if it's one of the user's shortcuts (any capitalisation). */
+  @Synchronized
+  fun shortcut(typed: String): String? = shortcuts[typed.lowercase()]
+
+  /** Adds or replaces a shortcut; one word in, any text out. */
+  @Synchronized
+  fun setShortcut(shortcut: String, expansion: String) {
+    val key = shortcut.trim().lowercase()
+    val text = expansion.trim()
+    if (key.isEmpty() || key.any(Char::isWhitespace) || text.isEmpty() || '\t' in text || '\n' in text) return
+    shortcuts.remove(key)
+    shortcuts[key] = text
+    version++
+  }
+
+  @Synchronized
+  fun removeShortcut(shortcut: String) {
+    if (shortcuts.remove(shortcut.lowercase()) != null) version++
+  }
+
+  /** Every shortcut with its text, newest first. */
+  @Synchronized
+  fun shortcuts(): List<Pair<String, String>> = shortcuts.toList().asReversed()
+
+  /** Counts one more use of [address], saving it first if new; anything that isn't an email address is ignored. */
+  @Synchronized
+  fun recordEmail(address: String) {
+    val a = address.trim().lowercase()
+    if (!isEmail(a)) return
+    emails.merge(a, 1, Int::plus)
+    version++
+  }
+
+  @Synchronized
+  fun removeEmail(address: String) {
+    if (emails.remove(address.lowercase()) != null) version++
+  }
+
+  /** Saved addresses, most used first. */
+  @Synchronized
+  fun emails(): List<Pair<String, Int>> = emails.toList().sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
+
+  /** The most used addresses that start with [prefix] (all of them for an empty one), the exact match left out. */
+  @Synchronized
+  fun emailsStartingWith(prefix: String, limit: Int = 3): List<String> {
+    val p = prefix.lowercase()
+    return emails().map { it.first }.filter { it.startsWith(p) && it != p }.take(limit)
+  }
+
+  /** Forgets everything learned from typing, saved emails included; shortcuts the user made themselves stay. */
   @Synchronized
   fun clear() {
+    emails.clear()
     words.clear()
     pairs.clear()
     triples.clear()
@@ -128,7 +183,7 @@ class UserHistory {
   @Synchronized
   fun successors(prev2: String, prev: String): List<Pair<String, Int>> = triples[tripleKey(prev2, prev)]?.toList().orEmpty()
 
-  /** Tab-separated lines: `w word count`, `p prev word count`, `t prev2 prev word count`, `x word` (blocked). */
+  /** Tab-separated lines: `w word count`, `p prev word count`, `t prev2 prev word count`, `x word` (blocked), `s shortcut text`, `e address count`. */
   @Synchronized
   fun serialize(): String = buildString {
     words.forEach { (w, c) -> append("w\t").append(w).append('\t').append(c).append('\n') }
@@ -138,10 +193,16 @@ class UserHistory {
       next.forEach { (w, c) -> append("t\t").append(p2).append('\t').append(p).append('\t').append(w).append('\t').append(c).append('\n') }
     }
     blocked.forEach { append("x\t").append(it).append('\n') }
+    shortcuts.forEach { (k, v) -> append("s\t").append(k).append('\t').append(v).append('\n') }
+    emails.forEach { (a, c) -> append("e\t").append(a).append('\t').append(c).append('\n') }
   }
 
   companion object {
     private const val SEP = '\u0001'
+    private val EMAIL = Regex("""[^\s@]+@[^\s@]+\.[^\s@]+""")
+
+    /** Shaped like an email address: something@domain.tld, no spaces. */
+    fun isEmail(text: String) = EMAIL.matches(text)
     private fun tripleKey(prev2: String, prev: String) = "$prev2$SEP$prev"
 
     fun parse(text: String): UserHistory = UserHistory().apply {
@@ -152,6 +213,8 @@ class UserHistory {
           f[0] == "p" && f.size == 4 -> f[3].toIntOrNull()?.let { pairs.getOrPut(f[1]) { HashMap() }[f[2]] = it }
           f[0] == "t" && f.size == 5 -> f[4].toIntOrNull()?.let { triples.getOrPut(tripleKey(f[1], f[2])) { HashMap() }[f[3]] = it }
           f[0] == "x" && f.size == 2 -> blocked += f[1]
+          f[0] == "s" && f.size == 3 -> shortcuts[f[1]] = f[2]
+          f[0] == "e" && f.size == 3 -> f[2].toIntOrNull()?.let { emails[f[1]] = it }
         }
       }
     }

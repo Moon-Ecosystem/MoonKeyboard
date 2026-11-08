@@ -61,8 +61,12 @@ data class EngineConfig(
   val glideWeight: Float = 4.5f,
   /** Per letter a word differs in length from what was typed: a prior that same-length fixes beat completions. */
   val lengthPenalty: Float = 0.5f,
-  /** Share of the neural model, when there is one, in the built-in probability; the rest is the dictionary's. */
+  /** Share of the neural model, when there is one, in the built-in probability for next-word predictions; the rest is the dictionary's. */
   val neuralShare: Float = 0.7f,
+  /** The same while typing and gliding, where the touches count too: less there kept more typed words right. */
+  val neuralTypingShare: Float = 0.5f,
+  /** [lmWeight] when the neural model is blended in: a better model earns more say against the touches. */
+  val neuralLmWeight: Float = 0.5f,
   /** The neural model also scores the words offered while typing (and so autocorrect), not only the next-word predictions. */
   val neuralWhileTyping: Boolean = true,
 )
@@ -84,11 +88,18 @@ class SuggestionEngine(
 
   private class Candidate(val word: String, val cost: Float, val score: Float, val completion: Boolean)
 
+  /** A word the user added by hand: learned in full at once, so it's suggested, glided and never corrected away. */
+  fun addWord(word: String) {
+    val w = word.trim()
+    // Only what typing can build up as one word ("rishabh123" breaks at the digits, so it could never be offered)
+    if (w.isNotEmpty() && w.all(::isWordChar)) history.record(null, w, maxOf(config.learnedAt - history.count(w), 1))
+  }
+
   /** Suggestions for a partly typed word. [allowCompletions] off keeps longer words out, for fixes to a word the user has fully typed. */
   fun suggest(typed: String, touches: List<Touch>, keys: KeyMap?, context: WordContext, allowAutocorrect: Boolean, allowCompletions: Boolean = true): Suggestions {
     if (typed.isEmpty()) return predict(context, capitalize = false)
     val spatial = Spatial(touches, keys, decoder.config)
-    val lm = Lm(context, config.neuralWhileTyping)
+    val lm = Lm(context, config.neuralWhileTyping, config.neuralTypingShare)
     val best = HashMap<String, Candidate>()
     // A capital the keyboard added at a sentence start says nothing about wanting a name
     val typedCapital = typed[0].isUpperCase() && !context.sentenceStart
@@ -99,7 +110,7 @@ class SuggestionEngine(
       // Short prefixes are still being typed; a length prior there kills ordinary completions
       val diff = if (typed.length >= 3) kotlin.math.abs(word.length - typed.length) else 0
       val adjusted = cost + config.lengthPenalty * diff
-      val score = -adjusted + config.lmWeight * (lm.logProb(word, id) - penalty)
+      val score = -adjusted + lm.weight * (lm.logProb(word, id) - penalty)
       val old = best[word]
       if (old == null || score > old.score) best[word] = Candidate(word, adjusted, score, completion)
     }
@@ -127,14 +138,27 @@ class SuggestionEngine(
     }
 
     val ranked = best.values.asSequence().filter { allowCompletions || !it.completion }.sortedByDescending { it.score }.toList()
-    val autocorrect = if (allowAutocorrect) autocorrectFor(typed, ranked) else null
+    // A shortcut is offered, never forced: it takes the middle slot, and space keeps what was typed
+    val expansion = history.shortcut(typed)?.let { applyCase(it, typed) }
+    // Saved addresses starting with the word: from the 4th letter one takes the right-hand slot, never the
+    // middle ("rish" offers rishabh@gmail.com; fewer letters match too many ordinary words). From the
+    // 7th the user is clearly typing an address, so the matches take the strip and autocorrect stands back.
+    val emails = when {
+      typed.length >= EMAIL_ALL_LETTERS -> history.emailsStartingWith(typed, 3)
+      typed.length >= EMAIL_MIN_LETTERS -> history.emailsStartingWith(typed, 1)
+      else -> emptyList()
+    }
+    val emailsLead = emails.isNotEmpty() && typed.length >= EMAIL_ALL_LETTERS
+    val autocorrect = if (allowAutocorrect && expansion == null && !emailsLead) autocorrectFor(typed, ranked) else null
 
     val shown = ArrayList<String>()
     fun add(word: String) {
       if (shown.size < 3 && shown.none { it.equals(word, ignoreCase = true) }) shown += word
     }
     val others = ranked.asSequence().map { applyCase(it.word, typed) }
-    val items = if (isValid(typed) && autocorrect == null) {
+    val items = if (expansion != null) {
+      listOfNotNull(typed, expansion, others.firstOrNull { !it.equals(typed, ignoreCase = true) && it != expansion })
+    } else if (isValid(typed) && autocorrect == null) {
       // A real word stays in the middle with the best alternatives either side
       val alternatives = others.filterNot { it.equals(typed, ignoreCase = true) }.take(2).toList()
       listOfNotNull(alternatives.getOrNull(0), typed, alternatives.getOrNull(1))
@@ -145,8 +169,17 @@ class SuggestionEngine(
       others.forEach(::add)
       shown
     }
+    val withEmail = when {
+      emails.isEmpty() -> items
+      // Best address in the middle, the others either side; word suggestions fill any slot left
+      emailsLead -> {
+        val rest = items.filter { it !in emails }.iterator()
+        listOfNotNull(emails.getOrNull(1) ?: rest.nextOrNull(), emails[0], emails.getOrNull(2) ?: rest.nextOrNull())
+      }
+      else -> items.take(2) + emails[0]
+    }
     val debug = ranked.take(12).map { "%-14s cost %.2f  score %.2f%s".format(it.word, it.cost, it.score, if (it.completion) "  (completion)" else "") }
-    return Suggestions(typed, items, autocorrect, isPrediction = false, debug = debug + neuralDebug(config.neuralWhileTyping))
+    return Suggestions(typed, withEmail, autocorrect, isPrediction = false, debug = debug + neuralDebug(config.neuralWhileTyping))
   }
 
   /**
@@ -156,12 +189,12 @@ class SuggestionEngine(
   fun glide(swipe: List<TracePoint>, keys: KeyMap, context: WordContext, firstUpper: Boolean, allUpper: Boolean): Suggestions {
     // A finger that wandered off the letters before lifting ends the word where it left them
     val path = trimOffLetters(swipe, keys, glideDecoder.config.endRadius)
-    val lm = Lm(context, config.neuralWhileTyping)
+    val lm = Lm(context, config.neuralWhileTyping, config.neuralTypingShare)
     val scores = HashMap<String, Pair<Float, Float>>()
     fun offer(word: String, id: Int, cost: Float) {
       if (history.isBlocked(word)) return
       val penalty = if (isProper(word)) config.capitalPenalty else 0f
-      val score = -config.glideWeight * cost + config.lmWeight * (lm.logProb(word, id) - penalty)
+      val score = -config.glideWeight * cost + lm.weight * (lm.logProb(word, id) - penalty)
       if ((scores[word]?.second ?: Float.NEGATIVE_INFINITY) < score) scores[word] = cost to score
     }
     glideDecoder.search(path, keys) { hit ->
@@ -259,8 +292,10 @@ class SuggestionEngine(
    * habits after a context count more the more often they've typed after it, so a phrase used
    * every day wins quickly while one-offs barely move anything.
    */
-  private inner class Lm(context: WordContext, useNeural: Boolean) {
+  private inner class Lm(context: WordContext, useNeural: Boolean, private val neuralShare: Float = config.neuralShare) {
     private val nn = if (useNeural) neural?.predict(context.tokens) else null
+    /** How much this model counts against the touches. */
+    val weight = if (nn != null) config.neuralLmWeight else config.lmWeight
     val prevId: Int = when {
       context.sentenceStart -> Lexicon.SENTENCE_START
       context.prev != null -> lexicon.findLenient(context.prev).takeIf { it >= 0 } ?: NONE
@@ -308,7 +343,7 @@ class SuggestionEngine(
       // but "I" and "London" (no lower-case spelling) do
       if (nn != null && (word == word.lowercase() || lexicon.find(word.lowercase()) < 0)) {
         val pn = nn.logProb(word)?.let { exp(it.toDouble()) } ?: 0.0
-        p = config.neuralShare * pn + (1 - config.neuralShare) * p
+        p = neuralShare * pn + (1 - neuralShare) * p
       }
       if (vocabularyShare > 0) p = (1 - vocabularyShare) * p + vocabularyShare * history.count(word) / total
       if (trust > 0) {
@@ -345,6 +380,10 @@ class SuggestionEngine(
 
   private companion object {
     const val NONE = -1
+    const val EMAIL_MIN_LETTERS = 4
+    const val EMAIL_ALL_LETTERS = 7
+
+    fun <T> Iterator<T>.nextOrNull(): T? = if (hasNext()) next() else null
     const val VOCABULARY_CONFIDENCE = 300.0
   }
 }
