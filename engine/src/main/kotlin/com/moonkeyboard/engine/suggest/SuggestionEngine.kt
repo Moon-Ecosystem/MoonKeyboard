@@ -61,8 +61,12 @@ data class EngineConfig(
   val glideWeight: Float = 4.5f,
   /** Per letter a word differs in length from what was typed: a prior that same-length fixes beat completions. */
   val lengthPenalty: Float = 0.5f,
-  /** Share of the neural model, when there is one, in the built-in probability; the rest is the dictionary's. */
+  /** Share of the neural model, when there is one, in the built-in probability for next-word predictions; the rest is the dictionary's. */
   val neuralShare: Float = 0.7f,
+  /** The same while typing and gliding, where the touches count too: less there kept more typed words right. */
+  val neuralTypingShare: Float = 0.5f,
+  /** [lmWeight] when the neural model is blended in: a better model earns more say against the touches. */
+  val neuralLmWeight: Float = 0.5f,
   /** The neural model also scores the words offered while typing (and so autocorrect), not only the next-word predictions. */
   val neuralWhileTyping: Boolean = true,
 )
@@ -88,7 +92,7 @@ class SuggestionEngine(
   fun suggest(typed: String, touches: List<Touch>, keys: KeyMap?, context: WordContext, allowAutocorrect: Boolean, allowCompletions: Boolean = true): Suggestions {
     if (typed.isEmpty()) return predict(context, capitalize = false)
     val spatial = Spatial(touches, keys, decoder.config)
-    val lm = Lm(context, config.neuralWhileTyping)
+    val lm = Lm(context, config.neuralWhileTyping, config.neuralTypingShare)
     val best = HashMap<String, Candidate>()
     // A capital the keyboard added at a sentence start says nothing about wanting a name
     val typedCapital = typed[0].isUpperCase() && !context.sentenceStart
@@ -99,7 +103,7 @@ class SuggestionEngine(
       // Short prefixes are still being typed; a length prior there kills ordinary completions
       val diff = if (typed.length >= 3) kotlin.math.abs(word.length - typed.length) else 0
       val adjusted = cost + config.lengthPenalty * diff
-      val score = -adjusted + config.lmWeight * (lm.logProb(word, id) - penalty)
+      val score = -adjusted + lm.weight * (lm.logProb(word, id) - penalty)
       val old = best[word]
       if (old == null || score > old.score) best[word] = Candidate(word, adjusted, score, completion)
     }
@@ -156,12 +160,12 @@ class SuggestionEngine(
   fun glide(swipe: List<TracePoint>, keys: KeyMap, context: WordContext, firstUpper: Boolean, allUpper: Boolean): Suggestions {
     // A finger that wandered off the letters before lifting ends the word where it left them
     val path = trimOffLetters(swipe, keys, glideDecoder.config.endRadius)
-    val lm = Lm(context, config.neuralWhileTyping)
+    val lm = Lm(context, config.neuralWhileTyping, config.neuralTypingShare)
     val scores = HashMap<String, Pair<Float, Float>>()
     fun offer(word: String, id: Int, cost: Float) {
       if (history.isBlocked(word)) return
       val penalty = if (isProper(word)) config.capitalPenalty else 0f
-      val score = -config.glideWeight * cost + config.lmWeight * (lm.logProb(word, id) - penalty)
+      val score = -config.glideWeight * cost + lm.weight * (lm.logProb(word, id) - penalty)
       if ((scores[word]?.second ?: Float.NEGATIVE_INFINITY) < score) scores[word] = cost to score
     }
     glideDecoder.search(path, keys) { hit ->
@@ -259,8 +263,10 @@ class SuggestionEngine(
    * habits after a context count more the more often they've typed after it, so a phrase used
    * every day wins quickly while one-offs barely move anything.
    */
-  private inner class Lm(context: WordContext, useNeural: Boolean) {
+  private inner class Lm(context: WordContext, useNeural: Boolean, private val neuralShare: Float = config.neuralShare) {
     private val nn = if (useNeural) neural?.predict(context.tokens) else null
+    /** How much this model counts against the touches. */
+    val weight = if (nn != null) config.neuralLmWeight else config.lmWeight
     val prevId: Int = when {
       context.sentenceStart -> Lexicon.SENTENCE_START
       context.prev != null -> lexicon.findLenient(context.prev).takeIf { it >= 0 } ?: NONE
@@ -308,7 +314,7 @@ class SuggestionEngine(
       // but "I" and "London" (no lower-case spelling) do
       if (nn != null && (word == word.lowercase() || lexicon.find(word.lowercase()) < 0)) {
         val pn = nn.logProb(word)?.let { exp(it.toDouble()) } ?: 0.0
-        p = config.neuralShare * pn + (1 - config.neuralShare) * p
+        p = neuralShare * pn + (1 - neuralShare) * p
       }
       if (vocabularyShare > 0) p = (1 - vocabularyShare) * p + vocabularyShare * history.count(word) / total
       if (trust > 0) {
