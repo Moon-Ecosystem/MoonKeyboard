@@ -241,7 +241,8 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
         // A hairline along the strip's bottom edge, so the bar reads as separate from the keys
         else Box(Modifier.drawBehind {
           val y = size.height - 0.5.dp.toPx()
-          drawLine(colors.divider, Offset(12.dp.toPx(), y), Offset(size.width - 12.dp.toPx(), y), 1.dp.toPx())
+          // Edge to edge: an inset line lined up with neither the strip's buttons nor the keys
+          drawLine(colors.divider, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
         }) { Strip(controller, colors) }
         Row {
           if (oneHanded == OneHanded.RIGHT) OneHandedControls(colors, Modifier.weight(1f).height(height))
@@ -603,7 +604,9 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
     if (emoji.isEmpty()) {
       ToolButton(Icons.Clipboard, R.string.clipboard, colors) { controller.panel = Panel.CLIPBOARD }
     } else {
+      // The same line as between the words, before each emoji, so each reads as its own choice
       for (e in emoji) {
+        Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
         Box(Modifier.size(44.dp).clip(CircleShape).clickable { controller.pickEmoji(e) }, contentAlignment = Alignment.Center) {
           Text(e, fontSize = 24.sp)
         }
