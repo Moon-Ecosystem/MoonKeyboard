@@ -1208,6 +1208,12 @@ class InputController(private val host: KeyboardHost) {
     val context = contextBeforeWord(ic)
     val keys = keyMap
     val allowAutocorrect = field.autocorrect
+    // Until the decode lands, show the letters typed rather than nothing: an empty strip falls back to the
+    // toolbar for a frame (worst from the undo pill in an empty field). Marked a prediction, so space never
+    // takes it as this word's result and still decodes for its autocorrect.
+    if (suggestions.items.isEmpty() || suggestions.isPrediction) {
+      suggestions = Suggestions(typed, listOf("", typed, ""), null, isPrediction = true)
+    }
     decodeJob?.cancel()
     decodeJob = scope.launch {
       val result = withContext(decodeDispatcher) { engine.suggest(typed, typedTouches, keys, context, allowAutocorrect) }
