@@ -20,6 +20,25 @@ g.initializer.extend([numpy_helper.from_array(np.array(a, dtype=np.int64), name)
                       (([-1], "last_start"), ([2**62], "last_end"), ([1], "last_axis"))])
 g.node.insert(list(g.node).index(norm) + 1, helper.make_node("Slice", [x, "last_start", "last_end", "last_axis"], [x + "_last"]))
 g.output[0].type.tensor_type.shape.dim[1].dim_value = 1
+
+# The word vectors are stored twice, as the input lookup table (uint8) and as the output layer's
+# weights (int8, transposed). Keep the output copy only: the lookup reads its columns instead.
+inits = {i.name: i for i in g.initializer}
+def shape(name): return tuple(inits[name].dims) if name in inits else ()
+# The lookup table is the big [vocab, dim] one; the output weights are the [dim, vocab] one
+lookup = max((n for n in g.node if n.op_type == "Gather" and len(shape(n.input[0])) == 2), key=lambda n: shape(n.input[0])[0])
+vocab_size, dim = shape(lookup.input[0])
+deq = next(n for n in g.node if n.op_type == "DequantizeLinear" and n.input[0] == lookup.output[0])
+out_w = next(n.input[1] for n in g.node if n.op_type == "MatMulInteger" and shape(n.input[1]) == (dim, vocab_size))
+base = out_w[: -len("_quantized")]
+assert base + "_scale" in inits and base + "_zero_point" in inits
+cols = lookup.output[0] + "_cols"
+# Gather on axis 1 of [dim, vocab] gives [dim, batch, n]; the network wants [batch, n, dim]
+g.node.insert(list(g.node).index(lookup), helper.make_node("Gather", [out_w, lookup.input[1]], [cols], axis=1))
+g.node.insert(list(g.node).index(lookup), helper.make_node("Transpose", [cols], [lookup.output[0]], perm=[1, 2, 0]))
+for name in (lookup.input[0], deq.input[1], deq.input[2]): g.initializer.remove(inits[name])
+deq.input[1], deq.input[2] = base + "_scale", base + "_zero_point"
+g.node.remove(lookup)
 onnx.checker.check_model(m)
 onnx.save(m, f"{out}/en-lm.onnx")
 

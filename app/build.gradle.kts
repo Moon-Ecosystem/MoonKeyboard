@@ -20,8 +20,8 @@ android {
     targetSdk = 36
     versionCode = 4
     versionName = "0.4"
-    // ONNX Runtime's native code for phones only: no x86 copies (emulators) to carry in the APK
-    ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+    // ONNX Runtime's native code for 64-bit ARM phones only: each other ABI adds 13–18 MB to the APK
+    ndk { abiFilters += listOf("arm64-v8a") }
   }
 
   signingConfigs {
