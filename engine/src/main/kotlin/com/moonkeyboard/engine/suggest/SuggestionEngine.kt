@@ -88,6 +88,13 @@ class SuggestionEngine(
 
   private class Candidate(val word: String, val cost: Float, val score: Float, val completion: Boolean)
 
+  /** A word the user added by hand: learned in full at once, so it's suggested, glided and never corrected away. */
+  fun addWord(word: String) {
+    val w = word.trim()
+    // Only what typing can build up as one word ("rishabh123" breaks at the digits, so it could never be offered)
+    if (w.isNotEmpty() && w.all(::isWordChar)) history.record(null, w, maxOf(config.learnedAt - history.count(w), 1))
+  }
+
   /** Suggestions for a partly typed word. [allowCompletions] off keeps longer words out, for fixes to a word the user has fully typed. */
   fun suggest(typed: String, touches: List<Touch>, keys: KeyMap?, context: WordContext, allowAutocorrect: Boolean, allowCompletions: Boolean = true): Suggestions {
     if (typed.isEmpty()) return predict(context, capitalize = false)
@@ -131,14 +138,27 @@ class SuggestionEngine(
     }
 
     val ranked = best.values.asSequence().filter { allowCompletions || !it.completion }.sortedByDescending { it.score }.toList()
-    val autocorrect = if (allowAutocorrect) autocorrectFor(typed, ranked) else null
+    // A shortcut is offered, never forced: it takes the middle slot, and space keeps what was typed
+    val expansion = history.shortcut(typed)?.let { applyCase(it, typed) }
+    // Saved addresses starting with the word: from the 4th letter one takes the right-hand slot, never the
+    // middle ("rish" offers rishabh@gmail.com; fewer letters match too many ordinary words). From the
+    // 7th the user is clearly typing an address, so the matches take the strip and autocorrect stands back.
+    val emails = when {
+      typed.length >= EMAIL_ALL_LETTERS -> history.emailsStartingWith(typed, 3)
+      typed.length >= EMAIL_MIN_LETTERS -> history.emailsStartingWith(typed, 1)
+      else -> emptyList()
+    }
+    val emailsLead = emails.isNotEmpty() && typed.length >= EMAIL_ALL_LETTERS
+    val autocorrect = if (allowAutocorrect && expansion == null && !emailsLead) autocorrectFor(typed, ranked) else null
 
     val shown = ArrayList<String>()
     fun add(word: String) {
       if (shown.size < 3 && shown.none { it.equals(word, ignoreCase = true) }) shown += word
     }
     val others = ranked.asSequence().map { applyCase(it.word, typed) }
-    val items = if (isValid(typed) && autocorrect == null) {
+    val items = if (expansion != null) {
+      listOfNotNull(typed, expansion, others.firstOrNull { !it.equals(typed, ignoreCase = true) && it != expansion })
+    } else if (isValid(typed) && autocorrect == null) {
       // A real word stays in the middle with the best alternatives either side
       val alternatives = others.filterNot { it.equals(typed, ignoreCase = true) }.take(2).toList()
       listOfNotNull(alternatives.getOrNull(0), typed, alternatives.getOrNull(1))
@@ -149,8 +169,17 @@ class SuggestionEngine(
       others.forEach(::add)
       shown
     }
+    val withEmail = when {
+      emails.isEmpty() -> items
+      // Best address in the middle, the others either side; word suggestions fill any slot left
+      emailsLead -> {
+        val rest = items.filter { it !in emails }.iterator()
+        listOfNotNull(emails.getOrNull(1) ?: rest.nextOrNull(), emails[0], emails.getOrNull(2) ?: rest.nextOrNull())
+      }
+      else -> items.take(2) + emails[0]
+    }
     val debug = ranked.take(12).map { "%-14s cost %.2f  score %.2f%s".format(it.word, it.cost, it.score, if (it.completion) "  (completion)" else "") }
-    return Suggestions(typed, items, autocorrect, isPrediction = false, debug = debug + neuralDebug(config.neuralWhileTyping))
+    return Suggestions(typed, withEmail, autocorrect, isPrediction = false, debug = debug + neuralDebug(config.neuralWhileTyping))
   }
 
   /**
@@ -351,6 +380,10 @@ class SuggestionEngine(
 
   private companion object {
     const val NONE = -1
+    const val EMAIL_MIN_LETTERS = 4
+    const val EMAIL_ALL_LETTERS = 7
+
+    fun <T> Iterator<T>.nextOrNull(): T? = if (hasNext()) next() else null
     const val VOCABULARY_CONFIDENCE = 300.0
   }
 }

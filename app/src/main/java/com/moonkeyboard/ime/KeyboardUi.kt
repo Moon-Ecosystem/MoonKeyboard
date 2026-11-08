@@ -67,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.painterResource
 import com.moonkeyboard.R
 import com.moonkeyboard.engine.decode.KeyMap
+import com.moonkeyboard.engine.history.UserHistory
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -516,8 +517,13 @@ private fun SuggestionSlot(controller: InputController, colors: KeyboardColors, 
         style = style.copy(textGeometricTransform = TextGeometricTransform(scaleX = maxOf(scale, MIN_TEXT_SCALE))),
         maxLines = 1,
         softWrap = false,
-        // Similar suggestions (implementation, implementations) differ at the end, so the middle goes
-        overflow = if (scale < MIN_TEXT_SCALE) TextOverflow.MiddleEllipsis else TextOverflow.Clip,
+        // Similar suggestions (implementation, implementations) differ at the end, so the middle goes;
+        // addresses differ before the "@" and share their domain, so the end goes
+        overflow = when {
+          scale >= MIN_TEXT_SCALE -> TextOverflow.Clip
+          '@' in word -> TextOverflow.Ellipsis
+          else -> TextOverflow.MiddleEllipsis
+        },
       )
     }
   }
@@ -563,11 +569,20 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
       val fullWidth = constraints.maxWidth
       val slots = fullWidth - 2 * with(density) { 1.dp.roundToPx() }
       val center = words[1]
+      // Several saved addresses: each would be too long for its slot, and the whole-strip rule below
+      // would show only one, so the addresses alone share the strip equally
+      val emails = words.indices.filter { words[it]?.let(UserHistory::isEmail) == true }
       // As in AOSP: a middle word that would have to be squeezed past the limit gets the whole strip
-      val centerOnly = center != null && center != controller.forgetAsk &&
+      val centerOnly = emails.size < 2 && center != null && center != controller.forgetAsk &&
         fitScale(measurer, center, suggestionStyle(colors, 1, bold), (slots * CENTER_SHARE).toInt() - pad) < MIN_TEXT_SCALE
       Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-        if (centerOnly) {
+        if (emails.size >= 2) {
+          val share = 1f / emails.size
+          emails.forEachIndexed { n, i ->
+            if (n > 0) Box(Modifier.width(1.dp).height(20.dp).background(colors.divider))
+            SuggestionSlot(controller, colors, measurer, i, words[i], bold, (slots * share).toInt() - pad, Modifier.weight(share))
+          }
+        } else if (centerOnly) {
           SuggestionSlot(controller, colors, measurer, 1, center, bold, fullWidth - pad, Modifier.weight(1f))
         } else {
           for (i in 0 until 3) {

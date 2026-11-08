@@ -19,6 +19,37 @@ class UserHistoryTest {
   }
 
   @Test
+  fun emailsAreOfferedMostUsedFirstAndNarrowByPrefix() {
+    val h = UserHistory()
+    h.recordEmail("Rishabh123@Gmail.com")
+    repeat(2) { h.recordEmail("rishabh@work.example") }
+    h.recordEmail("not an email")
+    h.recordEmail("moon@x.org")
+    val back = UserHistory.parse(h.serialize())
+    assertEquals(listOf("rishabh@work.example", "moon@x.org", "rishabh123@gmail.com"), back.emailsStartingWith(""))
+    assertEquals(listOf("rishabh@work.example", "rishabh123@gmail.com"), back.emailsStartingWith("RI"))
+    assertEquals(listOf("rishabh123@gmail.com"), back.emailsStartingWith("rishabh1"))
+    assertEquals("the full address typed isn't offered again", emptyList<String>(), back.emailsStartingWith("moon@x.org"))
+    back.removeEmail("moon@x.org")
+    assertEquals(2, back.emails().size)
+  }
+
+  @Test
+  fun shortcutsSurviveSavingAndClearing() {
+    val h = UserHistory()
+    h.setShortcut("OMW", " on my way ")
+    h.setShortcut("two words", "rejected")
+    h.setShortcut("addr", "12 Moon Street")
+    val back = UserHistory.parse(h.serialize())
+    assertEquals(listOf("addr" to "12 Moon Street", "omw" to "on my way"), back.shortcuts())
+    assertEquals("on my way", back.shortcut("Omw"))
+    back.clear()
+    assertEquals("clearing learned words keeps shortcuts", 2, back.shortcuts().size)
+    back.removeShortcut("OMW")
+    assertEquals(null, back.shortcut("omw"))
+  }
+
+  @Test
   fun listsPhrasesUsedMoreThanOnce() {
     val h = typed("see you soon", "see you soon", "see me")
     assertEquals(listOf(LearnedPhrase("see", "you", "soon", 2), LearnedPhrase("<s>", "see", "you", 2)), h.learnedPhrases().sortedBy { it.word })

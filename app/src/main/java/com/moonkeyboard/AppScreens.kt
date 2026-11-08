@@ -3,6 +3,9 @@ package com.moonkeyboard
 import android.os.Build
 import android.text.format.Formatter
 import com.moonkeyboard.ime.Accent
+import com.moonkeyboard.engine.history.UserHistory
+import com.moonkeyboard.engine.suggest.isWordChar
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.moonkeyboard.ime.KeyboardColors
@@ -25,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -85,7 +89,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 
-enum class Screen { HOME, LOOK, TYPING, GLIDE, EMOJI, CLIPBOARD, LEARNED, TEST_PAD }
+enum class Screen { HOME, LOOK, TYPING, GLIDE, EMOJI, CLIPBOARD, LEARNED, SHORTCUTS, TEST_PAD }
 
 /** A screen's scrolling body under its top bar. */
 @Composable
@@ -211,6 +215,9 @@ fun HomeScreen(open: (Screen) -> Unit) {
 
     Card {
       NavRow(AppIcons.Learned, R.string.learned_words, stringResource(R.string.learned_counts, words, phrases)) { open(Screen.LEARNED) }
+      Divider()
+      val shortcutCount = remember(engine) { engine?.history?.shortcuts()?.size ?: 0 }
+      NavRow(Icons.TextEdit, R.string.shortcuts, pluralStringResource(R.plurals.shortcut_count, shortcutCount, shortcutCount)) { open(Screen.SHORTCUTS) }
       Divider()
       NavRow(Icons.Emoji, R.string.emoji, stringResource(if (Prefs.emojiSuggestions.value) R.string.emoji_suggestions_on else R.string.emoji_suggestions_off)) { open(Screen.EMOJI) }
       Divider()
@@ -605,6 +612,7 @@ private sealed interface Learned {
   data class Word(val word: String, val count: Int) : Learned
   data class Phrase(val phrase: LearnedPhrase) : Learned
   data class Blocked(val word: String) : Learned
+  data class Email(val address: String, val count: Int) : Learned
 }
 
 @Composable
@@ -619,10 +627,12 @@ fun LearnedScreen(onBack: () -> Unit) {
   val words = remember(history, version) { history?.learnedWords().orEmpty() }
   val phrases = remember(history, version) { history?.learnedPhrases().orEmpty() }
   val blocked = remember(history, version) { history?.blockedWords().orEmpty() }
-  val shown = remember(words, phrases, blocked, query) {
+  val emails = remember(history, version) { history?.emails().orEmpty() }
+  val shown = remember(words, phrases, blocked, emails, query) {
     val q = query.trim().lowercase()
     fun hit(s: String) = q.isEmpty() || q in s.lowercase()
-    blocked.filter(::hit).map { Learned.Blocked(it) } +
+    emails.filter { hit(it.first) }.map { Learned.Email(it.first, it.second) } +
+      blocked.filter(::hit).map { Learned.Blocked(it) } +
       phrases.filter { hit(phraseText(it)) }.map { Learned.Phrase(it) } +
       words.filter { hit(it.first) }.map { Learned.Word(it.first, it.second) }
   }
@@ -649,21 +659,48 @@ fun LearnedScreen(onBack: () -> Unit) {
           BasicTextField(queryState, Modifier.fillMaxWidth(), textStyle = TextStyle(color = c.text, fontSize = 15.sp), cursorBrush = SolidColor(c.accent), lineLimits = TextFieldLineLimits.SingleLine)
         }
       }
-      LazyColumn(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.surface)) {
+      // As tall as its rows, up to the space left above the delete button; scrolls past that
+      LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.surface)) {
+        // A searched word that isn't learned yet can be added as the user's own
+        val candidate = query.trim()
+        // An address is saved as an email; anything else must be a plain word the keyboard can type and match
+        val isEmail = UserHistory.isEmail(candidate)
+        val addable = history != null && candidate.isNotEmpty() && (
+          if (isEmail) emails.none { it.first == candidate.lowercase() }
+          else candidate.all { isWordChar(it) } && words.none { it.first == candidate && it.second >= (engine?.config?.learnedAt ?: 2) })
+        if (addable) item(key = "add") {
+          Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(if (isEmail) R.string.add_email_detail else R.string.add_word_detail, candidate), Modifier.weight(1f), color = c.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Box(Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.accent).clickable {
+              if (isEmail) history?.recordEmail(candidate) else engine?.addWord(candidate)
+              queryState.clearText()
+              changed()
+            }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+              Text(stringResource(R.string.add), color = c.onAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+          }
+          if (shown.isNotEmpty()) Divider()
+        }
         if (history == null) item { Text(stringResource(R.string.loading), Modifier.padding(16.dp), color = c.muted, fontSize = 14.sp) }
-        else if (shown.isEmpty()) item { Text(stringResource(R.string.nothing_learned), Modifier.padding(16.dp), color = c.muted, fontSize = 14.sp) }
-        items(shown, key = { it.toString() }) { item ->
+        else if (shown.isEmpty() && !addable) item { Text(stringResource(R.string.nothing_learned), Modifier.padding(16.dp), color = c.muted, fontSize = 14.sp) }
+        itemsIndexed(shown, key = { _, it -> it.toString() }) { i, item ->
+         // A line between rows, none under the last
+         Column {
           when (item) {
-            is Learned.Word -> LearnedRow(item.word, pluralStringResource(R.plurals.typed_times, item.count, item.count), stringResource(R.string.forget_item, item.word)) {
+            is Learned.Word -> LearnedRow(item.word, pluralStringResource(R.plurals.typed_times, item.count, item.count), stringResource(R.string.forget_item, item.word), divider = false) {
               history?.forget(item.word)
               changed()
             }
             is Learned.Phrase -> {
               val text = phraseText(item.phrase)
-              LearnedRow(text, pluralStringResource(R.plurals.phrase_used, item.phrase.count, item.phrase.count), stringResource(R.string.forget_item, text)) {
+              LearnedRow(text, pluralStringResource(R.plurals.phrase_used, item.phrase.count, item.phrase.count), stringResource(R.string.forget_item, text), divider = false) {
                 history?.forgetPhrase(item.phrase.prev2, item.phrase.prev, item.phrase.word)
                 changed()
               }
+            }
+            is Learned.Email -> LearnedRow(item.address, pluralStringResource(R.plurals.email_used, item.count, item.count), stringResource(R.string.forget_item, item.address), divider = false) {
+              history?.removeEmail(item.address)
+              changed()
             }
             is Learned.Blocked -> Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
               Column(Modifier.weight(1f)) {
@@ -675,10 +712,12 @@ fun LearnedScreen(onBack: () -> Unit) {
               }
             }
           }
+          if (i < shown.lastIndex) Divider()
+         }
         }
       }
       var confirm by remember { mutableStateOf(false) }
-      DangerButton(stringResource(if (confirm) R.string.tap_again_to_delete else R.string.delete_learned_words), enabled = words.isNotEmpty() || blocked.isNotEmpty()) {
+      DangerButton(stringResource(if (confirm) R.string.tap_again_to_delete else R.string.delete_learned_words), enabled = words.isNotEmpty() || blocked.isNotEmpty() || emails.isNotEmpty()) {
         if (confirm) {
           history?.clear()
           changed()
@@ -686,6 +725,64 @@ fun LearnedScreen(onBack: () -> Unit) {
         confirm = !confirm
       }
     }
+  }
+}
+
+@Composable
+fun ShortcutsScreen(onBack: () -> Unit) {
+  val c = LocalAppColors.current
+  val engine by Language.ready.collectAsState()
+  val history = engine?.history
+  var version by remember { mutableIntStateOf(0) }
+  val list = remember(history, version) { history?.shortcuts().orEmpty() }
+  val keyState = rememberTextFieldState()
+  val textState = rememberTextFieldState()
+  val key = keyState.text.toString().trim()
+  val text = textState.text.toString().trim()
+  val canAdd = history != null && key.isNotEmpty() && key.none(Char::isWhitespace) && text.isNotEmpty()
+
+  Column(Modifier.fillMaxSize().background(c.background)) {
+    TopBar(R.string.shortcuts, onBack)
+    Column(Modifier.weight(1f).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+      Text(stringResource(R.string.shortcuts_explain), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 13.sp, lineHeight = 19.sp)
+      Card {
+        ShortcutField(keyState, stringResource(R.string.shortcut_key))
+        Divider()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          ShortcutField(textState, stringResource(R.string.shortcut_text), Modifier.weight(1f))
+          Box(Modifier.padding(end = 8.dp).height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (canAdd) c.accent else c.divider)
+            .clickable(enabled = canAdd) {
+              history?.setShortcut(key, text)
+              Language.historyChanged()
+              keyState.clearText()
+              textState.clearText()
+              version++
+            }.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+            Text(stringResource(R.string.add), color = if (canAdd) c.onAccent else c.muted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+          }
+        }
+      }
+      // As tall as its rows, up to the space left; scrolls past that
+      LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.surface)) {
+        if (list.isEmpty()) item { Text(stringResource(R.string.no_shortcuts), Modifier.padding(16.dp), color = c.muted, fontSize = 14.sp) }
+        itemsIndexed(list, key = { _, it -> it.first }) { i, (shortcut, expansion) ->
+          LearnedRow(expansion, shortcut, stringResource(R.string.forget_item, shortcut), divider = i < list.lastIndex) {
+            history?.removeShortcut(shortcut)
+            Language.historyChanged()
+            version++
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun ShortcutField(state: androidx.compose.foundation.text.input.TextFieldState, hint: String, modifier: Modifier = Modifier.fillMaxWidth()) {
+  val c = LocalAppColors.current
+  Box(modifier.height(52.dp).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
+    if (state.text.isEmpty()) Text(hint, color = c.muted, fontSize = 15.sp)
+    BasicTextField(state, Modifier.fillMaxWidth(), textStyle = TextStyle(color = c.text, fontSize = 15.sp), cursorBrush = SolidColor(c.accent), lineLimits = TextFieldLineLimits.SingleLine)
   }
 }
 
@@ -702,7 +799,7 @@ private fun Stat(value: String, label: String, modifier: Modifier) {
 }
 
 @Composable
-private fun LearnedRow(title: String, detail: String, forgetLabel: String, onForget: () -> Unit) {
+private fun LearnedRow(title: String, detail: String, forgetLabel: String, divider: Boolean = true, onForget: () -> Unit) {
   val c = LocalAppColors.current
   Column {
     Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -714,6 +811,6 @@ private fun LearnedRow(title: String, detail: String, forgetLabel: String, onFor
         Icon(Icons.Trash, forgetLabel, Modifier.size(18.dp), tint = c.muted)
       }
     }
-    Divider()
+    if (divider) Divider()
   }
 }
