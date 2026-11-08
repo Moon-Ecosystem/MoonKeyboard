@@ -412,6 +412,8 @@ fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
   Card {
     SwitchRow(R.string.hinglish, Prefs.hinglish, stringResource(R.string.hinglish_detail))
     Divider()
+    SwitchRow(R.string.neural_predictions, Prefs.neuralPredictions, stringResource(R.string.neural_predictions_detail))
+    Divider()
     SwitchRow(R.string.autocorrect, Prefs.autocorrect, stringResource(R.string.autocorrect_detail))
     Divider()
     SwitchRow(R.string.auto_caps, Prefs.autoCaps, stringResource(R.string.auto_caps_detail))

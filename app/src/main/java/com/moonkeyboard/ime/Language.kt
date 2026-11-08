@@ -1,8 +1,12 @@
 package com.moonkeyboard.ime
 
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import android.content.Context
 import com.moonkeyboard.engine.dict.Lexicon
 import com.moonkeyboard.engine.history.UserHistory
+import com.moonkeyboard.engine.suggest.NeuralLm
 import com.moonkeyboard.engine.suggest.SuggestionEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +48,34 @@ object Language {
       lexicon.blockOffensive = Prefs.blockOffensive.value
       lexicon.hinglish = Prefs.hinglish.value
       loaded.value = SuggestionEngine(lexicon, history)
+      // After the dictionary, so typing works from it alone while this loads; without it (a failed
+      // load), suggestions simply stay dictionary-only
+      neural = runCatching { loadNeural(app) }.getOrNull()
+      applyNeural()
+    }
+  }
+
+  @Volatile
+  private var neural: NeuralLm? = null
+
+  /** Blends the neural model into suggestions, or takes it out, as the setting says. */
+  fun applyNeural() {
+    engine?.neural = if (Prefs.neuralPredictions.value) neural else null
+  }
+
+  private fun loadNeural(app: Context): NeuralLm {
+    val env = OrtEnvironment.getEnvironment()
+    val model = app.assets.open("dict/en-lm.onnx").use { it.readBytes() }
+    // One thread: a single word's prediction is too small to gain from more, and idle threads spin
+    val session = env.createSession(model, OrtSession.SessionOptions().apply { setIntraOpNumThreads(1) })
+    val vocab = app.assets.open("dict/en-lm.vocab").bufferedReader().use { it.readLines() }
+    return NeuralLm(vocab) { ids ->
+      OnnxTensor.createTensor(env, arrayOf(ids)).use { input ->
+        session.run(mapOf("ids" to input)).use {
+          @Suppress("UNCHECKED_CAST")
+          (it[0].value as Array<Array<FloatArray>>)[0][0]
+        }
+      }
     }
   }
 

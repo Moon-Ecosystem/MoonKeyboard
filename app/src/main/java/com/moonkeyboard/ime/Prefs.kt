@@ -92,6 +92,7 @@ object Prefs {
   val autocorrect = Pref("autocorrect", true, String::toBoolean)
   val blockOffensive = Pref("block_offensive", false, String::toBoolean)
   val hinglish = Pref("hinglish", true, String::toBoolean)
+  val neuralPredictions = Pref("neural_predictions", true, String::toBoolean)
   val emojiSuggestions = Pref("emoji_suggestions", true, String::toBoolean)
   /** Offer a new copy in the suggestion strip, once. */
   val offerCopied = Pref("offer_copied", true, String::toBoolean)

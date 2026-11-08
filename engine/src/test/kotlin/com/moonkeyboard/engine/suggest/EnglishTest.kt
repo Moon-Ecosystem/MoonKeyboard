@@ -82,10 +82,11 @@ class EnglishTest {
   fun learnedWordsAreSuggestedAndNotCorrected() {
     val history = UserHistory()
     val e = SuggestionEngine(lexicon, history)
-    assertTrue("before learning it gets corrected", suggest("moonkey", engine = e).autocorrect != null)
-    history.record(null, "moonkey", weight = 2)
-    assertNull(suggest("moonkey", engine = e).autocorrect)
-    assertTrue(suggest("moonke", engine = e).items.contains("moonkey"))
+    // A made-up word with one clear fix ("moonlit"): a near tie between fixes isn't autocorrected at all
+    assertTrue("before learning it gets corrected", suggest("moonlite", engine = e).autocorrect != null)
+    history.record(null, "moonlite", weight = 2)
+    assertNull(suggest("moonlite", engine = e).autocorrect)
+    assertTrue(suggest("moonlit", engine = e).items.contains("moonlite"))
   }
 
   @Test
@@ -94,11 +95,11 @@ class EnglishTest {
     val e = SuggestionEngine(lexicon, history)
     // A fixed spelling, and a word undone at a sentence start (learned in lower case)
     assertTrue(suggest("im", engine = e).autocorrect != null)
-    assertTrue(suggest("Moonkey", engine = e).autocorrect != null)
+    assertTrue(suggest("Moonlite", engine = e).autocorrect != null)
     history.record(null, "im", weight = 2)
-    history.record(null, "moonkey", weight = 2)
+    history.record(null, "moonlite", weight = 2)
     assertNull(suggest("im", engine = e).autocorrect)
-    assertNull(suggest("Moonkey", engine = e).autocorrect)
+    assertNull(suggest("Moonlite", engine = e).autocorrect)
   }
 
   /**

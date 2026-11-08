@@ -61,6 +61,10 @@ data class EngineConfig(
   val glideWeight: Float = 4.5f,
   /** Per letter a word differs in length from what was typed: a prior that same-length fixes beat completions. */
   val lengthPenalty: Float = 0.5f,
+  /** Share of the neural model, when there is one, in the built-in probability; the rest is the dictionary's. */
+  val neuralShare: Float = 0.7f,
+  /** The neural model also scores the words offered while typing (and so autocorrect), not only the next-word predictions. */
+  val neuralWhileTyping: Boolean = true,
 )
 
 class SuggestionEngine(
@@ -69,6 +73,8 @@ class SuggestionEngine(
   val config: EngineConfig = EngineConfig(),
   decoderConfig: DecoderConfig = DecoderConfig(),
   glideConfig: GlideConfig = GlideConfig(),
+  /** Blended with the dictionary's word model when set; null leaves the dictionary alone. */
+  @Volatile var neural: NeuralLm? = null,
 ) {
   private val decoder = TapDecoder(lexicon, decoderConfig)
   private val glideDecoder = GlideDecoder(lexicon, glideConfig)
@@ -82,7 +88,7 @@ class SuggestionEngine(
   fun suggest(typed: String, touches: List<Touch>, keys: KeyMap?, context: WordContext, allowAutocorrect: Boolean, allowCompletions: Boolean = true): Suggestions {
     if (typed.isEmpty()) return predict(context, capitalize = false)
     val spatial = Spatial(touches, keys, decoder.config)
-    val lm = Lm(context)
+    val lm = Lm(context, config.neuralWhileTyping)
     val best = HashMap<String, Candidate>()
     // A capital the keyboard added at a sentence start says nothing about wanting a name
     val typedCapital = typed[0].isUpperCase() && !context.sentenceStart
@@ -140,7 +146,7 @@ class SuggestionEngine(
       shown
     }
     val debug = ranked.take(12).map { "%-14s cost %.2f  score %.2f%s".format(it.word, it.cost, it.score, if (it.completion) "  (completion)" else "") }
-    return Suggestions(typed, items, autocorrect, isPrediction = false, debug = debug)
+    return Suggestions(typed, items, autocorrect, isPrediction = false, debug = debug + neuralDebug(config.neuralWhileTyping))
   }
 
   /**
@@ -150,7 +156,7 @@ class SuggestionEngine(
   fun glide(swipe: List<TracePoint>, keys: KeyMap, context: WordContext, firstUpper: Boolean, allUpper: Boolean): Suggestions {
     // A finger that wandered off the letters before lifting ends the word where it left them
     val path = trimOffLetters(swipe, keys, glideDecoder.config.endRadius)
-    val lm = Lm(context)
+    val lm = Lm(context, config.neuralWhileTyping)
     val scores = HashMap<String, Pair<Float, Float>>()
     fun offer(word: String, id: Int, cost: Float) {
       if (history.isBlocked(word)) return
@@ -183,7 +189,7 @@ class SuggestionEngine(
 
   /** Next-word predictions after a separator: what follows these two words, this word, or this user's habit here. */
   fun predict(context: WordContext, capitalize: Boolean): Suggestions {
-    val lm = Lm(context)
+    val lm = Lm(context, useNeural = true)
     val scores = HashMap<String, Float>()
     for ((word, id) in lm.likelyNext()) scores[word] = lm.logProb(word, id)
     var ranked = scores.entries.filterNot { history.isBlocked(it.key) }.sortedByDescending { it.value }.map { it.key }
@@ -191,7 +197,19 @@ class SuggestionEngine(
     val top = ranked.take(3).map { if (capitalize) it.replaceFirstChar(Char::uppercaseChar) else it }
     // Best in the middle, like the word suggestions
     val items = listOfNotNull(top.getOrNull(1), top.getOrNull(0), top.getOrNull(2))
-    return Suggestions("", items, null, isPrediction = true)
+    return Suggestions("", items, null, isPrediction = true, debug = neuralDebug(true))
+  }
+
+  private fun neuralDebug(used: Boolean): List<String> =
+    listOfNotNull(neural?.takeIf { used }?.let { "neural model: last run %d ms".format(it.lastMillis) })
+
+  /**
+   * For offline comparison with other models: the words this context expects with their log
+   * probabilities, and the log factor on the unigram log probability of every other dictionary word.
+   */
+  fun contextScores(context: WordContext): Pair<Map<String, Float>, Float> {
+    val lm = Lm(context, useNeural = false)
+    return lm.likelyNext().mapValues { (word, id) -> lm.logProb(word, id) } to lm.backoffLog()
   }
 
   /**
@@ -241,7 +259,8 @@ class SuggestionEngine(
    * habits after a context count more the more often they've typed after it, so a phrase used
    * every day wins quickly while one-offs barely move anything.
    */
-  private inner class Lm(context: WordContext) {
+  private inner class Lm(context: WordContext, useNeural: Boolean) {
+    private val nn = if (useNeural) neural?.predict(context.tokens) else null
     val prevId: Int = when {
       context.sentenceStart -> Lexicon.SENTENCE_START
       context.prev != null -> lexicon.findLenient(context.prev).takeIf { it >= 0 } ?: NONE
@@ -274,11 +293,23 @@ class SuggestionEngine(
         val mine = history.successors(key1) + (if (key2 != null) history.successors(key2, key1) else emptyList())
         for ((word, _) in mine) words.getOrPut(word) { lexicon.find(word) }
       }
+      // The network's favourites, but only as dictionary words: its vocabulary is raw web text, and
+      // the dictionary's filters (offensive words, Hinglish off) apply here as everywhere
+      for (w in nn?.top.orEmpty()) {
+        val id = lexicon.findLenient(w)
+        if (id >= 0 && lexicon.isSuggestable(id)) words.putIfAbsent(lexicon.word(id), id)
+      }
       return words
     }
 
     fun logProb(word: String, id: Int): Float {
       var p = if (id >= 0) exp(staticLogProb(id).toDouble()) else exp(config.userWordLogProb.toDouble())
+      // The network knows words in lower case only: "Will" the name doesn't get the verb's odds,
+      // but "I" and "London" (no lower-case spelling) do
+      if (nn != null && (word == word.lowercase() || lexicon.find(word.lowercase()) < 0)) {
+        val pn = nn.logProb(word)?.let { exp(it.toDouble()) } ?: 0.0
+        p = config.neuralShare * pn + (1 - config.neuralShare) * p
+      }
       if (vocabularyShare > 0) p = (1 - vocabularyShare) * p + vocabularyShare * history.count(word) / total
       if (trust > 0) {
         val pair = history.pairCount(key1!!, word).toDouble() / n1
@@ -286,6 +317,16 @@ class SuggestionEngine(
         p = (1 - trust) * p + trust * mine
       }
       return ln(p).toFloat()
+    }
+
+    /** What [staticLogProb] keeps of the unigram for a word no pair or triple here predicts. */
+    fun backoffLog(): Float {
+      var f = 1.0
+      if (prevId != NONE && lexicon.hasBigrams(prevId)) {
+        f *= 1 - config.bigramShare
+        if (prev2Id != NONE && lexicon.hasTrigrams(prev2Id, prevId)) f *= 1 - config.trigramShare
+      }
+      return ln(f).toFloat()
     }
 
     private fun staticLogProb(id: Int): Float {
