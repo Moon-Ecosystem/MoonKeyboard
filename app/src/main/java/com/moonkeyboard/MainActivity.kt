@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity() {
               Screen.EMOJI -> EmojiScreen(home)
               Screen.CLIPBOARD -> ClipboardScreen(home)
               Screen.LEARNED -> LearnedScreen(home)
-              Screen.TEST_PAD -> MaterialTheme(colorScheme = if (colors == AppColors.Dark) darkColorScheme() else lightColorScheme()) {
+              Screen.TEST_PAD -> MaterialTheme(colorScheme = if (colors.text == AppColors.Dark.text) darkColorScheme() else lightColorScheme()) {
                 TestPad(onBack = home)
               }
             }

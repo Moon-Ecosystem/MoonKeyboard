@@ -5,13 +5,28 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.mutableStateOf
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+/**
+ * The accent (glide trail, chosen popup item, the app's switches), as a light shade for dark themes
+ * and a deeper one for light themes, where a pale accent would vanish. [WALLPAPER] takes the whole
+ * palette from the wallpaper (Material You, Android 12+).
+ */
+enum class Accent(val dark: Long, val light: Long) {
+  MOON(0xFFB4BDFF, 0xFF3D4BC4),
+  EMERALD(0xFF69B37E, 0xFF2E7D4F),
+  AMBER(0xFFE5A855, 0xFFA45F00),
+  CYAN(0xFF70C4E8, 0xFF00739F),
+  CORAL(0xFFE87A65, 0xFFC0412B),
+  VIOLET(0xFFB88EE8, 0xFF7442C8),
+  WALLPAPER(0xFFB4BDFF, 0xFF3D4BC4),
+}
 enum class OneHanded { OFF, LEFT, RIGHT }
 enum class KeySize(val scale: Float) { SHORT(0.9f), NORMAL(1f), TALL(1.12f) }
 enum class ImageExpiry(val days: Int?) { WEEK(7), MONTH(30), NEVER(null) }
 
 /** What the user can put on the toolbar, in the order they choose; options and clipboard are always there. */
 enum class ToolbarItem {
-  EMOJI, THEME, FLOATING, ONE_HANDED, TEXT_EDIT, SPLIT;
+  EMOJI, THEME, FLOATING, ONE_HANDED, TEXT_EDIT, SPLIT, INCOGNITO;
 
   companion object {
     /** As many as fit beside options, clipboard and the back arrow on a narrow phone. */
@@ -57,6 +72,9 @@ object Prefs {
   }
 
   val theme = Pref("theme", ThemeMode.SYSTEM, ThemeMode::valueOf)
+  val accent = Pref("accent", Accent.MOON, Accent::valueOf)
+  /** Dark theme on a true black background, for OLED screens. */
+  val pitchBlack = Pref("pitch_black", false, String::toBoolean)
   val borders = Pref("borders", true, String::toBoolean)
   val numberRow = Pref("number_row", false, String::toBoolean)
   /** A key of its own for emoji beside the comma, instead of holding the comma. */
@@ -86,7 +104,12 @@ object Prefs {
   /** How long a key must be held before its popup opens, in milliseconds. */
   val longPressMs = Pref("long_press_ms", 300) { it.toInt().coerceIn(100, 700) }
   val autoCaps = Pref("auto_caps", true, String::toBoolean)
+  /** Turned on from the toolbar: nothing typed is learned, in any field, until it's turned off. */
+  val incognito = Pref("incognito", false, String::toBoolean)
   val sound = Pref("sound", false, String::toBoolean)
+  val keyPreview = Pref("key_preview", true, String::toBoolean)
+  val spaceSlide = Pref("space_slide", true, String::toBoolean)
+  val backspaceSlide = Pref("backspace_slide", true, String::toBoolean)
   val glideTrail = Pref("glide_trail", true, String::toBoolean)
   val glideTyping = Pref("glide_typing", true, String::toBoolean)
   val autocorrect = Pref("autocorrect", true, String::toBoolean)

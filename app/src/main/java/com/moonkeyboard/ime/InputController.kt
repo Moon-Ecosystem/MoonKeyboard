@@ -568,6 +568,41 @@ class InputController(private val host: KeyboardHost) {
     undo = if (offer) EditUndo(deletedRun.toString(), inserted = false) else null
   }
 
+  /** Where a backspace slide started (the cursor) and the text before it; -1 when none is under way. */
+  private var slideEnd = -1
+  private var slideBefore = ""
+
+  /** A backspace slide: selects the last [words] words before where it started (0 selects nothing). */
+  fun selectWordsBack(words: Int) {
+    val ic = host.inputConnection ?: return
+    if (slideEnd < 0) {
+      if (words == 0) return
+      finishWord()
+      // From the editor: the backspace that started the slide may not have echoed back yet
+      val text = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return
+      if (text.selectionEnd < 0) return
+      slideEnd = text.startOffset + text.selectionEnd
+      slideBefore = ic.getTextBeforeCursor(SLIDE_LOOKBEHIND, 0)?.toString() ?: ""
+    }
+    var start = slideBefore.length
+    repeat(words) {
+      while (start > 0 && slideBefore[start - 1].isWhitespace()) start--
+      while (start > 0 && !slideBefore[start - 1].isWhitespace()) start--
+    }
+    selAnchor = slideEnd - (slideBefore.length - start)
+    selCursor = slideEnd
+    ic.setSelection(selAnchor, selCursor)
+  }
+
+  /** The backspace slide lifted: delete what it selected, with the strip's undo offer as for backspace. */
+  fun deleteSelectedWords() {
+    if (slideEnd < 0) return
+    val selected = selCursor != selAnchor
+    slideEnd = -1
+    slideBefore = ""
+    if (selected) deleted(backspace())
+  }
+
   /** The emoji and edit panels' delete key, which the strip's undo doesn't follow. */
   fun deleteBackward() {
     dropUndo()
@@ -1145,7 +1180,7 @@ class InputController(private val host: KeyboardHost) {
   }
 
   private fun learn(word: String, context: WordContext, weight: Int = 1) {
-    if (!field.learn) return
+    if (!field.learn || Prefs.incognito.value) return
     val engine = Language.engine ?: return
     // "The" at the start of a sentence is the word "the"; "I" and names keep their capital
     val lower = word.lowercase()
@@ -1234,6 +1269,8 @@ class InputController(private val host: KeyboardHost) {
     // Enough for the neural model's 32 words of context
     private const val CONTEXT_CHARS = 200
     private const val RESUME_CHARS = 48
+    // How far back a backspace slide can select: a long paragraph's worth of words
+    private const val SLIDE_LOOKBEHIND = 2_000
     /** Letters of a stuck mid-word kept as a prefix to look up similar words from. */
     private const val SIMILAR_PREFIX = 5
     /** Apps echo our edits back well within this; a cursor move later than it came from elsewhere. */

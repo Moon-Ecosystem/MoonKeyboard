@@ -1,6 +1,13 @@
 package com.moonkeyboard
 
+import android.os.Build
 import android.text.format.Formatter
+import com.moonkeyboard.ime.Accent
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.moonkeyboard.ime.KeyboardColors
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -155,8 +162,15 @@ fun HomeScreen(open: (Screen) -> Unit) {
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
     Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-      MoonLogo(40)
-      Text(stringResource(R.string.app_name), Modifier.weight(1f).padding(start = 12.dp), color = c.text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+      // The launcher icon on its own near-black, as on the home screen: the white art washes out on light.
+      // Scaled 108/72 like the launcher's mask, since the art sits inside the adaptive icon's safe zone
+      Box(Modifier.size(28.dp).clip(CircleShape).background(Color(0xFF070707))) {
+        Image(painterResource(R.drawable.ic_launcher_cat), null, Modifier.fillMaxSize().graphicsLayer { scaleX = 1.5f; scaleY = 1.5f })
+      }
+      Row(Modifier.weight(1f).padding(start = 8.dp)) {
+        Text(stringResource(R.string.app_name_first), color = c.accent, fontSize = 20.sp, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp)
+        Text(stringResource(R.string.app_name_rest), color = c.text, fontSize = 20.sp, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp)
+      }
       Row(
         Modifier.clip(RoundedCornerShape(14.dp)).background(c.successBg).padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -246,8 +260,11 @@ fun LookScreen(onBack: () -> Unit) {
     ) {
       SectionLabel(R.string.theme)
       Segmented(Prefs.theme, ThemeMode.entries, listOf(R.string.theme_system, R.string.theme_light, R.string.theme_dark), Modifier.fillMaxWidth())
-      Spacer(Modifier.height(4.dp))
       Card {
+        AccentPicker()
+        Divider()
+        SwitchRow(R.string.pitch_black, Prefs.pitchBlack, stringResource(R.string.pitch_black_detail))
+        Divider()
         SwitchRow(R.string.key_borders, Prefs.borders)
         Divider()
         SwitchRow(R.string.number_row, Prefs.numberRow)
@@ -268,6 +285,47 @@ fun LookScreen(onBack: () -> Unit) {
     }
     PreviewKeyboard()
   }
+}
+
+/** A row of swatches in the shade the current theme uses, the chosen one ticked and named above. */
+@Composable
+private fun AccentPicker() {
+  val c = LocalAppColors.current
+  val dark = c.text == AppColors.Dark.text
+  val context = LocalContext.current
+  val wallpaper = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+  val options = Accent.entries.filter { it != Accent.WALLPAPER || wallpaper }
+  Column(Modifier.fillMaxWidth().padding(16.dp)) {
+    Text(stringResource(R.string.accent_colour), color = c.text, fontSize = 15.sp)
+    Text(stringResource(R.string.accent_current, stringResource(Prefs.accent.value.label)), Modifier.padding(top = 2.dp), color = c.accent, fontSize = 12.sp)
+    Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+      for (accent in options) {
+        val swatch = if (accent == Accent.WALLPAPER && wallpaper) {
+          Color(context.getColor(if (dark) android.R.color.system_accent1_200 else android.R.color.system_accent1_600))
+        } else Color(if (dark) accent.dark else accent.light)
+        val chosen = Prefs.accent.value == accent
+        val name = stringResource(accent.label)
+        Box(
+          Modifier.size(40.dp).clip(CircleShape).background(swatch).border(if (chosen) 3.dp else 1.dp, if (chosen) c.text else c.divider, CircleShape)
+            .clickable { Prefs.accent.value = accent }
+            .semantics { contentDescription = name; selected = chosen },
+          contentAlignment = Alignment.Center,
+        ) {
+          if (chosen) Box(Modifier.size(8.dp).clip(CircleShape).background(KeyboardColors.contentColorFor(swatch)))
+        }
+      }
+    }
+  }
+}
+
+private val Accent.label get() = when (this) {
+  Accent.MOON -> R.string.accent_moon
+  Accent.EMERALD -> R.string.accent_emerald
+  Accent.AMBER -> R.string.accent_amber
+  Accent.CYAN -> R.string.accent_cyan
+  Accent.CORAL -> R.string.accent_coral
+  Accent.VIOLET -> R.string.accent_violet
+  Accent.WALLPAPER -> R.string.accent_wallpaper
 }
 
 private val BarRowHeight = 56.dp
@@ -429,6 +487,13 @@ fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
     }
     Divider()
     SwitchRow(R.string.key_sound, Prefs.sound)
+    Divider()
+    SwitchRow(R.string.key_preview, Prefs.keyPreview, stringResource(R.string.key_preview_detail))
+  }
+  Card {
+    SwitchRow(R.string.space_slide, Prefs.spaceSlide, stringResource(R.string.space_slide_detail))
+    Divider()
+    SwitchRow(R.string.backspace_slide, Prefs.backspaceSlide, stringResource(R.string.backspace_slide_detail))
   }
   Card {
     SliderRow(R.string.long_press_duration, Prefs.longPressMs, 100..700, "${Prefs.longPressMs.value} ms", step = 50)

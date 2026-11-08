@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import com.moonkeyboard.ime.Icons
 import com.moonkeyboard.ime.Prefs
 import com.moonkeyboard.ime.ThemeMode
+import com.moonkeyboard.ime.keyboardColors
 
 /** The app's palette, from the design canvas; light mirrors it for the light keyboard theme. */
 data class AppColors(
@@ -118,7 +119,11 @@ fun AppTheme(content: @Composable () -> Unit) {
     ThemeMode.LIGHT -> false
     ThemeMode.DARK -> true
   }
-  CompositionLocalProvider(LocalAppColors provides if (dark) AppColors.Dark else AppColors.Light, content = content)
+  // The accent and pitch black come from the keyboard's own colours, so the two can't drift apart
+  val keys = keyboardColors()
+  var colors = (if (dark) AppColors.Dark else AppColors.Light).copy(accent = keys.accent, onAccent = keys.onAccent)
+  if (dark && Prefs.pitchBlack.value) colors = colors.copy(background = Color.Black, surface = Color(0xFF141414), note = Color(0xFF0D0D0D))
+  CompositionLocalProvider(LocalAppColors provides colors, content = content)
 }
 
 /** The crescent moon on its tile, drawn the same way as the design's logo. */
