@@ -28,19 +28,17 @@ _Requires Android 7.0 (API 24) or higher._
 
 ## Features
 
-- **Glide typing:** slide across the letters of a word, with an optional trail that fades as you go. Sliding off the letters before lifting still types the word.
-- **Suggestions and autocorrect:** typos are fixed when you press space, and backspace or the undo pill puts back what you typed; a word you undo once is never corrected again. Next-word prediction is learned from everyday conversation as well as written sentences, and a small on-device neural model reads up to the last 32 words for context (Typing → Smarter predictions). Long suggestions squeeze to stay readable.
-- **Spelling and grammar fixes:** tap into an underlined word and your phone's spell checker's fixes show in the strip.
-- **Password managers:** Bitwarden, Google Password Manager and other autofill services show their sign-in suggestions in the strip (Android 11 and newer).
-- **The enter key matches the field:** search, send, next or done where the app asks for it, and it does that action.
-- **Learns how you write:** words and phrases you type are learned on the device, never in password or incognito fields, or anywhere while the keyboard's own incognito button is on. Browse, search and forget them in Settings, add words of your own, or tell the suggestion strip to stop offering a word. Shortcuts ("omw" → "on my way") show their text in the strip when you type them. Email addresses you type are remembered and offered again in email fields, most used first; elsewhere, typing the first 4 letters of one offers it beside your word, and from 7 letters every matching address fills the strip. Swear words can be blocked from suggestions and glide typing.
-- **Hinglish:** suggests Hindi typed in English letters, like "kya kar rahe ho", alongside English. It can be switched off.
-- **Emoji:** the full Emoji 18.0 set with search (hold the comma key) and recents. Type "pizza" and 🍕 shows in the suggestion strip.
-- **Clipboard:** text, images and GIFs you copy, with pinning and automatic clean-up of old images. What you just copied is offered in the suggestion strip once.
-- **Text editing:** a d-pad with repeating arrows, select, select all, copy, paste, Home and End. Slide left from backspace to delete whole words; slide back to keep some. Slide on the space bar to move the cursor. Both slides can be turned off.
-- **Layouts:** one-handed mode, a floating keyboard you can move and resize, and a split layout in landscape for two thumbs (on by default).
-- **Your keyboard, your way:** light, dark or system theme, pitch black for OLED screens, six accent colours or your wallpaper's (Material You, Android 12 and newer), key borders, number row, key height, long-press duration, vibration strength, key sound, a pop-up of the pressed letter and auto-capitalise. Pick and reorder the top bar's buttons by dragging.
-- **Test pad:** try the keyboard from the app without switching to it.
+- **Glide typing**, with an optional fading trail.
+- **Autocorrect and predictions**, helped by a small on-device neural model. Undo any correction with backspace.
+- **Learns your words** on the device. Add your own words, text shortcuts ("omw" → "on my way") and saved email addresses.
+- **Hinglish** ("kya kar rahe ho") alongside English.
+- **Emoji** with search, and emoji suggestions as you type.
+- **Clipboard** history with pinning, including images.
+- **Password manager** suggestions in the strip (Android 11+).
+- **Editing:** slide on space to move the cursor, slide from backspace to delete words, and a text-editing panel.
+- **Layouts:** one-handed, floating and split.
+- **Themes:** light, dark, pitch black, accent colours or Material You.
+- **Incognito button**: nothing is learned while it's on.
 
 ## Privacy
 
