@@ -209,13 +209,14 @@ class SuggestionEngine(
 
   private fun autocorrectFor(typed: String, ranked: List<Candidate>): String? {
     if (typed.any { !isWordChar(it) }) return null
+    // The user's own words are never corrected away, fixed spellings ("im" → "I'm") included: one
+    // undone correction teaches the word. A sentence start stores it in lower case ("Teh" as "teh").
+    if (maxOf(history.count(typed), history.count(typed.lowercase())) >= config.learnedAt) return null
     val typedId = lexicon.findLenient(typed)
     if (typedId >= 0) {
       val target = lexicon.whitelistTarget(typedId)
       if (target >= 0 && !history.isBlocked(lexicon.word(target))) return applyCase(lexicon.word(target), typed)
     }
-    // The user's own words are never corrected away
-    if (history.count(typed) >= config.learnedAt) return null
     // Completions are suggestions, not corrections: only whole-word candidates compete here
     val words = ranked.filter { !it.completion }
     val pick = words.firstOrNull() ?: return null

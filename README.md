@@ -28,15 +28,18 @@ _Requires Android 7.0 (API 24) or higher._
 
 ## Features
 
-- **Glide typing:** slide across the letters of a word, with an optional trail that fades as you go.
-- **Suggestions and autocorrect:** typos are fixed when you press space, and backspace undoes a fix. Next-word prediction uses the last two words for context.
+- **Glide typing:** slide across the letters of a word, with an optional trail that fades as you go. Sliding off the letters before lifting still types the word.
+- **Suggestions and autocorrect:** typos are fixed when you press space, and backspace or the undo pill puts back what you typed; a word you undo once is never corrected again. Next-word prediction uses the last two words for context and is learned from everyday conversation as well as written sentences. Long suggestions squeeze to stay readable.
+- **Spelling and grammar fixes:** tap into an underlined word and your phone's spell checker's fixes show in the strip.
+- **Password managers:** Bitwarden, Google Password Manager and other autofill services show their sign-in suggestions in the strip (Android 11 and newer).
+- **The enter key matches the field:** search, send, next or done where the app asks for it, and it does that action.
 - **Learns how you write:** words and phrases you type are learned on the device, never in password or incognito fields. Browse, search and forget them in Settings, or tell the suggestion strip to stop offering a word. Swear words can be blocked from suggestions and glide typing.
 - **Hinglish:** suggests Hindi typed in English letters, like "kya kar rahe ho", alongside English. It can be switched off.
 - **Emoji:** the full Emoji 18.0 set with search (hold the comma key) and recents. Type "pizza" and 🍕 shows in the suggestion strip.
 - **Clipboard:** text, images and GIFs you copy, with pinning and automatic clean-up of old images. What you just copied is offered in the suggestion strip once.
 - **Text editing:** a d-pad with repeating arrows, select, select all, copy, paste, Home and End.
-- **Layouts:** one-handed mode, a floating keyboard you can move and resize, and a split layout in landscape for two thumbs.
-- **Your keyboard, your way:** light, dark or system theme, key borders, number row, key height, vibration strength, key sound and auto-capitalise. Pick and reorder the top bar's buttons by dragging.
+- **Layouts:** one-handed mode, a floating keyboard you can move and resize, and a split layout in landscape for two thumbs (on by default).
+- **Your keyboard, your way:** light, dark or system theme, key borders, number row, key height, long-press duration, vibration strength, key sound and auto-capitalise. Pick and reorder the top bar's buttons by dragging.
 - **Test pad:** try the keyboard from the app without switching to it.
 
 ## Privacy
