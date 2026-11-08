@@ -1175,8 +1175,9 @@ class InputController(private val host: KeyboardHost) {
     }
     if (matches.isEmpty()) return false
     emailPrefix = prefix
-    // Best in the middle, like the word suggestions
-    suggestions = Suggestions(prefix, listOfNotNull(matches.getOrNull(1), matches[0], matches.getOrNull(2)), null, isPrediction = true)
+    // Best in the middle, like the word suggestions; an empty slot stays empty ("" isn't drawn or
+    // tappable), so a lone address sits in the middle, where a long one gets the whole strip
+    suggestions = Suggestions(prefix, listOf(matches.getOrNull(1) ?: "", matches[0], matches.getOrNull(2) ?: ""), null, isPrediction = true)
     return true
   }
 
