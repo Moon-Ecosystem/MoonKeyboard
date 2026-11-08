@@ -1161,14 +1161,23 @@ class InputController(private val host: KeyboardHost) {
    * empty field), most used first. False when none match, so the usual strip shows instead.
    */
   private fun showEmails(ic: InputConnection): Boolean {
-    if (!field.email) return false
     val history = Language.engine?.history ?: return false
     val prefix = (ic.getTextBeforeCursor(EMAIL_LOOKBEHIND, 0) ?: "").toString().takeLastWhile { !it.isWhitespace() }
-    val matches = history.emailsStartingWith(prefix)
+    val matches = when {
+      field.email -> history.emailsStartingWith(prefix)
+      // Elsewhere, letters alone are left to the engine's suggestions; past a digit or dot ("jharishabh2")
+      // the word being typed is only the part after it, so the whole run is matched here, with the same
+      // 4 letters for one address and 7 for all
+      field.secret || !field.suggest || prefix.all(::isWordChar) -> emptyList()
+      prefix.length >= EMAIL_ALL_LETTERS -> history.emailsStartingWith(prefix)
+      prefix.length >= EMAIL_MIN_LETTERS -> history.emailsStartingWith(prefix, 1)
+      else -> emptyList()
+    }
     if (matches.isEmpty()) return false
     emailPrefix = prefix
-    // Best in the middle, like the word suggestions
-    suggestions = Suggestions(prefix, listOfNotNull(matches.getOrNull(1), matches[0], matches.getOrNull(2)), null, isPrediction = true)
+    // Best in the middle, like the word suggestions; an empty slot stays empty ("" isn't drawn or
+    // tappable), so a lone address sits in the middle, where a long one gets the whole strip
+    suggestions = Suggestions(prefix, listOf(matches.getOrNull(1) ?: "", matches[0], matches.getOrNull(2) ?: ""), null, isPrediction = true)
     return true
   }
 
@@ -1199,6 +1208,12 @@ class InputController(private val host: KeyboardHost) {
     val context = contextBeforeWord(ic)
     val keys = keyMap
     val allowAutocorrect = field.autocorrect
+    // Until the decode lands, show the letters typed rather than nothing: an empty strip falls back to the
+    // toolbar for a frame (worst from the undo pill in an empty field). Marked a prediction, so space never
+    // takes it as this word's result and still decodes for its autocorrect.
+    if (suggestions.items.isEmpty() || suggestions.isPrediction) {
+      suggestions = Suggestions(typed, listOf("", typed, ""), null, isPrediction = true)
+    }
     decodeJob?.cancel()
     decodeJob = scope.launch {
       val result = withContext(decodeDispatcher) { engine.suggest(typed, typedTouches, keys, context, allowAutocorrect) }
@@ -1346,6 +1361,9 @@ class InputController(private val host: KeyboardHost) {
     private const val SLIDE_LOOKBEHIND = 2_000
     // Longer than any address someone types
     private const val EMAIL_LOOKBEHIND = 256
+    // As in the engine: one saved address from the 4th character, all that match from the 7th
+    private const val EMAIL_MIN_LETTERS = 4
+    private const val EMAIL_ALL_LETTERS = 7
     /** Letters of a stuck mid-word kept as a prefix to look up similar words from. */
     private const val SIMILAR_PREFIX = 5
     /** Apps echo our edits back well within this; a cursor move later than it came from elsewhere. */
