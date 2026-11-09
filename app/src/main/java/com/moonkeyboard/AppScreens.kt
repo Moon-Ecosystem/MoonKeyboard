@@ -69,7 +69,6 @@ import com.moonkeyboard.ime.Haptics
 import com.moonkeyboard.ime.Icons
 import com.moonkeyboard.ime.ImageExpiry
 import com.moonkeyboard.ime.InputController
-import com.moonkeyboard.ime.KeySize
 import com.moonkeyboard.ime.KeyboardUi
 import com.moonkeyboard.ime.Language
 import com.moonkeyboard.ime.OneHanded
@@ -276,7 +275,7 @@ fun LookScreen(onBack: () -> Unit) {
         Divider()
         SwitchRow(R.string.number_row, Prefs.numberRow)
         Divider()
-        LabelRow(R.string.key_height) { Segmented(Prefs.keySize, KeySize.entries, listOf(R.string.key_short, R.string.key_normal, R.string.key_tall), compact = true) }
+        SliderRow(R.string.key_height, Prefs.keyboardHeight, Prefs.KEYBOARD_HEIGHT_MIN..Prefs.KEYBOARD_HEIGHT_MAX, "${Prefs.keyboardHeight.value}%", step = 5)
         Divider()
         LabelRow(R.string.one_handed_short) { Segmented(Prefs.oneHanded, OneHanded.entries, listOf(R.string.off, R.string.left, R.string.right), compact = true) }
         Divider()

@@ -21,7 +21,6 @@ enum class Accent(val dark: Long, val light: Long) {
   WALLPAPER(0xFFB4BDFF, 0xFF3D4BC4),
 }
 enum class OneHanded { OFF, LEFT, RIGHT }
-enum class KeySize(val scale: Float) { SHORT(0.9f), NORMAL(1f), TALL(1.12f) }
 enum class ImageExpiry(val days: Int?) { WEEK(7), MONTH(30), NEVER(null) }
 
 /** What the user can put on the toolbar, in the order they choose; options and clipboard are always there. */
@@ -79,7 +78,8 @@ object Prefs {
   val numberRow = Pref("number_row", false, String::toBoolean)
   /** A key of its own for emoji beside the comma, instead of holding the comma. */
   val emojiKey = Pref("emoji_key", false, String::toBoolean)
-  val keySize = Pref("key_size", KeySize.NORMAL, KeySize::valueOf)
+  /** The keys' height as a percentage of the size that fits the screen. */
+  val keyboardHeight = Pref("keyboard_height", 100) { it.toInt().coerceIn(KEYBOARD_HEIGHT_MIN, KEYBOARD_HEIGHT_MAX) }
   val oneHanded = Pref("one_handed", OneHanded.OFF, OneHanded::valueOf)
   /** The side one-handed mode goes back to when switched on from the toolbar. */
   val oneHandedSide = Pref("one_handed_side", OneHanded.RIGHT, OneHanded::valueOf)
@@ -130,5 +130,15 @@ object Prefs {
     if (::sp.isInitialized) return
     sp = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
     all.forEach { it.load() }
+    // The old short / normal / tall key height carries over as the nearest percentage
+    if (!sp.contains("keyboard_height")) {
+      when (sp.getString("key_size", null)) {
+        "SHORT" -> keyboardHeight.value = 90
+        "TALL" -> keyboardHeight.value = 110
+      }
+    }
   }
+
+  const val KEYBOARD_HEIGHT_MIN = 80
+  const val KEYBOARD_HEIGHT_MAX = 140
 }

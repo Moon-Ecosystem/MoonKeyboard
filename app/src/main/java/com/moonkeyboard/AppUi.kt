@@ -72,17 +72,17 @@ data class AppColors(
 ) {
   companion object {
     val Dark = AppColors(
-      background = Color(0xFF0F1117), surface = Color(0xFF181B23), selected = Color(0xFF2E3450), divider = Color(0xFF262A35),
-      text = Color(0xFFEEF0F6), muted = Color(0xFFA9AFBF), faint = Color(0xFF6F7586), accent = Color(0xFFB4BDFF),
+      background = Color(0xFF111319), surface = Color(0xFF1A1D24), selected = Color(0xFF2E3450), divider = Color(0xFF282C36),
+      text = Color(0xFFE9EBF2), muted = Color(0xFFA3A9B8), faint = Color(0xFF6F7586), accent = Color(0xFFB4BDFF),
       onAccent = Color(0xFF12141C), iconBg = Color(0xFF262B44), success = Color(0xFF8FD6A8), successBg = Color(0xFF1D2A22),
-      danger = Color(0xFFF2A7B3), dangerBorder = Color(0xFF5A3640), note = Color(0xFF14171F), switchOff = Color(0xFF3A3F4D),
+      danger = Color(0xFFF2A7B3), dangerBorder = Color(0xFF5A3640), note = Color(0xFF15171E), switchOff = Color(0xFF323743),
       focus = Color(0xFF3A4170),
     )
     val Light = AppColors(
       background = Color(0xFFF4F5F9), surface = Color(0xFFFFFFFF), selected = Color(0xFFDCE0F5), divider = Color(0xFFE1E4EB),
-      text = Color(0xFF161922), muted = Color(0xFF525868), faint = Color(0xFF8A90A0), accent = Color(0xFF3D4BC4),
+      text = Color(0xFF14171E), muted = Color(0xFF555B6A), faint = Color(0xFF8A90A0), accent = Color(0xFF3D4BC4),
       onAccent = Color(0xFFFFFFFF), iconBg = Color(0xFFE4E7F7), success = Color(0xFF1E7A45), successBg = Color(0xFFDDF2E5),
-      danger = Color(0xFFB3263E), dangerBorder = Color(0xFFE8B7C0), note = Color(0xFFEAECF2), switchOff = Color(0xFFC4C9D4),
+      danger = Color(0xFFB3263E), dangerBorder = Color(0xFFE8B7C0), note = Color(0xFFEDEFF4), switchOff = Color(0xFFC7CCD7),
       focus = Color(0xFFB9C0EE),
     )
   }
@@ -122,7 +122,11 @@ fun AppTheme(content: @Composable () -> Unit) {
   // The accent and pitch black come from the keyboard's own colours, so the two can't drift apart
   val keys = keyboardColors()
   var colors = (if (dark) AppColors.Dark else AppColors.Light).copy(accent = keys.accent, onAccent = keys.onAccent)
-  if (dark && Prefs.pitchBlack.value) colors = colors.copy(background = Color.Black, surface = Color(0xFF141414), note = Color(0xFF0D0D0D))
+  // Pitch black: cards are the keyboard's own key colour (Moon-tinted, or the wallpaper's hue), text the same as on its keys
+  if (dark && Prefs.pitchBlack.value) colors = colors.copy(
+    background = Color.Black, surface = keys.key, note = keys.key, divider = keys.pressed, switchOff = keys.pressed,
+    text = keys.text, muted = keys.muted,
+  )
   CompositionLocalProvider(LocalAppColors provides colors, content = content)
 }
 

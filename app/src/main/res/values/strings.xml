@@ -185,10 +185,7 @@
   <string name="theme_dark">Dark</string>
   <string name="key_borders">Key borders</string>
   <string name="number_row">Number row</string>
-  <string name="key_height">Key height</string>
-  <string name="key_short">Short</string>
-  <string name="key_normal">Normal</string>
-  <string name="key_tall">Tall</string>
+  <string name="key_height">Keyboard height</string>
   <string name="off">Off</string>
   <string name="typing">Typing</string>
   <string name="haptics">Vibrate on key press</string>
