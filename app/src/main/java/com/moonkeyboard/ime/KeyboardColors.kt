@@ -22,26 +22,43 @@ data class KeyboardColors(
   val popup: Color,
   val divider: Color,
   val isDark: Boolean = false,
-  /** Pitch black: a bright enter key stood out alone on the black, so it gets a dim accent fill and an accent icon. */
-  val subtleEnter: Boolean = false,
+  /**
+   * In the dark themes a bright enter key stood out alone, so it gets a tonal fill instead: this much
+   * accent over the background, with the accent as its icon. 0 keeps the solid accent (light theme).
+   */
+  val enterTone: Float = 0f,
 ) {
-  val enter get() = if (subtleEnter) accent.copy(alpha = 0.22f).compositeOver(background) else accent
-  val onEnter get() = if (subtleEnter) accent else onAccent
+  val enter get() = if (enterTone > 0f) accent.copy(alpha = enterTone).compositeOver(background) else accent
+  val onEnter get() = if (enterTone > 0f) accent else onAccent
 
   fun withAccent(a: Accent): KeyboardColors {
     val accent = Color(if (isDark) a.dark else a.light)
     return copy(accent = accent, onAccent = contentColorFor(accent))
   }
 
-  /** Black behind everything; the built-in dark keys go neutral grey too, the wallpaper's keep their tint. */
-  fun pitchBlack(neutralKeys: Boolean): KeyboardColors {
-    val black = copy(background = Color.Black, shadow = Color.Black, subtleEnter = true)
-    return if (!neutralKeys) black else black.copy(
-      key = Color(0xFF1A1A1A),
-      special = Color(0xFF2A2A2A),
-      pressed = Color(0xFF3A3A3A),
-      popup = Color(0xFF2A2A2A),
-      divider = Color(0xFF2A2A2A),
+  /**
+   * Black behind everything. The built-in dark keys go to near-blacks with a faint Moon-blue lean, so they
+   * sit with the accent instead of looking stock grey, and text is softened a touch (pure white glows on
+   * OLED). The wallpaper's keys keep their hue, darkened to the same depth: made for a dark grey
+   * background, on black they read too bright.
+   */
+  fun pitchBlack(moonKeys: Boolean): KeyboardColors {
+    val black = copy(background = Color.Black, shadow = Color.Black, enterTone = PITCH_ENTER_TONE)
+    return if (!moonKeys) black.copy(
+      key = key.dim(0.5f),
+      special = special.dim(0.5f),
+      pressed = pressed.dim(0.6f),
+      popup = special.dim(0.5f),
+      divider = divider.dim(0.5f),
+    ) else black.copy(
+      key = Color(0xFF16181F),
+      special = Color(0xFF1C1F28),
+      pressed = Color(0xFF2A2E3A),
+      popup = Color(0xFF1C1F28),
+      divider = Color(0xFF1A1D25),
+      text = Color(0xFFE6E9F2),
+      muted = Color(0xFF8F95A6),
+      hint = Color(0xFF8F95A6),
     )
   }
 
@@ -70,6 +87,7 @@ data class KeyboardColors(
         popup = c(android.R.color.system_neutral2_700),
         divider = c(android.R.color.system_neutral2_700),
         isDark = true,
+        enterTone = DARK_ENTER_TONE,
       ) else KeyboardColors(
         background = c(android.R.color.system_neutral2_100),
         key = c(android.R.color.system_neutral1_10),
@@ -86,34 +104,43 @@ data class KeyboardColors(
       )
     }
 
+    // Light: a brighter ground, lighter function keys and a softer key shadow; enter stays solid accent
     val Light = KeyboardColors(
-      background = Color(0xFFE8EAF0),
+      background = Color(0xFFEDEFF4),
       key = Color(0xFFFFFFFF),
-      special = Color(0xFFCDD2DD),
-      pressed = Color(0xFFB9BFCD),
-      text = Color(0xFF161922),
-      muted = Color(0xFF525868),
+      special = Color(0xFFD8DCE5),
+      pressed = Color(0xFFC2C7D2),
+      text = Color(0xFF14171E),
+      muted = Color(0xFF555B6A),
       hint = Color(0xFF626878),
       accent = Color(0xFF3D4BC4),
       onAccent = Color(0xFFFFFFFF),
-      shadow = Color(0xFFB5BAC8),
+      shadow = Color(0xFFC7CCD7),
       popup = Color(0xFFFFFFFF),
-      divider = Color(0xFFC4C9D4),
+      divider = Color(0xFFD3D7E0),
     )
+    // Dark: letter and function keys closer together so the keys read as one surface, a quieter divider
     val Dark = KeyboardColors(
-      background = Color(0xFF0F1117),
-      key = Color(0xFF272B36),
-      special = Color(0xFF3A3F4D),
-      pressed = Color(0xFF4A5062),
-      text = Color(0xFFEEF0F6),
-      muted = Color(0xFFA9AFBF),
-      hint = Color(0xFF9DA3B4),
+      background = Color(0xFF111319),
+      key = Color(0xFF262A33),
+      special = Color(0xFF323743),
+      pressed = Color(0xFF434957),
+      text = Color(0xFFE9EBF2),
+      muted = Color(0xFFA3A9B8),
+      hint = Color(0xFF9AA0AF),
       accent = Color(0xFFB4BDFF),
       onAccent = Color(0xFF12141C),
-      shadow = Color(0xFF05060A),
-      popup = Color(0xFF2F3442),
-      divider = Color(0xFF343947),
+      shadow = Color(0xFF08090D),
+      popup = Color(0xFF2F3440),
+      divider = Color(0xFF2A2E38),
       isDark = true,
+      enterTone = DARK_ENTER_TONE,
     )
+
+    private const val DARK_ENTER_TONE = 0.3f
+    private const val PITCH_ENTER_TONE = 0.24f
   }
 }
+
+/** The same hue, [f] times as bright. */
+private fun Color.dim(f: Float) = Color(red * f, green * f, blue * f, alpha)

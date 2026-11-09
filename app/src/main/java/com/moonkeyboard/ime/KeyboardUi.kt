@@ -125,7 +125,8 @@ private val ShiftIcon = icon("M12 4l8 8h-5v8H9v-8H4z")
 // The × sits a little left of the box's middle, so it looks centred in the whole shape, point included
 private val BackspaceIcon = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM11 9l6 6M17 9l-6 6")
 private val EnterIcon = icon("M20 5v7a2 2 0 0 1-2 2H5M9 10l-4 4 4 4")
-private val SearchIcon = icon("M15 15l5 5M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0")
+// The handle starts on the lens (radius 7 meets the diagonal at ~16), not inside it
+private val SearchIcon = icon("M16 16l4.5 4.5M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0")
 private val GoIcon = icon("M4 12h16M14 6l6 6-6 6")
 private val SendIcon = icon("M4 12l17-8-7 18-3-7z")
 private val DoneIcon = icon("M5 12l5 5 10-11")
@@ -354,7 +355,7 @@ internal fun keyboardColors(): KeyboardColors {
   } else {
     (if (dark) KeyboardColors.Dark else KeyboardColors.Light).withAccent(Prefs.accent.value)
   }
-  return if (dark && Prefs.pitchBlack.value) colors.pitchBlack(neutralKeys = !wallpaper) else colors
+  return if (dark && Prefs.pitchBlack.value) colors.pitchBlack(moonKeys = !wallpaper) else colors
 }
 
 private fun soundFor(type: KeyType) = when (type) {
