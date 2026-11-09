@@ -69,6 +69,8 @@ data class EngineConfig(
   val neuralLmWeight: Float = 0.5f,
   /** The neural model also scores the words offered while typing (and so autocorrect), not only the next-word predictions. */
   val neuralWhileTyping: Boolean = true,
+  /** Cost of a missed space against the touches, like one wrong key: a split must beat close one-word fixes. */
+  val missedSpaceCost: Float = 2.5f,
 )
 
 class SuggestionEngine(
@@ -91,8 +93,8 @@ class SuggestionEngine(
   /** A word the user added by hand: learned in full at once, so it's suggested, glided and never corrected away. */
   fun addWord(word: String) {
     val w = word.trim()
-    // Only what typing can build up as one word ("rishabh123" breaks at the digits, so it could never be offered)
-    if (w.isNotEmpty() && w.all(::isWordChar)) history.record(null, w, maxOf(config.learnedAt - history.count(w), 1))
+    // Only what typing can build up as one word: letters, with digits after the first ("rishabh123")
+    if (w.isNotEmpty() && w[0].isLetter() && w.all { isWordChar(it) || it.isDigit() }) history.record(null, w, maxOf(config.learnedAt - history.count(w), 1))
   }
 
   /** Suggestions for a partly typed word. [allowCompletions] off keeps longer words out, for fixes to a word the user has fully typed. */
@@ -137,6 +139,7 @@ class SuggestionEngine(
       else if (prefixCost <= limit) offer(word, id, prefixCost, true)
     }
 
+    missedSpace(typed, lm)?.let { best.putIfAbsent(it.word, it) }
     val ranked = best.values.asSequence().filter { allowCompletions || !it.completion }.sortedByDescending { it.score }.toList()
     // A shortcut is offered, never forced: it takes the middle slot, and space keeps what was typed
     val expansion = history.shortcut(typed)?.let { applyCase(it, typed) }
@@ -164,7 +167,8 @@ class SuggestionEngine(
     } else if ((isValid(typed) || meantDigits) && autocorrect == null) {
       // A real word stays in the middle with the best alternatives either side
       val alternatives = others.filterNot { it.equals(typed, ignoreCase = true) }.take(2).toList()
-      listOfNotNull(alternatives.getOrNull(0), typed, alternatives.getOrNull(1))
+      // Fixed slots: with no alternatives the word still sits in the middle ("" slots aren't drawn)
+      listOf(alternatives.getOrNull(0) ?: "", typed, alternatives.getOrNull(1) ?: "")
     } else {
       // Typed word on the left, then the correction (or best guess) in the middle
       add(typed)
@@ -287,6 +291,31 @@ class SuggestionEngine(
   }
 
   /** Names and acronyms; the "I" family is ordinary English. */
+  /**
+   * A missed space ("ofthe" → "of the"): the best split of a non-word into two words, scored like any
+   * candidate. Only a pair the dictionary has seen side by side can be autocorrected to, and only when it
+   * clearly wins; any other pair ("the quick") is offered in the strip but never forced, so names and
+   * slang ("moonlite") don't fall apart into two words.
+   */
+  private fun missedSpace(typed: String, lm: Lm): Candidate? {
+    if (typed.length < MIN_SPLIT || !typed.all(Char::isLetter) || isValid(typed)) return null
+    var best: Candidate? = null
+    for (i in 1..typed.length - 2) {
+      val left = typed.substring(0, i)
+      val right = typed.substring(i)
+      if (left.length < 2 && !left.equals("a", ignoreCase = true)) continue
+      val l = lexicon.findLenient(left)
+      val r = lexicon.find(right.lowercase())
+      if (l < 0 || r < 0 || !lexicon.isSuggestable(l) || !lexicon.isSuggestable(r) || history.isBlocked(right)) continue
+      val pair = lexicon.bigramLogProb(l, r)
+      val next = pair ?: (lexicon.unigramLogProb(r) + UNSEEN_PAIR)
+      val score = -config.missedSpaceCost + lm.weight * (lm.logProb(lexicon.word(l), l) + next)
+      // An unseen pair counts as a completion: offered, never an autocorrect
+      if (best == null || score > best.score) best = Candidate("$left $right", config.missedSpaceCost, score, completion = pair == null)
+    }
+    return best
+  }
+
   /** One digit with letters both sides and enough letters around it to tell the word ("b4u" and "w8" aren't slips). */
   private fun isDigitSlip(typed: String) =
     typed.count(Char::isDigit) == 1 && typed.first().isLetter() && typed.last().isLetter() && typed.count(Char::isLetter) >= 4
@@ -389,6 +418,10 @@ class SuggestionEngine(
     const val NONE = -1
     const val EMAIL_MIN_LETTERS = 4
     const val EMAIL_ALL_LETTERS = 7
+    /** Shortest run worth splitting at a missed space ("ofthe"); shorter ones are mostly typos of one word. */
+    const val MIN_SPLIT = 5
+    /** ln P share left for a second word the dictionary never saw after the first: the pair model's backoff. */
+    val UNSEEN_PAIR = kotlin.math.ln(0.2f)
 
     fun <T> Iterator<T>.nextOrNull(): T? = if (hasNext()) next() else null
     const val VOCABULARY_CONFIDENCE = 300.0

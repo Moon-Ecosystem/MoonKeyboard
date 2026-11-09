@@ -151,6 +151,16 @@ class EnglishTest {
   }
 
   @Test
+  fun aMissedSpaceIsFixed() {
+    assertEquals("of the", suggest("ofthe", prev = "one").autocorrect)
+    assertEquals("The best", suggest("Thebest", prev = null).autocorrect)
+    val quick = suggest("thequick", prev = null)
+    assertTrue(quick.items.toString() + quick.debug, quick.items.contains("the quick"))
+    // Real words and words the user typed stay whole
+    for (word in listOf("therapist", "together", "season")) assertNull(word, suggest(word).autocorrect)
+  }
+
+  @Test
   fun aDigitWordTypedTwiceIsLearned() {
     val history = UserHistory()
     val e = SuggestionEngine(lexicon, history)

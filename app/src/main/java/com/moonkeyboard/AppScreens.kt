@@ -667,7 +667,7 @@ fun LearnedScreen(onBack: () -> Unit) {
         val isEmail = UserHistory.isEmail(candidate)
         val addable = history != null && candidate.isNotEmpty() && (
           if (isEmail) emails.none { it.first == candidate.lowercase() }
-          else candidate.all { isWordChar(it) } && words.none { it.first == candidate && it.second >= (engine?.config?.learnedAt ?: 2) })
+          else candidate.first().isLetter() && candidate.all { isWordChar(it) || it.isDigit() } && words.none { it.first == candidate && it.second >= (engine?.config?.learnedAt ?: 2) })
         if (addable) item(key = "add") {
           Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(if (isEmail) R.string.add_email_detail else R.string.add_word_detail, candidate), Modifier.weight(1f), color = c.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)

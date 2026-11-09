@@ -16,6 +16,7 @@ import android.util.Size
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedText
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InlineSuggestion
 import android.view.inputmethod.InputConnection
@@ -350,7 +351,13 @@ class InputController(private val host: KeyboardHost) {
     clipSetAside = false
     val ic = host.inputConnection
     if (ic != null && (bySlide || !isEcho()) && composing.isEmpty() && panel == Panel.KEYS && emojiQuery == null && field.suggest) resumeWord(ic)
-    if (composing.isNotEmpty()) return requestSuggestions()
+    if (composing.isNotEmpty()) {
+      // Picked up the word the cursor ends (an app filling the field, as WhatsApp's edit does): letters
+      // typed now continue it, so an auto capital from the empty field it started as goes off
+      shiftController.autoCapitalize(false)
+      syncShift()
+      return requestSuggestions()
+    }
     // Auto-caps syncs either way; one of mid-word similar words or next-word predictions takes the strip,
     // not both — predictions in between would flash before the async mid-word decode replaces them
     syncCaps()
@@ -395,7 +402,7 @@ class InputController(private val host: KeyboardHost) {
       val prefix = m.word.take(cut)
       val similar = withContext(decodeDispatcher) {
         engine.suggest(prefix, wordTouches.take(cut), keys, m.context, allowAutocorrect = false)
-      }.items.filter { !it.equals(m.word, ignoreCase = true) && !it.equals(prefix, ignoreCase = true) }.take(3)
+      }.items.filter { it.isNotEmpty() && !it.equals(m.word, ignoreCase = true) && !it.equals(prefix, ignoreCase = true) }.take(3)
       if (midWord != m) return@launch
       val fallback = mergeHostFixes(hostTexts, similar)
       if (fallback.isNotEmpty()) suggestions = result.copy(items = fallback) else refreshPredictions()
@@ -409,6 +416,7 @@ class InputController(private val host: KeyboardHost) {
     val out = ArrayList<String>(3)
     for (t in hostTexts + engineItems) {
       if (out.size >= 3) break
+      if (t.isEmpty()) continue
       if (seen.add(t.lowercase())) out += t
     }
     return out
@@ -927,6 +935,7 @@ class InputController(private val host: KeyboardHost) {
     }
     // A digit after letters stays in the word ("c4ossover", "mp3"), so the engine sees all of it
     if (field.suggest && c != null && (c.isLetter() || ((c == '\'' || c.isDigit()) && composing.isNotEmpty()))) {
+      if (composing.isEmpty()) adoptDigitsBefore(ic)
       composing.append(c)
       // Only a number-row digit keeps where it was hit (near the letters below it); one from the symbols
       // layer sat over a letter's spot, and a long-pressed one was chosen on purpose
@@ -1101,21 +1110,22 @@ class InputController(private val host: KeyboardHost) {
    * inside a word only offers fixes for it ([midWord]).
    */
   private fun resumeWord(ic: InputConnection) {
+    // Digits are part of a word, as when typing it ("covid19", "2nd")
+    fun inWord(c: Char) = isWordChar(c) || c.isDigit()
     val after = ic.getTextAfterCursor(RESUME_CHARS, 0) ?: ""
     var end = 0
-    while (end < after.length && isWordChar(after[end])) end++
+    while (end < after.length && inWord(after[end])) end++
     // A word running past the lookahead limit may be longer than we can see
     if (end == RESUME_CHARS) return
     val before = ic.getTextBeforeCursor(RESUME_CHARS, 0) ?: return
     var start = before.length
-    while (start > 0 && isWordChar(before[start - 1])) start--
+    while (start > 0 && inWord(before[start - 1])) start--
     // A word running into the lookbehind limit may be longer than we can see
     if (start == 0 && before.length == RESUME_CHARS) return
     val word = before.substring(start)
-    if (word.isEmpty() || !word[0].isLetter()) return
-    // Mark the word where it is: deleting and retyping it made Firefox's caret jump to its start
+    if (word.isEmpty() || !word[0].isLetterOrDigit() || word.none(Char::isLetter)) return
     val text = ic.getExtractedText(ExtractedTextRequest(), 0)
-    val cursor = if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
+    val cursor = cursorIn(text)
     if (end > 0) {
       if (cursor < word.length) return
       // Set the mid-word even for a real word: the strip offers similar ones in case the user put the cursor there to swap it
@@ -1125,6 +1135,30 @@ class InputController(private val host: KeyboardHost) {
       midWord = MidWord(wordStart, word + after.substring(0, end), WordContext.from(textBefore.dropLast(word.length)), hostFixesIn(text, wordStart, wordEnd))
       return
     }
+    pickUp(ic, word, cursor)
+  }
+
+  /**
+   * A letter right after digits joins them ("2" + "nd"), so "2nd" or "10am" is one word that space keeps,
+   * not "2" and a word "nd" to autocorrect.
+   */
+  private fun adoptDigitsBefore(ic: InputConnection) {
+    val before = textBefore(ic, RESUME_CHARS)
+    val digits = before.takeLastWhile(Char::isDigit)
+    if (digits.isEmpty() || digits.length == RESUME_CHARS) return
+    // Digits that are part of something longer ("v1.2", "1,000", or letters a cursor move left behind) stay as they are
+    val prev = before.getOrNull(before.length - digits.length - 1)
+    if (prev != null && (isWordChar(prev) || prev == '.' || prev == ',')) return
+    pickUp(ic, digits, cursorIn(ic.getExtractedText(ExtractedTextRequest(), 0)))
+  }
+
+  /** The cursor's absolute offset, or -1 when there's a selection or the editor won't say. */
+  private fun cursorIn(text: ExtractedText?): Int =
+    if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
+
+  /** Makes [word], just before the cursor at [cursor], the composing word again. */
+  private fun pickUp(ic: InputConnection, word: String, cursor: Int) {
+    // Mark the word where it is: deleting and retyping it made Firefox's caret jump to its start
     ic.beginBatchEdit()
     if (cursor >= word.length && ic.setComposingRegion(cursor - word.length, cursor)) {
       // The same word over itself, for the invisible style that keeps Compose fields from underlining it
