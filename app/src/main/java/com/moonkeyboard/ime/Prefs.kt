@@ -140,5 +140,5 @@ object Prefs {
   }
 
   const val KEYBOARD_HEIGHT_MIN = 80
-  const val KEYBOARD_HEIGHT_MAX = 120
+  const val KEYBOARD_HEIGHT_MAX = 140
 }
