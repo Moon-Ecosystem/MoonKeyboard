@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 
 /** Palette from the design canvas. */
@@ -21,7 +22,12 @@ data class KeyboardColors(
   val popup: Color,
   val divider: Color,
   val isDark: Boolean = false,
+  /** Pitch black: a bright enter key stood out alone on the black, so it gets a dim accent fill and an accent icon. */
+  val subtleEnter: Boolean = false,
 ) {
+  val enter get() = if (subtleEnter) accent.copy(alpha = 0.22f).compositeOver(background) else accent
+  val onEnter get() = if (subtleEnter) accent else onAccent
+
   fun withAccent(a: Accent): KeyboardColors {
     val accent = Color(if (isDark) a.dark else a.light)
     return copy(accent = accent, onAccent = contentColorFor(accent))
@@ -29,7 +35,7 @@ data class KeyboardColors(
 
   /** Black behind everything; the built-in dark keys go neutral grey too, the wallpaper's keep their tint. */
   fun pitchBlack(neutralKeys: Boolean): KeyboardColors {
-    val black = copy(background = Color.Black, shadow = Color.Black)
+    val black = copy(background = Color.Black, shadow = Color.Black, subtleEnter = true)
     return if (!neutralKeys) black else black.copy(
       key = Color(0xFF1A1A1A),
       special = Color(0xFF2A2A2A),

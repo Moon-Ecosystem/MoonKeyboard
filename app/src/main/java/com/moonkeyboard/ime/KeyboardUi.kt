@@ -641,7 +641,7 @@ private fun DrawScope.drawKey(
   val key = bounds.key
   val functional = key.special || key.type == KeyType.SHIFT || key.type == KeyType.BACKSPACE || key.type == KeyType.LAYER
   val fill = when {
-    key.type == KeyType.ENTER -> colors.accent
+    key.type == KeyType.ENTER -> colors.enter
     isPressed -> colors.pressed
     functional -> colors.special
     else -> colors.key
@@ -666,7 +666,7 @@ private fun DrawScope.drawKey(
       }
     }
     KeyType.BACKSPACE -> drawIcon(BackspaceIcon, center, 24.dp.toPx(), colors.text)
-    KeyType.ENTER -> drawIcon(enterIcon(controller.enterAction), center, 22.dp.toPx(), colors.onAccent, strokeWidth = 2f)
+    KeyType.ENTER -> drawIcon(enterIcon(controller.enterAction), center, 22.dp.toPx(), colors.onEnter, strokeWidth = 2f)
     KeyType.EMOJI -> drawIcon(SmileIcon, center, 22.dp.toPx(), colors.text, strokeWidth = 2f)
     KeyType.SPACE -> drawLabel(measurer, key.label, center, TextStyle(color = colors.muted, fontSize = 15.sp))
     KeyType.LAYER -> drawLabel(measurer, key.label, center, TextStyle(color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold))
