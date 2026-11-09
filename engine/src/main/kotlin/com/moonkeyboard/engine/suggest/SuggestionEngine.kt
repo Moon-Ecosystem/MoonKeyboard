@@ -149,7 +149,10 @@ class SuggestionEngine(
       else -> emptyList()
     }
     val emailsLead = emails.isNotEmpty() && typed.length >= EMAIL_ALL_LETTERS
-    val autocorrect = if (allowAutocorrect && expansion == null && !emailsLead) autocorrectFor(typed, ranked) else null
+    // Digits in a word: a single one inside it is a slip off the number row ("c4ossover"), corrected like any
+    // typo; anywhere else they're meant ("mp3", "2nd", "covid19") and space keeps them
+    val meantDigits = typed.any(Char::isDigit) && !isDigitSlip(typed)
+    val autocorrect = if (allowAutocorrect && expansion == null && !emailsLead && !meantDigits) autocorrectFor(typed, ranked) else null
 
     val shown = ArrayList<String>()
     fun add(word: String) {
@@ -158,7 +161,7 @@ class SuggestionEngine(
     val others = ranked.asSequence().map { applyCase(it.word, typed) }
     val items = if (expansion != null) {
       listOfNotNull(typed, expansion, others.firstOrNull { !it.equals(typed, ignoreCase = true) && it != expansion })
-    } else if (isValid(typed) && autocorrect == null) {
+    } else if ((isValid(typed) || meantDigits) && autocorrect == null) {
       // A real word stays in the middle with the best alternatives either side
       val alternatives = others.filterNot { it.equals(typed, ignoreCase = true) }.take(2).toList()
       listOfNotNull(alternatives.getOrNull(0), typed, alternatives.getOrNull(1))
@@ -259,7 +262,7 @@ class SuggestionEngine(
   }
 
   private fun autocorrectFor(typed: String, ranked: List<Candidate>): String? {
-    if (typed.any { !isWordChar(it) }) return null
+    if (typed.any { !isWordChar(it) && !it.isDigit() }) return null
     // The user's own words are never corrected away, fixed spellings ("im" → "I'm") included: one
     // undone correction teaches the word. A sentence start stores it in lower case ("Teh" as "teh").
     if (maxOf(history.count(typed), history.count(typed.lowercase())) >= config.learnedAt) return null
@@ -284,6 +287,10 @@ class SuggestionEngine(
   }
 
   /** Names and acronyms; the "I" family is ordinary English. */
+  /** One digit with letters both sides and enough letters around it to tell the word ("b4u" and "w8" aren't slips). */
+  private fun isDigitSlip(typed: String) =
+    typed.count(Char::isDigit) == 1 && typed.first().isLetter() && typed.last().isLetter() && typed.count(Char::isLetter) >= 4
+
   private fun isProper(word: String) = word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
 
   /**

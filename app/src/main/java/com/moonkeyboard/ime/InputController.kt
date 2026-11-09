@@ -507,7 +507,8 @@ class InputController(private val host: KeyboardHost) {
 
   fun commitPopup(text: String, x: Float, y: Float) {
     emojiQuery?.let { emojiQuery = it + text.lowercase(Locale.ROOT); return }
-    typeText(display(text), x, y)
+    // A digit held out of a letter (r → 4) was picked on purpose: no position, so it only reads as itself
+    if (text.singleOrNull()?.isDigit() == true) typeText(text, Float.NaN, Float.NaN) else typeText(display(text), x, y)
   }
 
   /** Text from a panel (emoji, a clipboard item): ends the word in progress, then goes in as is. */
@@ -924,9 +925,13 @@ class InputController(private val host: KeyboardHost) {
         ic.endBatchEdit()
       }
     }
-    if (field.suggest && c != null && (c.isLetter() || (c == '\'' && composing.isNotEmpty()))) {
+    // A digit after letters stays in the word ("c4ossover", "mp3"), so the engine sees all of it
+    if (field.suggest && c != null && (c.isLetter() || ((c == '\'' || c.isDigit()) && composing.isNotEmpty()))) {
       composing.append(c)
-      touches += if (x.isNaN()) keyMap?.touchFor(c) ?: Touch.exact(c) else Touch(x, y, c)
+      // Only a number-row digit keeps where it was hit (near the letters below it); one from the symbols
+      // layer sat over a letter's spot, and a long-pressed one was chosen on purpose
+      val placed = !x.isNaN() && (!c.isDigit() || layerId == LETTERS)
+      touches += if (placed) Touch(x, y, c) else keyMap?.touchFor(c) ?: Touch.exact(c)
       // Tapping more letters onto a glided word makes it an ordinary typed word again
       glided = false
       ic.compose(composing)
