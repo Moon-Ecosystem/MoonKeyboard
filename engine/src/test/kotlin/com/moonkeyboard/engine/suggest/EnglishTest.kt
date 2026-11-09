@@ -1,6 +1,7 @@
 package com.moonkeyboard.engine.suggest
 
 import com.moonkeyboard.engine.decode.KeyMap
+import com.moonkeyboard.engine.decode.Touch
 import com.moonkeyboard.engine.decode.resample
 import com.moonkeyboard.engine.trace.TracePoint
 import com.moonkeyboard.engine.dict.Lexicon
@@ -131,6 +132,40 @@ class EnglishTest {
     assertEquals("most used in the middle", "rishabh@work.example", s.items[1])
     assertEquals(setOf("rishabh@gmail.com", "rishabhj@x.org", "rishabh@work.example"), s.items.toSet())
     assertNull("space keeps what was typed", s.autocorrect)
+  }
+
+  @Test
+  fun aDigitSlippedIntoAWordIsCorrectedButMeantDigitsAreKept() {
+    // The 4 hit low on its key, toward the r below it, with the number row on
+    val four = numberRowKeys.single { it.key.label == "4" }
+    val slip = Touch(four.centerX, four.top + (four.bottom - four.top) * 0.8f, '4')
+    val typed = "c4ossover"
+    val touches = typed.map { if (it == '4') slip else numberRowMap.touchFor(it) }
+    assertEquals("crossover", engine.suggest(typed, touches, numberRowMap, WordContext("a", false), allowAutocorrect = true).autocorrect)
+    // Digits at either end, or a short word around one, are meant: space keeps them
+    for (word in listOf("mp3", "covid19", "b4u", "abc123")) {
+      val s = engine.suggest(word, word.map(numberRowMap::touchFor), numberRowMap, WordContext("the", false), allowAutocorrect = true)
+      assertNull(word, s.autocorrect)
+      assertTrue(word, word in s.items)
+    }
+  }
+
+  @Test
+  fun aMissedSpaceIsFixed() {
+    assertEquals("of the", suggest("ofthe", prev = "one").autocorrect)
+    assertEquals("The best", suggest("Thebest", prev = null).autocorrect)
+    val quick = suggest("thequick", prev = null)
+    assertTrue(quick.items.toString() + quick.debug, quick.items.contains("the quick"))
+    // Real words and words the user typed stay whole
+    for (word in listOf("therapist", "together", "season")) assertNull(word, suggest(word).autocorrect)
+  }
+
+  @Test
+  fun aDigitWordTypedTwiceIsLearned() {
+    val history = UserHistory()
+    val e = SuggestionEngine(lexicon, history)
+    history.record(null, "jharishabh2", weight = 2)
+    assertTrue(suggest("jharishab", engine = e).items.contains("jharishabh2"))
   }
 
   @Test
@@ -270,6 +305,9 @@ class EnglishTest {
     }
     val geometry = KeyboardGeometry.compute(Layouts.load("qwerty"), 390f, 46f, 6f, 10f, 4f)
     val keys = KeyMap.from(geometry)
+    private val numberRow = KeyboardGeometry.compute(Layouts.withNumberRow(Layouts.load("qwerty")), 390f, 46f, 6f, 10f, 4f)
+    val numberRowKeys = numberRow.keys
+    val numberRowMap = KeyMap.from(numberRow)
 
     /** Held-out sentences written by :tools; the first 150 keep the test quick. */
     val EVAL: List<String> by lazy { eval("en") }
