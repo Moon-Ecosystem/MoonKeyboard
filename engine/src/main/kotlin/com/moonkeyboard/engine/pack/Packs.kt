@@ -48,7 +48,7 @@ data class PackManifest(
 
   /** The engine's settings for this language. */
   fun engineConfig(base: EngineConfig = EngineConfig()): EngineConfig =
-    if (nounCapitals) base.copy(capitalPenalty = 0f, nounCapitals = true) else base
+    if (nounCapitals) base.copy(nounCapitals = true) else base
 }
 
 class PackException(message: String) : Exception(message)

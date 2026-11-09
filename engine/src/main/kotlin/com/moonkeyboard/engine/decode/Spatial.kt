@@ -49,6 +49,8 @@ class KeyMap(private val centers: Map<Char, Pair<Float, Float>>, val keyWidth: F
 fun baseChar(c: Char): Char {
   val l = c.lowercaseChar()
   if (l in 'a'..'z' || l == '\'') return l
+  // ß doesn't decompose, but it's typed and glided on the s key
+  if (l == 'ß') return 's'
   return Normalizer.normalize(l.toString(), Normalizer.Form.NFD)[0]
 }
 

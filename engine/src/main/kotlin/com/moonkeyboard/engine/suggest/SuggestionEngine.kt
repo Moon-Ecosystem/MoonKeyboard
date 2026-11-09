@@ -325,7 +325,13 @@ class SuggestionEngine(
   private fun isDigitSlip(typed: String) =
     typed.count(Char::isDigit) == 1 && typed.first().isLetter() && typed.last().isLetter() && typed.count(Char::isLetter) >= 4
 
-  private fun isProper(word: String) = word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
+  /**
+   * A name or acronym, which the dictionary over-rates. Where every noun has a capital (German) only
+   * an all-capitals word counts: "Haus" is an ordinary word there, "ADH" still an acronym.
+   */
+  private fun isProper(word: String) =
+    if (config.nounCapitals) word.length > 1 && word.all { !it.isLetter() || it.isUpperCase() }
+    else word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
 
   /**
    * ln P(word | context), worked out once per request: the built-in model (two-word context
