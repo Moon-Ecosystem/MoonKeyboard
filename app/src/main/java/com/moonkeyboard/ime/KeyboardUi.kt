@@ -86,6 +86,8 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -103,10 +105,20 @@ import com.moonkeyboard.engine.layout.KeyboardGeometry
 import com.moonkeyboard.engine.layout.Layout
 import com.moonkeyboard.engine.layout.Layouts
 
+// The design's key: labels are drawn at their sizes for a key this tall, and scale with the real one
 private val KeyHeight = 48.dp
 private val HGap = 6.dp
 // Roomy rows: with the larger labels a tighter gap looked cramped
 private val VGap = 15.dp
+// Portrait, as AOSP's keyboard: the letters' rows and gaps fill a height set by the screen's width
+// (55% of it, our 4 rows of 48 dp on a 432 dp wide phone), so a number row squeezes the rows instead
+// of adding one, and display or font size settings don't inflate the keys. Capped by the screen's
+// height (a wide unfolded screen) and by a largest key (tablets).
+private const val PORTRAIT_WIDTH_SHARE = 0.55f
+private const val MAX_HEIGHT_SHARE = 0.3f
+private val MaxKeyHeight = 60.dp
+// A fifth row (numbers) halves the gaps between rows, so the keys keep most of their height
+private const val FIVE_ROW_GAP = 0.5f
 private val SidePadding = 4.dp
 internal val StripHeight = 48.dp
 private val TopPadding = 6.dp
@@ -115,7 +127,8 @@ private val TopPadding = 6.dp
 private val BottomPadding = 16.dp
 private val KeyRadius = 8.dp
 private const val ONE_HANDED_SHARE = 0.84f
-private val EmojiExtraHeight = 96.dp
+// The emoji panel's extra height over the keys, as a share of the screen's
+private const val EMOJI_EXTRA_SHARE = 0.05f
 // Landscape: everything smaller, and rows closer, so the app keeps about half the screen
 private const val LANDSCAPE_SCALE = 0.8f
 private val LandscapeVGap = 8.dp
@@ -168,14 +181,16 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
   val colors = keyboardColors()
   val borders = Prefs.borders.value
   val oneHanded = if (floating) OneHanded.OFF else Prefs.oneHanded.value
-  val keyHeight = KeyHeight * Prefs.keySize.value.scale
+  val heightScale = Prefs.keyboardHeight.value / 100f
   val vGap = if (landscape) LandscapeVGap else VGap
   val split = landscape && !floating && oneHanded == OneHanded.OFF && Prefs.splitLandscape.value
   val density = LocalDensity.current
   val view = LocalView.current
   val audio = remember { view.context.getSystemService(AudioManager::class.java) }
   val scope = rememberCoroutineScope()
-  val measurer = rememberTextMeasurer(cacheSize = 64)
+  val fontResolver = LocalFontFamilyResolver.current
+  val layoutDirection = LocalLayoutDirection.current
+  val screen = view.resources.displayMetrics
   val raw = controller.layout
   // Landscape rows are roomy, so the space bar takes some of that width
   val layout = remember(raw, landscape) { if (landscape) Layouts.wideSpace(raw) else raw }
@@ -196,21 +211,39 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
     val fullWidth = constraints.maxWidth.toFloat()
     val widthPx = if (oneHanded == OneHanded.OFF) fullWidth else (fullWidth * ONE_HANDED_SHARE).roundToInt().toFloat()
     val letters = controller.layoutFor(InputController.LETTERS)
-    val geometry = remember(layout, letters, widthPx, keyHeight, vGap, split, density) {
+    val docked = !landscape && !floating
+    val (geometry, letterKey) = remember(layout, letters, widthPx, heightScale, vGap, split, density, docked, screen.widthPixels, screen.heightPixels) {
       with(density) {
+        // The letters' rows and gaps share one height, however many rows there are. Landscape and the
+        // floating card keep the design's 4 rows of keys, scaled through their density as before
+        val area = heightScale * if (docked) {
+          minOf(screen.widthPixels * PORTRAIT_WIDTH_SHARE, screen.heightPixels * MAX_HEIGHT_SHARE)
+        } else 4 * KeyHeight.toPx() + 3 * vGap.toPx()
+        val gapRatio = vGap.toPx() / KeyHeight.toPx() * (if (letters.rows.size > 4) FIVE_ROW_GAP else 1f)
+        var k = minOf(
+          area / (letters.rows.sumOf { it.height.toDouble() }.toFloat() + (letters.rows.size - 1) * gapRatio),
+          MaxKeyHeight.toPx() * heightScale,
+        )
+        val letterGap = k * gapRatio
+        val letterKey = k
         // Every layer is as tall as the letters: a layer with fewer rows (symbols next to letters
         // with a number row) spreads them out instead of shrinking the keyboard
-        var k = keyHeight.toPx()
         fun keysHeight(l: Layout) = l.rows.sumOf { (k * it.height).toDouble() }.toFloat()
-        val target = keysHeight(letters) + (letters.rows.size - 1) * vGap.toPx()
+        val target = keysHeight(letters) + (letters.rows.size - 1) * letterGap
         // A number pad's keys grow taller instead, so they stay big targets
-        if (controller.layerId in InputController.PADS) k = (target - (layout.rows.size - 1) * vGap.toPx()) / layout.rows.sumOf { it.height.toDouble() }.toFloat()
-        val gap = if (layout.rows.size > 1) maxOf(vGap.toPx(), (target - keysHeight(layout)) / (layout.rows.size - 1)) else vGap.toPx()
+        if (controller.layerId in InputController.PADS) k = (target - (layout.rows.size - 1) * letterGap) / layout.rows.sumOf { it.height.toDouble() }.toFloat()
+        val gap = if (layout.rows.size > 1) maxOf(letterGap, (target - keysHeight(layout)) / (layout.rows.size - 1)) else letterGap
         KeyboardGeometry.compute(
           layout, widthPx, k, HGap.toPx(), gap, SidePadding.toPx(), topPadding = TopPadding.toPx(),
           splitGap = if (split && controller.layerId !in InputController.PADS) widthPx * SPLIT_SHARE else 0f,
-        )
+        ) to letterKey
       }
+    }
+    // Key labels are sized for the design's key and scale with the letter keys' real height (as AOSP
+    // sizes them by key height), never with the system font size: a large font made the keys look bloated
+    val measurer = remember(letterKey, density, fontResolver, layoutDirection) {
+      val labelScale = letterKey / with(density) { KeyHeight.toPx() }
+      TextMeasurer(fontResolver, Density(density.density, labelScale), layoutDirection, cacheSize = 64)
     }
     val touches = remember(geometry) {
       with(density) {
@@ -231,9 +264,12 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
 
     when (controller.panel) {
       Panel.CLIPBOARD -> ClipboardPanel(controller, colors, panelModifier)
-      // Taller than the keys, so emoji can be big: the app above moves up to make room
-      // (Not in landscape or floating, where the app has little room to spare)
-      Panel.EMOJI -> EmojiPanel(controller, colors, Modifier.fillMaxWidth().height(StripHeight + height + if (landscape || floating) 0.dp else EmojiExtraHeight))
+      // Taller than the keys, so emoji can be big: the app above moves up to make room, by a share of
+      // the screen so it stays in proportion (not in landscape or floating, with little room to spare)
+      Panel.EMOJI -> {
+        val extra = if (docked) with(density) { (screen.heightPixels * EMOJI_EXTRA_SHARE).toDp() } else 0.dp
+        EmojiPanel(controller, colors, Modifier.fillMaxWidth().height(StripHeight + height + extra))
+      }
       Panel.EDIT -> EditPanel(controller, colors, panelModifier)
       Panel.OPTIONS -> OptionsPanel(controller, colors, panelModifier)
       Panel.KEYS -> Column {
