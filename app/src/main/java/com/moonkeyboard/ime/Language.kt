@@ -40,9 +40,11 @@ object Language {
   fun load(context: Context) {
     if (loading != null) return
     val app = context.applicationContext
-    historyFile = File(app.filesDir, "history.tsv")
+    // shortcut: always the built-in English pack until languages can be switched
+    val pack = LanguagePacks.builtIn(app)
+    historyFile = LanguagePacks.historyFile(app, pack.manifest.id)
     loading = scope.launch {
-      val lexicon = Lexicon.read(app.assets.open("dict/en.dict").use { it.readBytes() })
+      val lexicon = Lexicon.read(pack.open(pack.dictionary)!!.use { it.readBytes() })
       val history = if (historyFile.exists()) UserHistory.parse(historyFile.readText()) else UserHistory()
       savedVersion = history.version
       lexicon.blockOffensive = Prefs.blockOffensive.value
@@ -50,7 +52,7 @@ object Language {
       loaded.value = SuggestionEngine(lexicon, history)
       // After the dictionary, so typing works from it alone while this loads; without it (a failed
       // load), suggestions simply stay dictionary-only
-      neural = runCatching { loadNeural(app) }.getOrNull()
+      neural = runCatching { loadNeural(pack) }.getOrNull()
       applyNeural()
     }
   }
@@ -63,12 +65,13 @@ object Language {
     engine?.neural = if (Prefs.neuralPredictions.value) neural else null
   }
 
-  private fun loadNeural(app: Context): NeuralLm {
+  /** The pack's neural model; a pack without one throws, leaving suggestions dictionary-only. */
+  private fun loadNeural(pack: PackFiles): NeuralLm {
     val env = OrtEnvironment.getEnvironment()
-    val model = app.assets.open("dict/en-lm.onnx").use { it.readBytes() }
+    val model = pack.open(pack.model)!!.use { it.readBytes() }
     // One thread: a single word's prediction is too small to gain from more, and idle threads spin
     val session = env.createSession(model, OrtSession.SessionOptions().apply { setIntraOpNumThreads(1) })
-    val vocab = app.assets.open("dict/en-lm.vocab").bufferedReader().use { it.readLines() }
+    val vocab = pack.open(pack.vocab)!!.bufferedReader().use { it.readLines() }
     return NeuralLm(vocab) { ids ->
       OnnxTensor.createTensor(env, arrayOf(ids)).use { input ->
         session.run(mapOf("ids" to input)).use {

@@ -49,10 +49,16 @@ enum class KeyType {
 object Layouts {
   private val json = Json
 
+  /** A built-in layout. */
   fun load(id: String): Layout {
     val text = Layouts::class.java.getResourceAsStream("/layouts/$id.json")
       ?.use { it.readBytes().decodeToString() }
       ?: error("No layout '$id'")
+    return parse(text, id)
+  }
+
+  /** A layout from its JSON, as a language pack carries one. */
+  fun parse(text: String, id: String): Layout {
     val layout = json.decodeFromString(Layout.serializer(), text)
     require(layout.rows.all { row -> row.keys.all { it.type != KeyType.LAYER || it.layer != null } }) {
       "Layout '$id' has a layer key without a target"

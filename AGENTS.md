@@ -93,6 +93,14 @@ A small transformer (4 layers, 50k lower-case words) is blended with the diction
 - Measure a model change with `Evaluate --dict <abs en.dict> --neural <abs app/src/main/assets/dict> --eval <abs engine/src/test/resources/eval/en.txt>` (and `hi.txt`). It prints the full report three ways: 3-gram only, blend for next-word only, blend everywhere.
 - On the phone, the test pad's debug panel shows "neural model: last run N ms" (about 10–20 ms on the moto g32). If that line never appears, the model failed to load and suggestions are quietly dictionary-only.
 
+## Language packs
+
+English (with Hinglish) is built in (`assets/dict/`, with a `manifest.json`); other languages are signed `.mkpack` files the user downloads in the browser and opens with the keyboard, since the app has no internet permission. They're published as releases of the separate `Moon-Ecosystem/MoonKeyboard-Languages` repo.
+
+- Format (`engine/.../pack/Packs.kt`): a zip of `manifest.json` (id, name, version, layout, and the SHA-256 of every file), `manifest.sig` (ECDSA P-256 over the manifest), `<id>.dict`, optional `<id>-lm.onnx` and `<id>-lm.vocab`, and layouts as `<name>.json`. Nothing in a pack is parsed until the signature and every hash check out. Bump `Packs.FORMAT` only for changes old apps can't read.
+- Installed packs live in `filesDir/packs/<id>/` (`LanguagePacks.kt`). Each language learns in its own `history-<id>.tsv`; English keeps `history.tsv`.
+- Build a pack: `BuildPack pack <folder> <id> <name> <version> <layout> <private key> <out.mkpack>`. The signing key is `~/.android-keys/moonkeyboard-packs.pk8`, never in the repo; its public half is `LanguagePacks.PUBLIC_KEY`. Never print or commit the private key, and never regenerate it: packs signed with a new key won't install on existing apps.
+
 ## Git workflow
 
 - Work happens on `dev`, or on a feature branch for an experiment (e.g. `neural-lm`), and reaches `main` through a pull request. Don't commit to `main` directly.
