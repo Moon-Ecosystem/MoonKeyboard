@@ -2,7 +2,6 @@ package com.moonkeyboard.engine.eval
 
 import com.moonkeyboard.engine.decode.KeyMap
 import com.moonkeyboard.engine.decode.Touch
-import com.moonkeyboard.engine.decode.baseChar
 import com.moonkeyboard.engine.decode.resample
 import com.moonkeyboard.engine.layout.KeyType
 import com.moonkeyboard.engine.layout.KeyboardGeometry
@@ -27,7 +26,13 @@ class TypingSimulator(geometry: KeyboardGeometry, seed: Long = 42) {
     val typed = StringBuilder()
     val touches = ArrayList<Touch>()
     for (c in word) {
-      val (cx, cy) = keys.center(baseChar(c)) ?: continue
+      if (c == '\'') continue
+      // A letter without a key (ß) is picked from a long press: exactly that letter
+      val (cx, cy) = keys.center(keys.keyOf(c)) ?: run {
+        typed.append(c)
+        touches += Touch.exact(c)
+        null
+      } ?: continue
       val x = cx + gaussian(sigma)
       val y = cy + gaussian(sigma)
       val hit = letterKeys.minBy { it.distanceSq(x, y) }.key.label[0]
@@ -44,7 +49,7 @@ class TypingSimulator(geometry: KeyboardGeometry, seed: Long = 42) {
    * two key widths early), then smoothed over [smoothing] key widths so corners are rounded off.
    */
   fun glide(word: String, sigma: Float, smoothing: Float, undershoot: Float = 0f): List<TracePoint> {
-    val letters = word.map(::baseChar).filter { keys.center(it) != null }
+    val letters = word.map(keys::keyOf).filter { keys.center(it) != null }
     val noisy = letters.filterIndexed { i, c -> i == 0 || c != letters[i - 1] }.map { c ->
       val (x, y) = keys.center(c)!!
       (x + gaussian(sigma)) to (y + gaussian(sigma))

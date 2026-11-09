@@ -1,16 +1,17 @@
 package com.moonkeyboard.tools
 
-import com.moonkeyboard.engine.pack.PackManifest
 import com.moonkeyboard.engine.pack.Packs
 import java.io.File
 
 /**
- * Makes signed language packs (see [Packs]). Every file in <folder> goes in: `<id>.dict`, optionally
- * `<id>-lm.onnx` and `<id>-lm.vocab`, and layouts as `<name>.json`. Paths must be absolute, as
- * `:tools:run` runs inside tools/.
+ * Makes signed language packs (see [Packs]). A pack's source is a `<id>/pack/` folder in the
+ * MoonKeyboard-Languages repo (whose `<id>/fetch-data.sh` runs this), holding
+ * `pack.json` (the manifest's settings: id, name, version, layout, digraphs...) and its layouts as
+ * `<name>.json`; the built files (`<id>.dict`, optionally `<id>-lm.onnx` and `<id>-lm.vocab`) come
+ * from a second folder. Paths must be absolute, as `:tools:run` runs inside tools/.
  *
  *   ./gradlew :tools:run -PmainClass=com.moonkeyboard.tools.BuildPackKt \
- *     --args="pack <folder> <id> '<name>' <version> <layout> <private key> <out.mkpack>"
+ *     --args="pack <source folder> <built folder> <private key> <out.mkpack>"
  *
  * Once, to make the signing key (the private key must stay out of the repo; the public one goes in
  * the app's LanguagePacks.PUBLIC_KEY):
@@ -31,20 +32,20 @@ fun main(args: Array<String>) {
       println("public key:  ${Packs.encode(keys.public)}")
     }
     "pack" -> {
-      require(args.size == 8) { USAGE }
-      val (_, folder, id, name, version, layout, keyFile, out) = args
-      val files = File(folder).listFiles { f -> f.isFile }!!.sortedBy { it.name }.associate { it.name to it.readBytes() }
-      val manifest = PackManifest(Packs.FORMAT, id, name, version.toInt(), layout)
+      require(args.size == 5) { USAGE }
+      val (_, source, built, keyFile, out) = args
+      val manifest = Packs.parseManifest(File(source, "pack.json").readBytes())
+      val files = (File(source).listFiles()!! + File(built).listFiles()!!)
+        .filter { it.isFile && it.name != "pack.json" }
+        .sortedBy { it.name }
+        .associate { it.name to it.readBytes() }
+      require("${manifest.id}.dict" in files) { "no ${manifest.id}.dict in $built" }
       val bytes = Packs.build(manifest, files, Packs.privateKey(File(keyFile).readBytes()))
       File(out).writeBytes(bytes)
-      println("$out: ${files.keys.joinToString()} (${bytes.size / 1024} KB)")
+      println("$out: ${manifest.name} ${manifest.version}, ${files.keys.joinToString()} (${bytes.size / 1024} KB)")
     }
     else -> error(USAGE)
   }
 }
 
-private operator fun <T> Array<T>.component6() = this[5]
-private operator fun <T> Array<T>.component7() = this[6]
-private operator fun <T> Array<T>.component8() = this[7]
-
-private const val USAGE = "usage: BuildPack genkey <private key out> | pack <folder> <id> <name> <version> <layout> <private key> <out.mkpack>"
+private const val USAGE = "usage: BuildPack genkey <private key out> | pack <source folder> <built folder> <private key> <out.mkpack>"

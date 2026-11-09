@@ -49,7 +49,7 @@ object Language {
       savedVersion = history.version
       lexicon.blockOffensive = Prefs.blockOffensive.value
       lexicon.hinglish = Prefs.hinglish.value
-      loaded.value = SuggestionEngine(lexicon, history)
+      loaded.value = SuggestionEngine(lexicon, history, pack.manifest.engineConfig(), pack.manifest.decoderConfig())
       // After the dictionary, so typing works from it alone while this loads; without it (a failed
       // load), suggestions simply stay dictionary-only
       neural = runCatching { loadNeural(pack) }.getOrNull()

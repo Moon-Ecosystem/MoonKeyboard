@@ -1,5 +1,7 @@
 package com.moonkeyboard.engine.pack
 
+import com.moonkeyboard.engine.decode.DecoderConfig
+import com.moonkeyboard.engine.suggest.EngineConfig
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayOutputStream
@@ -35,7 +37,19 @@ data class PackManifest(
   val layout: String = "qwerty",
   /** Every file in the pack and its SHA-256, in hex; the built-in pack leaves it empty. */
   val files: Map<String, String> = emptyMap(),
-)
+  /** Letters with a standard two-letter spelling for when the key isn't to hand: German "ß" → "ss", "ä" → "ae". */
+  val digraphs: Map<String, String> = emptyMap(),
+  /** Every noun is capitalised (German): a capitalised word isn't taken for a name, so it isn't marked down. */
+  val nounCapitals: Boolean = false,
+) {
+  /** The decoder's settings for this language. */
+  fun decoderConfig(base: DecoderConfig = DecoderConfig()): DecoderConfig =
+    base.copy(digraphs = digraphs.mapKeys { it.key.single() })
+
+  /** The engine's settings for this language. */
+  fun engineConfig(base: EngineConfig = EngineConfig()): EngineConfig =
+    if (nounCapitals) base.copy(capitalPenalty = 0f, nounCapitals = true) else base
+}
 
 class PackException(message: String) : Exception(message)
 
@@ -142,6 +156,9 @@ object Packs {
     if (!ID.matches(manifest.id)) throw PackException("Bad pack id '${manifest.id}'")
     if (manifest.files.keys.any { !FILE_NAME.matches(it) || it == MANIFEST || it == SIGNATURE }) throw PackException("Bad file name in the pack")
     if (manifest.files.isNotEmpty() && "${manifest.id}.dict" !in manifest.files) throw PackException("The pack has no dictionary")
+    if (manifest.digraphs.any { (letter, spelling) -> letter.length != 1 || spelling.length != 2 || !(letter + spelling).all(Char::isLetter) }) {
+      throw PackException("Bad two-letter spelling in the pack")
+    }
   }
 
   /** Writes each entry of [zip] into [dir] (flat names only, within size limits) and returns their hashes. */

@@ -99,7 +99,7 @@ English (with Hinglish) is built in (`assets/dict/`, with a `manifest.json`); ot
 
 - Format (`engine/.../pack/Packs.kt`): a zip of `manifest.json` (id, name, version, layout, and the SHA-256 of every file), `manifest.sig` (ECDSA P-256 over the manifest), `<id>.dict`, optional `<id>-lm.onnx` and `<id>-lm.vocab`, and layouts as `<name>.json`. Nothing in a pack is parsed until the signature and every hash check out. Bump `Packs.FORMAT` only for changes old apps can't read.
 - Installed packs live in `filesDir/packs/<id>/` (`LanguagePacks.kt`). Each language learns in its own `history-<id>.tsv`; English keeps `history.tsv`.
-- Build a pack: `BuildPack pack <folder> <id> <name> <version> <layout> <private key> <out.mkpack>`. The signing key is `~/.android-keys/moonkeyboard-packs.pk8`, never in the repo; its public half is `LanguagePacks.PUBLIC_KEY`. Never print or commit the private key, and never regenerate it: packs signed with a new key won't install on existing apps.
+- Each language's sources (its `pack.json` with the language rules such as `digraphs` and `nounCapitals`, its layout, data download and held-out sentences) live in that repo, under `<id>/`; its `fetch-data.sh` builds the dictionary with `BuildLexicon` and the pack with `BuildPack pack <source> <built> <private key> <out.mkpack>` from this repo. This repo stays language-neutral: a language needs a change here only for a rule the engine doesn't have yet. The signing key is `~/.android-keys/moonkeyboard-packs.pk8`, never in the repo; its public half is `LanguagePacks.PUBLIC_KEY`. Never print or commit the private key, and never regenerate it: packs signed with a new key won't install on existing apps.
 
 ## Git workflow
 

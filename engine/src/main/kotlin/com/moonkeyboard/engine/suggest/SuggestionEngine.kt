@@ -69,6 +69,8 @@ data class EngineConfig(
   val neuralLmWeight: Float = 0.5f,
   /** The neural model also scores the words offered while typing (and so autocorrect), not only the next-word predictions. */
   val neuralWhileTyping: Boolean = true,
+  /** Nouns are written with a capital (German): "haus" is corrected to "Haus", which elsewhere is left alone. */
+  val nounCapitals: Boolean = false,
   /** Cost of a missed space against the touches, like one wrong key: a split must beat close one-word fixes. */
   val missedSpaceCost: Float = 2.5f,
 )
@@ -278,7 +280,10 @@ class SuggestionEngine(
     // Completions are suggestions, not corrections: only whole-word candidates compete here
     val words = ranked.filter { !it.completion }
     val pick = words.firstOrNull() ?: return null
-    if (pick.word.equals(typed, ignoreCase = true)) return null
+    if (pick.word.equals(typed, ignoreCase = true)) {
+      // Only the capital differs: a noun typed in lower case gets it where nouns are capitalised
+      return if (config.nounCapitals && pick.word[0].isUpperCase() && typed[0].isLowerCase()) pick.word else null
+    }
     if (isValid(typed)) {
       // A real word is replaced only by something far more likely here ("tour" → "your")
       val typedScore = words.firstOrNull { it.word.equals(typed, ignoreCase = true) }?.score ?: return null
