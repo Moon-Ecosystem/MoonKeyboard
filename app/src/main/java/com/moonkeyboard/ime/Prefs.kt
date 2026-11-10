@@ -25,7 +25,7 @@ enum class ImageExpiry(val days: Int?) { WEEK(7), MONTH(30), NEVER(null) }
 
 /** What the user can put on the toolbar, in the order they choose; options and clipboard are always there. */
 enum class ToolbarItem {
-  EMOJI, THEME, FLOATING, ONE_HANDED, TEXT_EDIT, SPLIT, INCOGNITO;
+  EMOJI, THEME, FLOATING, ONE_HANDED, TEXT_EDIT, SPLIT, INCOGNITO, SYMBOLS;
 
   companion object {
     /** As many as fit beside options, clipboard and the back arrow on a narrow phone. */
@@ -80,6 +80,8 @@ object Prefs {
   val longPressSymbols = Pref("long_press_symbols", false, String::toBoolean)
   /** A row of recent emoji above the strip, one tap each. */
   val emojiRow = Pref("emoji_row", false, String::toBoolean)
+  /** How many emoji the row holds; past the ten that fit, it scrolls. */
+  val emojiRowCount = Pref("emoji_row_count", EMOJI_ROW_FIT) { it.toInt().coerceIn(EMOJI_ROW_FIT, Emoji.MAX_RECENTS) }
   /** A key of its own for emoji beside the comma, instead of holding the comma. */
   val emojiKey = Pref("emoji_key", false, String::toBoolean)
   /** The keys' height as a percentage of the size that fits the screen. */
@@ -147,6 +149,8 @@ object Prefs {
     }
   }
 
+  /** Emoji that fit across the row without scrolling. */
+  const val EMOJI_ROW_FIT = 10
   const val KEYBOARD_HEIGHT_MIN = 80
   const val KEYBOARD_HEIGHT_MAX = 140
 }

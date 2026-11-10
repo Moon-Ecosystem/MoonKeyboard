@@ -16,7 +16,7 @@ Moon Keyboard is a fully offline Android keyboard (input method) with glide typi
 ```
 app/                         the Android input method and the settings app
   src/main/java/com/moonkeyboard/
-    MainActivity.kt, AppScreens.kt, AppUi.kt   settings app (setup, Look, Typing, Glide, Clipboard, Learned words)
+    MainActivity.kt, AppScreens.kt, AppUi.kt   settings app (setup, Look, Typing, Emoji, Clipboard, Languages, Learned words)
     TestPad.kt                                 try the keyboard in-app, with touch/decoder debug info
     ime/
       MoonImeService.kt     InputMethodService: window, insets, clipboard capture, inline autofill request

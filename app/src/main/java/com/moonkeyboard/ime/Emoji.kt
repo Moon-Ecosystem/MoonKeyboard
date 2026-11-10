@@ -120,7 +120,7 @@ object Emoji {
   }
 
   // Four rows of the panel's grid at its usual eight across
-  private const val MAX_RECENTS = 32
+  const val MAX_RECENTS = 32
   private const val MAX_RESULTS = 40
   private const val MAX_STRIP = 2
   private const val MIN_STRIP_WORD = 3

@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,6 +70,7 @@ import com.moonkeyboard.engine.history.LearnedPhrase
 import com.moonkeyboard.engine.suggest.WordContext
 import com.moonkeyboard.ime.ClipKind
 import com.moonkeyboard.ime.ClipboardStore
+import com.moonkeyboard.ime.Emoji
 import com.moonkeyboard.ime.Haptics
 import com.moonkeyboard.ime.Icons
 import com.moonkeyboard.ime.ImageExpiry
@@ -93,7 +95,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 
-enum class Screen { HOME, LOOK, TYPING, GLIDE, EMOJI, CLIPBOARD, LANGUAGES, LEARNED, SHORTCUTS, TEST_PAD }
+enum class Screen { HOME, LOOK, TYPING, EMOJI, CLIPBOARD, LANGUAGES, LEARNED, SHORTCUTS, TEST_PAD }
 
 /** A screen's scrolling body under its top bar. */
 @Composable
@@ -199,13 +201,7 @@ fun HomeScreen(open: (Screen) -> Unit) {
       stringResource(if (Prefs.autocorrect.value) R.string.autocorrect_on else R.string.autocorrect_off),
       stringResource(if (Prefs.haptics.value) R.string.vibration else R.string.no_vibration),
     ).joinToString(", ")
-    val glide = stringResource(
-      when {
-        !Prefs.glideTyping.value -> R.string.off
-        Prefs.glideTrail.value -> R.string.glide_on_trail
-        else -> R.string.on
-      },
-    )
+    val emoji = stringResource(if (Prefs.emojiSuggestions.value) R.string.emoji_suggestions_on else R.string.emoji_suggestions_off)
     val clips = ClipboardStore.clips.size
     val clipDetail = stringResource(R.string.clipboard_storage, clips, Formatter.formatShortFileSize(LocalContext.current, ClipboardStore.storageBytes()))
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -213,7 +209,7 @@ fun HomeScreen(open: (Screen) -> Unit) {
       Tile(AppIcons.Typing, R.string.typing, typing) { open(Screen.TYPING) }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      Tile(AppIcons.Glide, R.string.glide_typing, glide) { open(Screen.GLIDE) }
+      Tile(Icons.Emoji, R.string.emoji, emoji) { open(Screen.EMOJI) }
       Tile(Icons.Clipboard, R.string.clipboard, clipDetail) { open(Screen.CLIPBOARD) }
     }
 
@@ -226,8 +222,6 @@ fun HomeScreen(open: (Screen) -> Unit) {
       Divider()
       val shortcutCount = remember(engine) { engine?.shared?.shortcuts()?.size ?: 0 }
       NavRow(Icons.TextEdit, R.string.shortcuts, pluralStringResource(R.plurals.shortcut_count, shortcutCount, shortcutCount)) { open(Screen.SHORTCUTS) }
-      Divider()
-      NavRow(Icons.Emoji, R.string.emoji, stringResource(if (Prefs.emojiSuggestions.value) R.string.emoji_suggestions_on else R.string.emoji_suggestions_off)) { open(Screen.EMOJI) }
       Divider()
       NavRow(AppIcons.TestPad, R.string.test_pad, stringResource(R.string.test_pad_detail)) { open(Screen.TEST_PAD) }
     }
@@ -281,12 +275,13 @@ fun LookScreen(onBack: () -> Unit) {
         SwitchRow(R.string.pitch_black, Prefs.pitchBlack, stringResource(R.string.pitch_black_detail))
         Divider()
         SwitchRow(R.string.key_borders, Prefs.borders)
-        Divider()
+      }
+      Spacer(Modifier.height(4.dp))
+      SectionLabel(R.string.layout)
+      Card {
         SwitchRow(R.string.number_row, Prefs.numberRow)
         Divider()
         SwitchRow(R.string.long_press_symbols, Prefs.longPressSymbols, stringResource(R.string.long_press_symbols_detail))
-        Divider()
-        SwitchRow(R.string.emoji_row, Prefs.emojiRow, stringResource(R.string.emoji_row_detail))
         Divider()
         // The preview below grows with the height and shrinks this list: keep the slider in view while it's dragged
         val slider = remember { BringIntoViewRequester() }
@@ -498,7 +493,7 @@ private fun PreviewKeyboard() {
 
 @Composable
 fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
-  Card {
+  Group(R.string.suggestions) {
     SwitchRow(R.string.hinglish, Prefs.hinglish, stringResource(R.string.hinglish_detail))
     Divider()
     SwitchRow(R.string.neural_predictions, Prefs.neuralPredictions, stringResource(R.string.neural_predictions_detail))
@@ -509,7 +504,17 @@ fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
     Divider()
     SwitchRow(R.string.block_offensive, Prefs.blockOffensive, stringResource(R.string.block_offensive_detail))
   }
-  Card {
+  Group(R.string.gestures) {
+    SwitchRow(R.string.glide_typing, Prefs.glideTyping, stringResource(R.string.glide_detail))
+    if (Prefs.glideTyping.value) SwitchRow(R.string.glide_trail, Prefs.glideTrail)
+    Divider()
+    SwitchRow(R.string.space_slide, Prefs.spaceSlide, stringResource(R.string.space_slide_detail))
+    Divider()
+    SwitchRow(R.string.backspace_slide, Prefs.backspaceSlide, stringResource(R.string.backspace_slide_detail))
+    Divider()
+    SliderRow(R.string.long_press_duration, Prefs.longPressMs, 100..700, "${Prefs.longPressMs.value} ms", step = 50)
+  }
+  Group(R.string.feedback) {
     SwitchRow(R.string.haptics, Prefs.haptics)
     if (Prefs.haptics.value) {
       val view = LocalView.current
@@ -521,22 +526,14 @@ fun TypingScreen(onBack: () -> Unit) = Page(R.string.typing, onBack) {
     Divider()
     SwitchRow(R.string.key_preview, Prefs.keyPreview, stringResource(R.string.key_preview_detail))
   }
-  Card {
-    SwitchRow(R.string.space_slide, Prefs.spaceSlide, stringResource(R.string.space_slide_detail))
-    Divider()
-    SwitchRow(R.string.backspace_slide, Prefs.backspaceSlide, stringResource(R.string.backspace_slide_detail))
-  }
-  Card {
-    SliderRow(R.string.long_press_duration, Prefs.longPressMs, 100..700, "${Prefs.longPressMs.value} ms", step = 50)
-  }
 }
 
+/** A labelled card of settings. */
 @Composable
-fun GlideScreen(onBack: () -> Unit) = Page(R.string.glide_typing, onBack) {
-  Card {
-    SwitchRow(R.string.glide_typing, Prefs.glideTyping, stringResource(R.string.glide_detail))
-    Divider()
-    SwitchRow(R.string.glide_trail, Prefs.glideTrail)
+private fun Group(label: Int, content: @Composable ColumnScope.() -> Unit) {
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    SectionLabel(label)
+    Card(content = content)
   }
 }
 
@@ -546,6 +543,11 @@ fun EmojiScreen(onBack: () -> Unit) = Page(R.string.emoji, onBack) {
     SwitchRow(R.string.emoji_suggestions, Prefs.emojiSuggestions, stringResource(R.string.emoji_suggestions_detail))
     Divider()
     SwitchRow(R.string.emoji_key, Prefs.emojiKey, stringResource(R.string.emoji_key_detail))
+    Divider()
+    SwitchRow(R.string.emoji_row, Prefs.emojiRow, stringResource(R.string.emoji_row_detail))
+    if (Prefs.emojiRow.value) {
+      SliderRow(R.string.emoji_row_count, Prefs.emojiRowCount, Prefs.EMOJI_ROW_FIT..Emoji.MAX_RECENTS, "${Prefs.emojiRowCount.value}", step = 2)
+    }
   }
   val c = LocalAppColors.current
   if (!Prefs.emojiKey.value) Text(stringResource(R.string.emoji_search_tip), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 13.sp, lineHeight = 19.sp)

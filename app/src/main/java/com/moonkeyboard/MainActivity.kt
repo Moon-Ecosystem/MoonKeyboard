@@ -63,7 +63,6 @@ class MainActivity : ComponentActivity() {
               }
               Screen.LOOK -> LookScreen(home)
               Screen.TYPING -> TypingScreen(home)
-              Screen.GLIDE -> GlideScreen(home)
               Screen.EMOJI -> EmojiScreen(home)
               Screen.CLIPBOARD -> ClipboardScreen(home)
               Screen.LANGUAGES -> LanguagesScreen(home)

@@ -95,7 +95,6 @@ object AppIcons {
   val Shield = icon("M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z", "M9 12l2 2 4-4")
   val Check = icon("M5 12l5 5 9-10")
   val Typing = icon("M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z", "M7 10h.01M11 10h.01M15 10h.01M8 14h8")
-  val Glide = icon("M4 17c3-9 6-9 8-4s5 5 8-6")
   val Learned = icon("M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2zM8 7h6M8 11h6")
   val TestPad = icon("M4 20l4-4M14 4l6 6-8 8-6-6z")
   val Close = icon("M6 6l12 12M18 6L6 18")

@@ -21,6 +21,8 @@ object Icons {
   val Open = icon("M14 4h6v6M20 4l-9 9", "M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4")
   // An eye struck through: nothing is being remembered
   val Incognito = icon("M2 12s3.5-7 10-7c2 0 3.7.6 5.1 1.5M22 12s-3.5 7-10 7c-2 0-3.7-.6-5.1-1.5", "M9.9 14.1a3 3 0 0 1 4.2-4.2", "M3 3l18 18")
+  // A hash: the symbols held on the letter keys
+  val Symbols = icon("M4 9h16M4 15h16", "M10 3 8 21M16 3l-2 18")
   val Theme = icon("M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z")
   val Settings = icon("M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12", circle(16f, 6f, 2f), circle(10f, 12f, 2f), circle(18f, 18f, 2f))
   val Trash = icon("M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3")

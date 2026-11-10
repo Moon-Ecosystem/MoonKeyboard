@@ -336,6 +336,7 @@ internal val ToolbarItem.icon get() = when (this) {
   ToolbarItem.TEXT_EDIT -> Icons.TextEdit
   ToolbarItem.SPLIT -> Icons.Split
   ToolbarItem.INCOGNITO -> Icons.Incognito
+  ToolbarItem.SYMBOLS -> Icons.Symbols
 }
 
 internal val ToolbarItem.label get() = when (this) {
@@ -346,6 +347,7 @@ internal val ToolbarItem.label get() = when (this) {
   ToolbarItem.TEXT_EDIT -> R.string.text_editing
   ToolbarItem.SPLIT -> R.string.split_short
   ToolbarItem.INCOGNITO -> R.string.incognito
+  ToolbarItem.SYMBOLS -> R.string.symbols_short
 }
 
 /** A setting that is on, shown highlighted. */
@@ -356,6 +358,7 @@ internal fun ToolbarItem.isOn() = when (this) {
   ToolbarItem.ONE_HANDED -> !Prefs.floating.value && Prefs.oneHanded.value != OneHanded.OFF
   ToolbarItem.SPLIT -> Prefs.splitLandscape.value
   ToolbarItem.INCOGNITO -> Prefs.incognito.value
+  ToolbarItem.SYMBOLS -> Prefs.longPressSymbols.value
   else -> false
 }
 
@@ -378,6 +381,10 @@ internal fun ToolbarItem.act(controller: InputController, colors: KeyboardColors
     ToolbarItem.TEXT_EDIT -> controller.panel = Panel.EDIT
     ToolbarItem.SPLIT -> Prefs.splitLandscape.value = !Prefs.splitLandscape.value
     ToolbarItem.INCOGNITO -> Prefs.incognito.value = !Prefs.incognito.value
+    ToolbarItem.SYMBOLS -> {
+      Prefs.longPressSymbols.value = !Prefs.longPressSymbols.value
+      controller.panel = Panel.KEYS
+    }
   }
 }
 
@@ -425,7 +432,6 @@ private fun OneHandedControls(colors: KeyboardColors, modifier: Modifier) {
 }
 
 internal val EmojiRowHeight = 40.dp
-private const val EMOJI_ROW_COUNT = 10
 // Until there are recent ones of the user's own
 private val COMMON_EMOJI = listOf("😂", "❤️", "👍", "😭", "🙏", "😊", "🔥", "😍", "🥺", "✨")
 
@@ -435,20 +441,29 @@ private val COMMON_EMOJI = listOf("😂", "❤️", "👍", "😭", "🙏", "�
  */
 @Composable
 private fun EmojiRow(controller: InputController) {
-  val shown = remember(controller.fieldsOpened) {
+  val count = Prefs.emojiRowCount.value
+  val shown = remember(controller.fieldsOpened, count) {
     val recents = Emoji.recents
-    (recents + COMMON_EMOJI.filter { it !in recents }).take(EMOJI_ROW_COUNT)
+    // Common ones fill the first ten until there are recent ones of the user's own; past that, only recents
+    (recents + COMMON_EMOJI.filter { it !in recents }).take(maxOf(minOf(recents.size, count), Prefs.EMOJI_ROW_FIT))
   }
-  Row(Modifier.fillMaxWidth().height(EmojiRowHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-    for (emoji in shown) {
-      Box(
-        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).clickable {
-          controller.insert(emoji)
-          Emoji.used(emoji)
-        },
-        contentAlignment = Alignment.Center,
-      ) {
-        Text(emoji, fontSize = 22.sp)
+  // Cells stay a tenth of the row wide; more than ten carry on past the edge
+  BoxWithConstraints(Modifier.fillMaxWidth().height(EmojiRowHeight).padding(horizontal = 4.dp)) {
+    val cell = maxWidth / Prefs.EMOJI_ROW_FIT
+    Row(
+      Modifier.fillMaxHeight().then(if (shown.size > Prefs.EMOJI_ROW_FIT) Modifier.horizontalScroll(rememberScrollState(), overscrollEffect = null) else Modifier),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      for (emoji in shown) {
+        Box(
+          Modifier.width(cell).fillMaxHeight().clip(RoundedCornerShape(8.dp)).clickable {
+            controller.insert(emoji)
+            Emoji.used(emoji)
+          },
+          contentAlignment = Alignment.Center,
+        ) {
+          Text(emoji, fontSize = 22.sp)
+        }
       }
     }
   }
