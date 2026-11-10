@@ -310,6 +310,7 @@ class InputController(private val host: KeyboardHost) {
     dropUndo()
     midWord = null
     field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
+      .copy(contentTypes = EditorInfoCompat.getContentMimeTypes(info).toList())
     val kind = info.inputType and InputType.TYPE_MASK_CLASS
     val sameKind = kind == inputClass
     inputClass = kind
@@ -736,9 +737,11 @@ class InputController(private val host: KeyboardHost) {
   /** The app whose field is focused. */
   val targetPackage: String? get() = host.editorInfo.packageName
 
-  /** The field takes images of [mime] (apps list what they accept in their EditorInfo). */
-  fun acceptsContent(mime: String): Boolean =
-    EditorInfoCompat.getContentMimeTypes(host.editorInfo).any { ClipDescription.compareMimeTypes(mime, it) }
+  /**
+   * The field takes images of [mime] (apps list what they accept in their EditorInfo). Read from [field],
+   * which Compose watches, so the strip offers a copied image as soon as a field that takes it opens.
+   */
+  fun acceptsContent(mime: String): Boolean = field.contentTypes.any { ClipDescription.compareMimeTypes(mime, it) }
 
   fun commitContent(uri: Uri, mime: String, label: String): Boolean {
     val ic = host.inputConnection ?: return false
@@ -1366,7 +1369,11 @@ class InputController(private val host: KeyboardHost) {
   }
 
   /** What the focused field allows, from its input type. */
-  private data class FieldFlags(val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false, val number: Boolean = false, val email: Boolean = false) {
+  private data class FieldFlags(
+    val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false, val number: Boolean = false, val email: Boolean = false,
+    /** The kinds of image the field takes (its EditorInfo's content MIME types). */
+    val contentTypes: List<String> = emptyList(),
+  ) {
     companion object {
       val NONE = FieldFlags(suggest = false, autocorrect = false, learn = false, autoCaps = false)
 
