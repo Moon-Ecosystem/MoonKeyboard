@@ -784,19 +784,26 @@ private fun DrawScope.drawKey(
 private fun DrawScope.drawPopup(popup: Popup, controller: InputController, colors: KeyboardColors, measurer: TextMeasurer) {
   val pad = 4.dp.toPx()
   val topLeft = Offset(popup.left - pad, popup.top - pad)
-  val size = Size(popup.cellWidth * popup.items.size + 2 * pad, popup.cellHeight + 2 * pad)
+  val size = Size(popup.cellWidth * popup.columns + 2 * pad, popup.cellHeight * popup.rows + 2 * pad)
   drawRoundRect(Color.Black.copy(alpha = 0.18f), topLeft + Offset(0f, 3.dp.toPx()), size, CornerRadius(12.dp.toPx()))
   drawRoundRect(colors.popup, topLeft, size, CornerRadius(12.dp.toPx()))
   popup.items.forEachIndexed { i, item ->
-    val left = popup.left + i * popup.cellWidth
+    val left = popup.left + (i % popup.columns) * popup.cellWidth
+    val top = popup.top + (i / popup.columns) * popup.cellHeight
     val selected = i == popup.selected
     if (selected) {
-      drawRoundRect(colors.accent, Offset(left, popup.top), Size(popup.cellWidth, popup.cellHeight), CornerRadius(KeyRadius.toPx()))
+      drawRoundRect(colors.accent, Offset(left, top), Size(popup.cellWidth, popup.cellHeight), CornerRadius(KeyRadius.toPx()))
     }
-    val center = Offset(left + popup.cellWidth / 2, popup.top + popup.cellHeight / 2)
-    // Language names stay as written, smaller; letters follow shift
-    val label = if (popup.languages != null) item else controller.display(item)
-    drawLabel(measurer, label, center, TextStyle(color = if (selected) colors.onAccent else colors.text, fontSize = if (popup.languages != null) 17.sp else 24.sp))
+    val center = Offset(left + popup.cellWidth / 2, top + popup.cellHeight / 2)
+    val color = if (selected) colors.onAccent else colors.text
+    if (popup.languages != null) {
+      // Language names stay as written, smaller, and shrink further rather than run into the next one
+      val style = TextStyle(color = color, fontSize = 17.sp)
+      val fit = popup.cellWidth * 0.9f / measurer.measure(item, style).size.width
+      drawLabel(measurer, item, center, if (fit < 1f) style.copy(fontSize = 17.sp * fit) else style)
+    } else {
+      drawLabel(measurer, controller.display(item), center, TextStyle(color = color, fontSize = 24.sp))
+    }
   }
 }
 

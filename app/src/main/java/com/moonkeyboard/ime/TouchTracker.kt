@@ -27,9 +27,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/** [languages]: a space-bar popup's language ids, one per item (null for the system's keyboard list). */
-class Popup(val items: List<String>, val left: Float, val top: Float, val cellWidth: Float, val cellHeight: Float, val languages: List<String?>? = null) {
+/**
+ * [languages]: a space-bar popup's language ids, one per item (null for the system's keyboard list).
+ * Items fill [columns] cells a row, from the top row down.
+ */
+class Popup(val items: List<String>, val left: Float, val top: Float, val cellWidth: Float, val cellHeight: Float, val languages: List<String?>? = null, val columns: Int = items.size) {
   var selected by mutableIntStateOf(0)
+  val rows: Int get() = (items.size + columns - 1) / columns
+
+  /** The item under [x], [y]; a finger above or below the popup picks from its nearest row. */
+  fun indexAt(x: Float, y: Float): Int {
+    val column = ((x - left) / cellWidth).toInt().coerceIn(0, columns - 1)
+    val row = ((y - top) / cellHeight).toInt().coerceIn(0, rows - 1)
+    return (row * columns + column).coerceIn(0, items.lastIndex)
+  }
 }
 
 /** A glide trail sample and when the finger passed it ([SystemClock.uptimeMillis]); it fades by age. */
@@ -164,7 +175,7 @@ class TouchTracker(
     val (at, nowMs) = samples.last()
     val p = popup
     if (p != null && popupOwner == id) {
-      p.selected = ((at.x - p.left) / p.cellWidth).toInt().coerceIn(0, p.items.lastIndex)
+      p.selected = p.indexAt(at.x, at.y)
       return
     }
     if (cursorOwner == id || pressed[id]?.key?.type == KeyType.SPACE) {
@@ -355,12 +366,18 @@ class TouchTracker(
   /** The switched-on languages by name, then ⌨ for the system's keyboard list, over the space bar. */
   private fun languagePopup(bounds: KeyBounds): Popup {
     val (packs, next) = controller.languageChoices()
-    val items = packs.map { it.manifest.name } + KEYBOARDS_ITEM
-    // Wide enough for a name like "Deutsch", but all of them must fit across the keyboard
-    val cell = minOf(keyWidth * LANGUAGE_CELL_KEYS, (geometry.width - 2 * sidePadding) / items.size)
-    val total = cell * items.size
+    // "Português (Brasil)" shows as "Português", unless another language shares that name
+    val short = packs.map { it.manifest.name.substringBefore(" (") }
+    val items = packs.mapIndexed { i, p -> if (short.count { it == short[i] } > 1) p.manifest.name else short[i] } + KEYBOARDS_ITEM
+    // Cells wide enough for a name like "Deutsch"; when they don't all fit across, they wrap onto more rows
+    val width = geometry.width - 2 * sidePadding
+    val rows = Math.ceil((items.size * keyWidth * LANGUAGE_CELL_KEYS / width).toDouble()).toInt().coerceAtLeast(1)
+    val columns = (items.size + rows - 1) / rows
+    val cell = minOf(keyWidth * LANGUAGE_CELL_KEYS, width / columns)
+    val total = cell * columns
     val left = (bounds.centerX - total / 2).coerceIn(sidePadding, geometry.width - sidePadding - total)
-    return Popup(items, left, bounds.top - bounds.height - popupGap, cell, bounds.height, packs.map { it.manifest.id } + null)
+    val top = bounds.top - rows * bounds.height - popupGap
+    return Popup(items, left, top, cell, bounds.height, packs.map { it.manifest.id } + null, columns)
       .apply { selected = next }
   }
 
