@@ -18,8 +18,8 @@ android {
     applicationId = "com.moonkeyboard"
     minSdk = 24
     targetSdk = 36
-    versionCode = 7
-    versionName = "0.7"
+    versionCode = 8
+    versionName = "0.8"
     // ONNX Runtime's native code for 64-bit ARM phones only: each other ABI adds 13–18 MB to the APK
     ndk { abiFilters += listOf("arm64-v8a") }
   }
