@@ -103,12 +103,15 @@ object Emoji {
       var worst = 0
       for (t in terms) {
         val words = e.words.flatMap { it.split(' ', ':', '-') }
-        worst = maxOf(worst, when {
-          words.any { it == t } -> 0
-          words.any { it.startsWith(t) } -> 1
-          e.words.any { t in it } -> 2
-          else -> return null
-        })
+        worst = maxOf(
+          worst,
+          when {
+            words.any { it == t } -> 0
+            words.any { it.startsWith(t) } -> 1
+            e.words.any { t in it } -> 2
+            else -> return null
+          },
+        )
       }
       return worst
     }

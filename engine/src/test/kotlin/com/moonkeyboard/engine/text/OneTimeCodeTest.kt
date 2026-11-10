@@ -18,12 +18,10 @@ class OneTimeCodeTest {
   fun splitInTwo() = assertEquals("482913", oneTimeCode("Code: 482 913"))
 
   @Test
-  fun nearestTheKeywordWins() =
-    assertEquals("482913", oneTimeCode("482913 is the OTP for your txn of Rs 5000 at Amazon. Valid for 10 mins."))
+  fun nearestTheKeywordWins() = assertEquals("482913", oneTimeCode("482913 is the OTP for your txn of Rs 5000 at Amazon. Valid for 10 mins."))
 
   @Test
-  fun amountsDatesAndTimesAreNotCodes() =
-    assertEquals("7731", oneTimeCode("OTP 7731 for Rs. 1,250.00 on 30/10/2026 at 10:45"))
+  fun amountsDatesAndTimesAreNotCodes() = assertEquals("7731", oneTimeCode("OTP 7731 for Rs. 1,250.00 on 30/10/2026 at 10:45"))
 
   @Test
   fun phoneNumbersAreTooLong() = assertNull(oneTimeCode("Call me on 9876543210"))

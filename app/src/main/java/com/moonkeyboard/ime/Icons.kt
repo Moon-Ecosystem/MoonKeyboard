@@ -19,15 +19,17 @@ object Icons {
   val Floating = icon("M5 10h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2z", "M9 5h6")
   val Split = icon("M4 7h5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z", "M15 7h5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z")
   val Open = icon("M14 4h6v6M20 4l-9 9", "M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4")
+
   // An eye struck through: nothing is being remembered
   val Incognito = icon("M2 12s3.5-7 10-7c2 0 3.7.6 5.1 1.5M22 12s-3.5 7-10 7c-2 0-3.7-.6-5.1-1.5", "M9.9 14.1a3 3 0 0 1 4.2-4.2", "M3 3l18 18")
+
   // A hash: the symbols held on the letter keys
   val Symbols = icon("M4 9h16M4 15h16", "M10 3 8 21M16 3l-2 18")
   val Theme = icon("M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z")
   val Settings = icon("M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12", circle(16f, 6f, 2f), circle(10f, 12f, 2f), circle(18f, 18f, 2f))
   val Trash = icon("M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3")
   val Close = icon("M6 6l12 12M18 6L6 18")
-  val Pin =icon("M12 17v5M9 3h6l-1 6 3 3H7l3-3z")
+  val Pin = icon("M12 17v5M9 3h6l-1 6 3 3H7l3-3z")
   val Backspace = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM11 9l6 6M17 9l-6 6")
   val Up = icon("M12 19V5M6 11l6-6 6 6")
   val Down = icon("M12 5v14M6 13l6 6 6-6")
@@ -57,16 +59,15 @@ object Icons {
 
   private fun circle(cx: Float, cy: Float, r: Float) = "M${cx - r} ${cy}a$r $r 0 1 0 ${2 * r} 0a$r $r 0 1 0 ${-2 * r} 0"
 
-  private fun icon(vararg paths: String): ImageVector =
-    ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
-      for (d in paths) {
-        addPath(
-          PathParser().parsePathString(d).toNodes(),
-          stroke = SolidColor(Color.Black),
-          strokeLineWidth = 1.8f,
-          strokeLineCap = StrokeCap.Round,
-          strokeLineJoin = StrokeJoin.Round,
-        )
-      }
-    }.build()
+  private fun icon(vararg paths: String): ImageVector = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
+    for (d in paths) {
+      addPath(
+        PathParser().parsePathString(d).toNodes(),
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 1.8f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+      )
+    }
+  }.build()
 }

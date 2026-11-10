@@ -2,31 +2,26 @@ package com.moonkeyboard.ime
 
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.graphics.ImageDecoder
 import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import androidx.annotation.RequiresApi
-import androidx.compose.foundation.Canvas
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import android.view.KeyEvent
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -41,10 +36,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -52,35 +48,27 @@ import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.unit.Dp
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,20 +76,32 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.moonkeyboard.R
 import com.moonkeyboard.engine.text.oneTimeCode
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** The strip's row when a panel is open: back to the keys, a title, and the panel's own buttons. */
@@ -577,18 +577,20 @@ fun OptionsPanel(controller: InputController, colors: KeyboardColors, modifier: 
   Column(modifier) {
     PanelHeader(R.string.keyboard_options, controller, colors)
     Column(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      for (row in 0 until 2) EditRow {
-        for (slot in row * perRow until (row + 1) * perRow) {
-          if (slot > tiles.lastIndex) {
-            Spacer(Modifier.weight(1f))
-            continue
-          }
-          val item = tiles[slot]
-          if (item != null) {
-            OptionTile(colors, item.icon, item.label, active = item.isOn(), enabled = item.isEnabled()) { item.act(controller, colors) }
-          } else {
-            OptionTile(colors, Icons.Open, R.string.settings) {
-              context.startActivity(Intent(context, com.moonkeyboard.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      for (row in 0 until 2) {
+        EditRow {
+          for (slot in row * perRow until (row + 1) * perRow) {
+            if (slot > tiles.lastIndex) {
+              Spacer(Modifier.weight(1f))
+              continue
+            }
+            val item = tiles[slot]
+            if (item != null) {
+              OptionTile(colors, item.icon, item.label, active = item.isOn(), enabled = item.isEnabled()) { item.act(controller, colors) }
+            } else {
+              OptionTile(colors, Icons.Open, R.string.settings) {
+                context.startActivity(Intent(context, com.moonkeyboard.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+              }
             }
           }
         }

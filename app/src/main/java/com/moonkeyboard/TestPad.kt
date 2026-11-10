@@ -61,11 +61,14 @@ internal class TestPadHost(view: View) : KeyboardHost {
 
   init {
     // SpannableStringBuilder notifies TextWatcher spans; INCLUSIVE keeps this one covering all text
-    buffer.setSpan(object : TextWatcher {
-      override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) = Unit
-      override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) = Unit
-      override fun afterTextChanged(s: Editable) { text = s.toString() }
-    }, 0, 0, Spanned.SPAN_INCLUSIVE_INCLUSIVE)
+    buffer.setSpan(
+      object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) = Unit
+        override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) = Unit
+        override fun afterTextChanged(s: Editable) { text = s.toString() }
+      },
+      0, 0, Spanned.SPAN_INCLUSIVE_INCLUSIVE,
+    )
   }
 
   override val editorInfo = EditorInfo().apply {
@@ -99,22 +102,22 @@ fun TestPad(onBack: () -> Unit) {
   var showDebug by rememberSaveable { mutableStateOf(true) }
 
   Surface(Modifier.fillMaxSize()) {
-  Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-      TextButton(onBack) { Text(stringResource(R.string.back)) }
-      Text(stringResource(R.string.test_pad), style = MaterialTheme.typography.titleMedium)
-      Spacer(Modifier.weight(1f))
-      TextButton({ host.clear(); recorder.clear() }) { Text(stringResource(R.string.clear)) }
-      TextButton({ showDebug = !showDebug }) { Text(stringResource(if (showDebug) R.string.hide_debug else R.string.show_debug)) }
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+      Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onBack) { Text(stringResource(R.string.back)) }
+        Text(stringResource(R.string.test_pad), style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.weight(1f))
+        TextButton({ host.clear(); recorder.clear() }) { Text(stringResource(R.string.clear)) }
+        TextButton({ showDebug = !showDebug }) { Text(stringResource(if (showDebug) R.string.hide_debug else R.string.show_debug)) }
+      }
+      Text(
+        host.text + "▏",
+        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+        style = MaterialTheme.typography.bodyLarge,
+      )
+      if (showDebug) DebugPanel(recorder, controller, Modifier.heightIn(max = 240.dp))
+      KeyboardUi(controller, recorder)
     }
-    Text(
-      host.text + "▏",
-      Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
-      style = MaterialTheme.typography.bodyLarge,
-    )
-    if (showDebug) DebugPanel(recorder, controller, Modifier.heightIn(max = 240.dp))
-    KeyboardUi(controller, recorder)
-  }
   }
 }
 
@@ -126,35 +129,35 @@ private fun DebugPanel(recorder: GestureRecorder, controller: InputController, m
   val last = recorder.traces.lastOrNull()
 
   Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant) {
-  Column(
-    Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
-    verticalArrangement = Arrangement.spacedBy(4.dp),
-  ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.touch_paths), style = MaterialTheme.typography.labelLarge)
-      Spacer(Modifier.padding(4.dp))
-      Switch(recorder.showPaths, { recorder.showPaths = it })
-      Spacer(Modifier.weight(1f))
-      TextButton({ recorder.exportJson()?.let { clipboard.setText(AnnotatedString(it)) } }, enabled = recorder.traces.isNotEmpty()) {
-        Text(stringResource(R.string.copy_traces, recorder.traces.size))
+    Column(
+      Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.touch_paths), style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.padding(4.dp))
+        Switch(recorder.showPaths, { recorder.showPaths = it })
+        Spacer(Modifier.weight(1f))
+        TextButton({ recorder.exportJson()?.let { clipboard.setText(AnnotatedString(it)) } }, enabled = recorder.traces.isNotEmpty()) {
+          Text(stringResource(R.string.copy_traces, recorder.traces.size))
+        }
       }
+      Text("layer ${controller.layerId}  shift ${controller.shift}  board ${geometry?.width?.toInt()}×${geometry?.height?.toInt()} px", style = mono)
+      if (last != null && geometry != null) {
+        val avgSampleMs = if (last.points.size > 1) last.durationMs.toFloat() / (last.points.size - 1) else 0f
+        val speed = if (last.durationMs > 0) last.lengthPx / last.durationMs else 0f
+        Text("last  typed '${last.typed}'  ${last.points.size} pts  ${last.durationMs} ms  ${last.lengthPx.toInt()} px", style = mono)
+        Text("      ${"%.1f".format(speed)} px/ms  sample every ${"%.1f".format(avgSampleMs)} ms", style = mono)
+        Text("keys  ${last.keysAlong(geometry).joinToString(" → ")}", style = mono)
+      }
+      val suggestions = controller.suggestions
+      if (suggestions.debug.isNotEmpty()) {
+        Text("decoder  '${suggestions.typed}' → ${suggestions.autocorrect ?: "(no autocorrect)"}", style = mono)
+        suggestions.debug.forEach { Text("  $it", style = mono) }
+      } else if (Language.engine == null) {
+        Text("decoder  dictionary loading…", style = mono)
+      }
+      recorder.log.asReversed().forEach { Text(it, style = mono) }
     }
-    Text("layer ${controller.layerId}  shift ${controller.shift}  board ${geometry?.width?.toInt()}×${geometry?.height?.toInt()} px", style = mono)
-    if (last != null && geometry != null) {
-      val avgSampleMs = if (last.points.size > 1) last.durationMs.toFloat() / (last.points.size - 1) else 0f
-      val speed = if (last.durationMs > 0) last.lengthPx / last.durationMs else 0f
-      Text("last  typed '${last.typed}'  ${last.points.size} pts  ${last.durationMs} ms  ${last.lengthPx.toInt()} px", style = mono)
-      Text("      ${"%.1f".format(speed)} px/ms  sample every ${"%.1f".format(avgSampleMs)} ms", style = mono)
-      Text("keys  ${last.keysAlong(geometry).joinToString(" → ")}", style = mono)
-    }
-    val suggestions = controller.suggestions
-    if (suggestions.debug.isNotEmpty()) {
-      Text("decoder  '${suggestions.typed}' → ${suggestions.autocorrect ?: "(no autocorrect)"}", style = mono)
-      suggestions.debug.forEach { Text("  $it", style = mono) }
-    } else if (Language.engine == null) {
-      Text("decoder  dictionary loading…", style = mono)
-    }
-    recorder.log.asReversed().forEach { Text(it, style = mono) }
-  }
   }
 }

@@ -26,7 +26,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
-import kotlin.math.roundToInt
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -49,6 +48,7 @@ import com.moonkeyboard.ime.Icons
 import com.moonkeyboard.ime.Prefs
 import com.moonkeyboard.ime.ThemeMode
 import com.moonkeyboard.ime.keyboardColors
+import kotlin.math.roundToInt
 
 /** The app's palette, from the design canvas; light mirrors it for the light keyboard theme. */
 data class AppColors(
@@ -103,12 +103,11 @@ object AppIcons {
   val DragHandle = icon("M5 9h14M5 15h14")
   val Language = icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M3 12h18", "M12 3c3 3 3 15 0 18c-3-3-3-15 0-18z")
 
-  private fun icon(vararg paths: String): ImageVector =
-    ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
-      for (d in paths) {
-        addPath(PathParser().parsePathString(d).toNodes(), stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
-      }
-    }.build()
+  private fun icon(vararg paths: String): ImageVector = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
+    for (d in paths) {
+      addPath(PathParser().parsePathString(d).toNodes(), stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
+    }
+  }.build()
 }
 
 /** Follows the keyboard's own theme setting, so the app and the keyboard always match. */

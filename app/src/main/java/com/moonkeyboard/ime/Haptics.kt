@@ -35,9 +35,10 @@ object Haptics {
     }
   }
 
-  private fun vibrator(context: Context): Vibrator =
-    if (Build.VERSION.SDK_INT >= 31) context.getSystemService(VibratorManager::class.java).defaultVibrator
-    else @Suppress("DEPRECATION") context.getSystemService(Vibrator::class.java)
+  private fun vibrator(context: Context): Vibrator = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(VibratorManager::class.java).defaultVibrator
+  else
+    @Suppress("DEPRECATION")
+    context.getSystemService(Vibrator::class.java)
 
   private const val MS_PER_STEP = 10L
 }

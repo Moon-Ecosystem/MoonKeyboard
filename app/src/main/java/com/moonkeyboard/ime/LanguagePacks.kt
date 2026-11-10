@@ -21,13 +21,11 @@ abstract class PackFiles(val manifest: PackManifest) {
   val vocab: String get() = "${manifest.id}-lm.vocab"
 
   /** The layout [name] from the pack, or the built-in one of that name. */
-  fun layout(name: String): Layout =
-    open("$name.json")?.use { Layouts.parse(it.readBytes().decodeToString(), name) } ?: Layouts.load(name)
+  fun layout(name: String): Layout = open("$name.json")?.use { Layouts.parse(it.readBytes().decodeToString(), name) } ?: Layouts.load(name)
 }
 
 private class AssetPack(private val assets: AssetManager, private val dir: String, manifest: PackManifest) : PackFiles(manifest) {
-  override fun open(name: String): InputStream? =
-    try { assets.open("$dir/$name") } catch (_: FileNotFoundException) { null }
+  override fun open(name: String): InputStream? = try { assets.open("$dir/$name") } catch (_: FileNotFoundException) { null }
 }
 
 private class InstalledPack(private val dir: File, manifest: PackManifest) : PackFiles(manifest) {
@@ -54,19 +52,16 @@ object LanguagePacks {
 
   private fun packsDir(context: Context) = File(context.filesDir, "packs")
 
-  fun installed(context: Context): List<PackFiles> =
-    packsDir(context).listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty()
-      .mapNotNull { dir -> Packs.installed(dir)?.let { InstalledPack(dir, it) } }
-      .sortedBy { it.manifest.name }
+  fun installed(context: Context): List<PackFiles> = packsDir(context).listFiles { f -> f.isDirectory && !f.name.startsWith(".") }.orEmpty()
+    .mapNotNull { dir -> Packs.installed(dir)?.let { InstalledPack(dir, it) } }
+    .sortedBy { it.manifest.name }
 
   /** Checks and installs the pack at [uri]; throws [com.moonkeyboard.engine.pack.PackException] when it's refused. */
-  fun install(context: Context, uri: Uri): PackManifest =
-    (context.contentResolver.openInputStream(uri) ?: throw FileNotFoundException(uri.toString())).use {
-      Packs.install(it, packsDir(context), Packs.publicKey(PUBLIC_KEY))
-    }
+  fun install(context: Context, uri: Uri): PackManifest = (context.contentResolver.openInputStream(uri) ?: throw FileNotFoundException(uri.toString())).use {
+    Packs.install(it, packsDir(context), Packs.publicKey(PUBLIC_KEY))
+  }
 
-  fun find(context: Context, id: String): PackFiles? =
-    if (id == BUILT_IN) builtIn(context) else installed(context).find { it.manifest.id == id }
+  fun find(context: Context, id: String): PackFiles? = if (id == BUILT_IN) builtIn(context) else installed(context).find { it.manifest.id == id }
 
   /** Every language, in switching order, and whether it's switched on. */
   fun all(context: Context): List<Pair<PackFiles, Boolean>> {

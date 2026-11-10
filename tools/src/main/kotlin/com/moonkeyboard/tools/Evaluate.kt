@@ -1,5 +1,8 @@
 package com.moonkeyboard.tools
 
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import com.moonkeyboard.engine.decode.DecoderConfig
 import com.moonkeyboard.engine.decode.GlideConfig
 import com.moonkeyboard.engine.dict.Lexicon
@@ -8,9 +11,6 @@ import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.layout.KeyboardGeometry
 import com.moonkeyboard.engine.layout.Layouts
 import com.moonkeyboard.engine.pack.Packs
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
 import com.moonkeyboard.engine.suggest.EngineConfig
 import com.moonkeyboard.engine.suggest.NeuralLm
 import com.moonkeyboard.engine.suggest.SuggestionEngine
@@ -124,8 +124,10 @@ fun typosReport(lexicon: Lexicon, lines: List<String>, geometry: KeyboardGeometr
       examples += "  %-16s → %-16s (want %s)  strip %s".format(typo, result, target, s.items)
     }
   }
-  out.appendLine("typos: autocorrected %5.1f%%  in strip %5.1f%%  (also-a-word %4.1f%%, so unfixable without context)  (%d pairs)"
-    .format(pct(fixed, total), pct(inStrip, total), pct(alreadyAWord, total), total))
+  out.appendLine(
+    "typos: autocorrected %5.1f%%  in strip %5.1f%%  (also-a-word %4.1f%%, so unfixable without context)  (%d pairs)"
+      .format(pct(fixed, total), pct(inStrip, total), pct(alreadyAWord, total), total),
+  )
   examples.forEach(out::appendLine)
   return out.toString()
 }
@@ -158,6 +160,7 @@ class Report(val tap: Double, val tapHarm: Double, val glide: Double, val predic
 }
 
 private val TAP_NOISE = listOf(0.35f, 0.5f)
+
 /** (corner noise, smoothing, undershoot): a careful swiper, and a fast one who turns early. */
 private val GLIDE_NOISE = listOf(Triple(0.2f, 0.4f, 0f), Triple(0.3f, 0.6f, 0.35f))
 
@@ -195,8 +198,10 @@ fun report(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGeometry
     }
     tapSum += committed.toDouble() / words
     harmSum += harmed.toDouble() / words
-    out.appendLine("tap   noise %.2f: raw %5.1f%%  committed %5.1f%%  in strip %5.1f%%  broke a right word %4.1f%%  (%d words)"
-      .format(sigma, pct(literal, words), pct(committed, words), pct(strip, words), pct(harmed, words), words))
+    out.appendLine(
+      "tap   noise %.2f: raw %5.1f%%  committed %5.1f%%  in strip %5.1f%%  broke a right word %4.1f%%  (%d words)"
+        .format(sigma, pct(literal, words), pct(committed, words), pct(strip, words), pct(harmed, words), words),
+    )
     examples.forEach(out::appendLine)
   }
 
@@ -278,8 +283,7 @@ fun compareReport(a: Lexicon, b: Lexicon, sentences: List<String>, geometry: Key
     // Continuity-corrected McNemar statistic, chi-squared with one degree of freedom
     val chi2 = if (disagree == 0) 0.0 else (kotlin.math.abs(onlyA[i] - onlyB[i]) - 1.0).coerceAtLeast(0.0).let { it * it } / disagree
     val p = chiSquared1Tail(chi2)
-    out.appendLine("%-17s A %5.1f%%  B %5.1f%%  diff %+5.1f pts  (only A %d, only B %d, p=%.3g, %d words)".format(
-      label, pct(hitsA[i], n), pct(hitsB[i], n), pct(hitsB[i] - hitsA[i], n), onlyA[i], onlyB[i], p, n))
+    out.appendLine("%-17s A %5.1f%%  B %5.1f%%  diff %+5.1f pts  (only A %d, only B %d, p=%.3g, %d words)".format(label, pct(hitsA[i], n), pct(hitsB[i], n), pct(hitsB[i] - hitsA[i], n), onlyA[i], onlyB[i], p, n))
   }
   return out.toString()
 }
@@ -362,11 +366,15 @@ private fun learningReport(lexicon: Lexicon, sentences: List<String>, setup: Set
 /** Sweeps only the user-model knobs (fast: predictions only), ranked by habit + everything-else accuracy. */
 fun learningGrid(lexicon: Lexicon, sentences: List<String>) {
   val results = ArrayList<Pair<Double, String>>()
-  for (share in listOf(0.3f, 0.5f, 0.7f, 0.85f)) for (confidence in listOf(0.5f, 1f, 2f, 4f, 8f)) for (vocabulary in listOf(0f, 0.05f, 0.15f)) {
-    val engine = EngineConfig(userShare = share, userConfidence = confidence, userVocabularyShare = vocabulary)
-    val (_, _, habit, other) = learning(lexicon, sentences, Setup(engine = engine))
-    // Ordinary sentences weigh double: learning must not cost the everyday case much
-    results += (habit + 2 * other) to "share %.2f confidence %.1f vocabulary %.2f: habits %5.1f%%, other %5.1f%%".format(share, confidence, vocabulary, habit, other)
+  for (share in listOf(0.3f, 0.5f, 0.7f, 0.85f)) {
+    for (confidence in listOf(0.5f, 1f, 2f, 4f, 8f)) {
+      for (vocabulary in listOf(0f, 0.05f, 0.15f)) {
+        val engine = EngineConfig(userShare = share, userConfidence = confidence, userVocabularyShare = vocabulary)
+        val (_, _, habit, other) = learning(lexicon, sentences, Setup(engine = engine))
+        // Ordinary sentences weigh double: learning must not cost the everyday case much
+        results += (habit + 2 * other) to "share %.2f confidence %.1f vocabulary %.2f: habits %5.1f%%, other %5.1f%%".format(share, confidence, vocabulary, habit, other)
+      }
+    }
   }
   results.sortedByDescending { it.first }.take(10).forEach { println(it.second) }
 }
@@ -425,7 +433,7 @@ private fun grid(lexicon: Lexicon, sentences: List<String>, geometry: KeyboardGe
     "unexplainedTurnCost" to listOf(0f, 0.15f, 0.25f, 0.4f, 0.6f).map { v -> { s: Setup -> s.copy(glide = s.glide.copy(unexplainedTurnCost = v)) } },
     "turnDegrees" to listOf(35f, 50f, 65f).map { v -> { s: Setup -> s.copy(glide = s.glide.copy(turnDegrees = v)) } },
     "undershootReach" to listOf(1.5f, 2.5f, 3.5f).map { v -> { s: Setup -> s.copy(glide = s.glide.copy(undershootReach = v)) } },
-  // Without a model the neural knobs change nothing
+    // Without a model the neural knobs change nothing
   ).filter { if (only == null) !it.first.startsWith("neural") else it.first in only }
   var best = start
   var bestScore = report(lexicon, sentences, geometry, best).score

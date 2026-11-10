@@ -184,8 +184,10 @@ class Lexicon internal constructor(
     const val SENTENCE_START = -2
     const val NOT_A_WORD = 1
     const val NO_SUGGEST = 2
+
     /** Possibly offensive: suggested only when the user turns blocking off. */
     const val OFFENSIVE = 4
+
     /** Hindi typed in Latin letters; English words that are also Hindi ("main") don't carry it. */
     const val HINGLISH = 8
 

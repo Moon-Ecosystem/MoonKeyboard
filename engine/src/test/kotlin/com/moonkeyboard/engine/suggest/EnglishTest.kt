@@ -3,12 +3,12 @@ package com.moonkeyboard.engine.suggest
 import com.moonkeyboard.engine.decode.KeyMap
 import com.moonkeyboard.engine.decode.Touch
 import com.moonkeyboard.engine.decode.resample
-import com.moonkeyboard.engine.trace.TracePoint
 import com.moonkeyboard.engine.dict.Lexicon
 import com.moonkeyboard.engine.eval.TypingSimulator
 import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.layout.KeyboardGeometry
 import com.moonkeyboard.engine.layout.Layouts
+import com.moonkeyboard.engine.trace.TracePoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -22,8 +22,7 @@ class EnglishTest {
 
   private fun touches(word: String) = word.map(keys::touchFor)
 
-  private fun suggest(typed: String, prev: String? = "the", engine: SuggestionEngine = this.engine) =
-    engine.suggest(typed, touches(typed), keys, WordContext(prev, prev == null), allowAutocorrect = true)
+  private fun suggest(typed: String, prev: String? = "the", engine: SuggestionEngine = this.engine) = engine.suggest(typed, touches(typed), keys, WordContext(prev, prev == null), allowAutocorrect = true)
 
   @Test
   fun correctsCommonTypos() {
@@ -324,6 +323,7 @@ class EnglishTest {
     const val GLIDE_FLOOR = 0.72
     const val HINGLISH_TAP_FLOOR = 0.92
     const val HINGLISH_GLIDE_FLOOR = 0.65
+
     /** Tweets' looser spelling: variants correct into each other more often than English words do. */
     const val HINGLISH_BROKE_CEILING = 0.012
   }

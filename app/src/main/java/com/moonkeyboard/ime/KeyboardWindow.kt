@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,6 +63,7 @@ private val HandleHeight = 28.dp
 private val GripWidth = 48.dp
 private val DockZone = 160.dp
 private val MinWidth = 220.dp
+
 // The card width at which keys are full size
 private val FullSizeWidth = 400.dp
 
@@ -132,7 +133,7 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
     Column(
       Modifier.offset(spot.x.dp, y.dp).width(spot.width.dp).then(bounds)
         .shadow(12.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(colors.background)
-        .onSizeChanged { cardHeight = with(density) { it.height.toDp().value } }
+        .onSizeChanged { cardHeight = with(density) { it.height.toDp().value } },
     ) {
       val move = stringResource(R.string.move_keyboard)
       // The resize grip sits in the bar too: in a corner over the keys it took enter's taps
@@ -184,7 +185,7 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
                   pref.value = spot()
                 }
               }
-            }
+            },
         ) {
           val s = 1.8.dp.toPx()
           val e = Offset(size.width - 10.dp.toPx(), size.height - 6.dp.toPx())

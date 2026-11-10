@@ -54,6 +54,7 @@ object ClipboardStore {
   fun freshClip(now: Long = System.currentTimeMillis()): Clip? = fresh?.takeIf { now - it.createdAt < FRESH_MS }
 
   private val scope = MainScope()
+
   @OptIn(ExperimentalCoroutinesApi::class)
   private val io = Dispatchers.IO.limitedParallelism(1)
   private lateinit var dir: File
@@ -194,7 +195,7 @@ object ClipboardStore {
     for (c in list) {
       put(
         JSONObject().put("id", c.id).put("kind", c.kind.name).put("content", c.content).put("mime", c.mime)
-          .put("hash", c.hash).put("createdAt", c.createdAt).put("pinned", c.pinned)
+          .put("hash", c.hash).put("createdAt", c.createdAt).put("pinned", c.pinned),
       )
     }
   }.toString()
@@ -203,8 +204,10 @@ object ClipboardStore {
     val array = JSONArray(text)
     return (0 until array.length()).map { i ->
       val o = array.getJSONObject(i)
-      Clip(o.getLong("id"), ClipKind.valueOf(o.getString("kind")), o.getString("content"), o.getString("mime"),
-        o.getString("hash"), o.getLong("createdAt"), o.getBoolean("pinned"))
+      Clip(
+        o.getLong("id"), ClipKind.valueOf(o.getString("kind")), o.getString("content"), o.getString("mime"),
+        o.getString("hash"), o.getLong("createdAt"), o.getBoolean("pinned"),
+      )
     }
   }
 
@@ -220,6 +223,7 @@ object ClipboardStore {
   private const val INDEX = "index.json"
   private const val FRESH_MS = 5L * 60 * 1000
   private const val DAY_MS = 24L * 60 * 60 * 1000
+
   // ClipDescription.EXTRA_IS_SENSITIVE (Android 13), which password managers set on older versions too
   private const val EXTRA_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
 }

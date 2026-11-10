@@ -119,6 +119,7 @@ data class KeyboardColors(
       popup = Color(0xFFFFFFFF),
       divider = Color(0xFFD3D7E0),
     )
+
     // Dark: letter and function keys closer together so the keys read as one surface, a quieter divider
     val Dark = KeyboardColors(
       background = Color(0xFF111319),

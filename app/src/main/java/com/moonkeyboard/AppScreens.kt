@@ -2,18 +2,11 @@ package com.moonkeyboard
 
 import android.os.Build
 import android.text.format.Formatter
-import com.moonkeyboard.ime.Accent
-import com.moonkeyboard.engine.history.UserHistory
-import com.moonkeyboard.engine.suggest.isWordChar
-import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
-import com.moonkeyboard.ime.KeyboardColors
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,44 +23,60 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.withFrameMillis
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.moonkeyboard.engine.history.LearnedPhrase
+import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.suggest.WordContext
+import com.moonkeyboard.engine.suggest.isWordChar
+import com.moonkeyboard.ime.Accent
 import com.moonkeyboard.ime.ClipKind
 import com.moonkeyboard.ime.ClipboardStore
 import com.moonkeyboard.ime.Emoji
@@ -75,6 +84,7 @@ import com.moonkeyboard.ime.Haptics
 import com.moonkeyboard.ime.Icons
 import com.moonkeyboard.ime.ImageExpiry
 import com.moonkeyboard.ime.InputController
+import com.moonkeyboard.ime.KeyboardColors
 import com.moonkeyboard.ime.KeyboardUi
 import com.moonkeyboard.ime.Language
 import com.moonkeyboard.ime.LanguagePacks
@@ -82,18 +92,8 @@ import com.moonkeyboard.ime.OneHanded
 import com.moonkeyboard.ime.Prefs
 import com.moonkeyboard.ime.ThemeMode
 import com.moonkeyboard.ime.ToolbarItem
-import com.moonkeyboard.ime.label
 import com.moonkeyboard.ime.icon
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.zIndex
+import com.moonkeyboard.ime.label
 
 enum class Screen { HOME, LOOK, TYPING, EMOJI, CLIPBOARD, LANGUAGES, LEARNED, SHORTCUTS, TEST_PAD }
 
@@ -695,15 +695,19 @@ fun LearnedScreen(onBack: () -> Unit) {
         val isEmail = UserHistory.isEmail(candidate)
         val addable = history != null && candidate.isNotEmpty() && (
           if (isEmail) emails.none { it.first == candidate.lowercase() }
-          else candidate.first().isLetter() && candidate.all { isWordChar(it) || it.isDigit() } && words.none { it.first == candidate && it.second >= (engine?.config?.learnedAt ?: 2) })
+          else candidate.first().isLetter() && candidate.all { isWordChar(it) || it.isDigit() } && words.none { it.first == candidate && it.second >= (engine?.config?.learnedAt ?: 2) }
+          )
         if (addable) item(key = "add") {
           Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(if (isEmail) R.string.add_email_detail else R.string.add_word_detail, candidate), Modifier.weight(1f), color = c.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Box(Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.accent).clickable {
-              if (isEmail) shared?.recordEmail(candidate) else engine?.addWord(candidate)
-              queryState.clearText()
-              changed()
-            }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            Box(
+              Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.accent).clickable {
+                if (isEmail) shared?.recordEmail(candidate) else engine?.addWord(candidate)
+                queryState.clearText()
+                changed()
+              }.padding(horizontal = 16.dp),
+              contentAlignment = Alignment.Center,
+            ) {
               Text(stringResource(R.string.add), color = c.onAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
           }
@@ -712,36 +716,36 @@ fun LearnedScreen(onBack: () -> Unit) {
         if (history == null) item { Text(stringResource(R.string.loading), Modifier.padding(16.dp), color = c.muted, fontSize = 14.sp) }
         else if (shown.isEmpty() && !addable) item { Text(stringResource(R.string.nothing_learned), Modifier.padding(16.dp), color = c.muted, fontSize = 14.sp) }
         itemsIndexed(shown, key = { _, it -> it.toString() }) { i, item ->
-         // A line between rows, none under the last
-         Column {
-          when (item) {
-            is Learned.Word -> LearnedRow(item.word, pluralStringResource(R.plurals.typed_times, item.count, item.count), stringResource(R.string.forget_item, item.word), divider = false) {
-              history?.forget(item.word)
-              changed()
-            }
-            is Learned.Phrase -> {
-              val text = phraseText(item.phrase)
-              LearnedRow(text, pluralStringResource(R.plurals.phrase_used, item.phrase.count, item.phrase.count), stringResource(R.string.forget_item, text), divider = false) {
-                history?.forgetPhrase(item.phrase.prev2, item.phrase.prev, item.phrase.word)
+          // A line between rows, none under the last
+          Column {
+            when (item) {
+              is Learned.Word -> LearnedRow(item.word, pluralStringResource(R.plurals.typed_times, item.count, item.count), stringResource(R.string.forget_item, item.word), divider = false) {
+                history?.forget(item.word)
                 changed()
               }
-            }
-            is Learned.Email -> LearnedRow(item.address, pluralStringResource(R.plurals.email_used, item.count, item.count), stringResource(R.string.forget_item, item.address), divider = false) {
-              shared?.removeEmail(item.address)
-              changed()
-            }
-            is Learned.Blocked -> Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-              Column(Modifier.weight(1f)) {
-                Text(item.word, color = c.muted, fontSize = 15.sp, textDecoration = TextDecoration.LineThrough)
-                Text(stringResource(R.string.never_suggested), Modifier.padding(top = 2.dp), color = c.muted, fontSize = 12.sp)
+              is Learned.Phrase -> {
+                val text = phraseText(item.phrase)
+                LearnedRow(text, pluralStringResource(R.plurals.phrase_used, item.phrase.count, item.phrase.count), stringResource(R.string.forget_item, text), divider = false) {
+                  history?.forgetPhrase(item.phrase.prev2, item.phrase.prev, item.phrase.word)
+                  changed()
+                }
               }
-              Box(Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.divider).clickable { history?.unblock(item.word); changed() }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.allow), color = c.text, fontSize = 13.sp)
+              is Learned.Email -> LearnedRow(item.address, pluralStringResource(R.plurals.email_used, item.count, item.count), stringResource(R.string.forget_item, item.address), divider = false) {
+                shared?.removeEmail(item.address)
+                changed()
+              }
+              is Learned.Blocked -> Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                  Text(item.word, color = c.muted, fontSize = 15.sp, textDecoration = TextDecoration.LineThrough)
+                  Text(stringResource(R.string.never_suggested), Modifier.padding(top = 2.dp), color = c.muted, fontSize = 12.sp)
+                }
+                Box(Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.divider).clickable { history?.unblock(item.word); changed() }.padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                  Text(stringResource(R.string.allow), color = c.text, fontSize = 13.sp)
+                }
               }
             }
+            if (i < shown.lastIndex) Divider()
           }
-          if (i < shown.lastIndex) Divider()
-         }
         }
       }
       var confirm by remember { mutableStateOf(false) }
@@ -779,14 +783,17 @@ fun ShortcutsScreen(onBack: () -> Unit) {
         Divider()
         Row(verticalAlignment = Alignment.CenterVertically) {
           ShortcutField(textState, stringResource(R.string.shortcut_text), Modifier.weight(1f))
-          Box(Modifier.padding(end = 8.dp).height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (canAdd) c.accent else c.divider)
-            .clickable(enabled = canAdd) {
-              history?.setShortcut(key, text)
-              Language.historyChanged()
-              keyState.clearText()
-              textState.clearText()
-              version++
-            }.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+          Box(
+            Modifier.padding(end = 8.dp).height(38.dp).clip(RoundedCornerShape(19.dp)).background(if (canAdd) c.accent else c.divider)
+              .clickable(enabled = canAdd) {
+                history?.setShortcut(key, text)
+                Language.historyChanged()
+                keyState.clearText()
+                textState.clearText()
+                version++
+              }.padding(horizontal = 18.dp),
+            contentAlignment = Alignment.Center,
+          ) {
             Text(stringResource(R.string.add), color = if (canAdd) c.onAccent else c.muted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
           }
         }

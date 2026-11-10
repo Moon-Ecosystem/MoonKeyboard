@@ -1,14 +1,14 @@
 package com.moonkeyboard.ime
 
 import android.os.SystemClock
+import android.view.KeyEvent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import android.view.KeyEvent
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerId
@@ -69,8 +69,10 @@ class TouchTracker(
   val pressed = mutableStateMapOf<PointerId, KeyBounds>()
   var popup by mutableStateOf<Popup?>(null)
     private set
+
   /** The glide's samples still visible, oldest first; they outlive the glide while they fade. */
   val trail = ArrayDeque<TrailPoint>()
+
   /** Changes every frame while the trail is on screen, so it redraws as it fades. */
   var trailTick by mutableLongStateOf(0L)
     private set
@@ -78,13 +80,16 @@ class TouchTracker(
 
   private var popupOwner: PointerId? = null
   private val holds = HashMap<PointerId, Job>()
+
   // Where each finger landed: the point the decoder scores, not where it lifted
   private val downAt = HashMap<PointerId, Offset>()
   private val downTime = HashMap<PointerId, Long>()
   private var glideOwner: PointerId? = null
+
   /** The finger sliding along the space bar to move the cursor, and where it last moved it. */
   private var cursorOwner: PointerId? = null
   private var cursorAnchorX = 0f
+
   /** The finger sliding left from backspace to select whole words, and how many it has taken. */
   private var deleteOwner: PointerId? = null
   private var deleteWords = 0
@@ -387,9 +392,11 @@ class TouchTracker(
     const val BACKSPACE_REPEAT_DELAY_MS = 400L
     const val BACKSPACE_REPEAT_MS = 50L
     private const val PREVIEW_INTERVAL_MS = 80L
+
     // In key widths: how far to slide before space becomes a cursor, and the slide per character
     private const val CURSOR_SLOP = 0.5f
     private const val CURSOR_STEP = 0.35f
+
     // Slide per word when deleting from backspace, in key widths
     private const val DELETE_STEP = 0.8f
   }

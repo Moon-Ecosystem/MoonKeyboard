@@ -51,6 +51,7 @@ class KeyboardGeometry(val keys: List<KeyBounds>, val width: Float, val height: 
       }
       val units = layout.rows.maxOf { row -> row.keys.sumOf { it.width.toDouble() } }.toFloat()
       val unit = (width - 2 * sidePadding - (units - 1) * hGap) / units
+
       // A key spanning n units also spans the n-1 gaps it replaces, so wide keys line up with the grid
       fun keyWidth(k: Key) = k.width * unit + (k.width - 1) * hGap
 

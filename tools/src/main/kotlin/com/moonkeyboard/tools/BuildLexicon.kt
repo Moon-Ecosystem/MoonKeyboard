@@ -103,11 +103,10 @@ private fun readAospWordList(file: File, builder: LexiconBuilder) {
   println("fixed corrections: $linked of ${whitelist.size}")
 }
 
-private fun attributes(line: String): Map<String, String> =
-  line.trim().split(',').mapNotNull { part ->
-    val eq = part.indexOf('=')
-    if (eq > 0) part.substring(0, eq) to part.substring(eq + 1) else null
-  }.toMap()
+private fun attributes(line: String): Map<String, String> = line.trim().split(',').mapNotNull { part ->
+  val eq = part.indexOf('=')
+  if (eq > 0) part.substring(0, eq) to part.substring(eq + 1) else null
+}.toMap()
 
 private val TOKEN = Regex("""[\p{L}\p{N}]+(?:['’][\p{L}]+)*|[.!?]|[,;:"()]""")
 
@@ -210,8 +209,7 @@ private fun addLines(file: File, builder: LexiconBuilder, ngrams: Ngrams, limit:
   return heldOut
 }
 
-private fun words(text: String): List<String> =
-  TOKEN.findAll(text).map { it.value.replace('’', '\'') }.filter { it[0].isLetterOrDigit() }.toList()
+private fun words(text: String): List<String> = TOKEN.findAll(text).map { it.value.replace('’', '\'') }.filter { it[0].isLetterOrDigit() }.toList()
 
 /** Words only Hindi uses; a tweet with two of them is Hinglish, one without any is taken as English. */
 private val ANCHORS = setOf(
@@ -334,8 +332,7 @@ private fun testSentence(builder: LexiconBuilder, text: String): String? {
 }
 
 /** Sentence-initial capitals fold to the dictionary's form: "The" → "the", but "I" stays "I". */
-private fun lookup(builder: LexiconBuilder, token: String): Int? =
-  builder.id(token) ?: builder.id(token.lowercase()) ?: builder.id(token.lowercase().replaceFirstChar(Char::uppercaseChar))
+private fun lookup(builder: LexiconBuilder, token: String): Int? = builder.id(token) ?: builder.id(token.lowercase()) ?: builder.id(token.lowercase().replaceFirstChar(Char::uppercaseChar))
 
 /**
  * Tatoeba's example sentences are full of "Tom" and "Mary"; left in, every prediction is a name.
@@ -387,13 +384,17 @@ private const val MIN_TRIPLE = 4
 private const val PER_CONTEXT = 6
 private const val HOLD_OUT = 50
 private const val MAX_HELD_OUT = 3000
+
 /** Entries a pair or triple counter may hold before singletons are pruned (~26 bytes each). */
 private const val MAX_COUNTED = 16_000_000
 private const val MIN_HINGLISH = 40
+
 /** Added to Hinglish frequencies on the AOSP scale; below 0 favours English when both fit. */
 private const val HINGLISH_BIAS = 0.0
+
 /** 150× more common, on the AOSP scale (ln 150 / ln 1.15); 20× dropped real words ("kis" next to "kisi"). */
 private const val TYPO_GAP = 36
+
 /** Times seen in Hinglish tweets beyond which a word is never taken for a typo. */
 private const val NEVER_A_TYPO = 1000
 

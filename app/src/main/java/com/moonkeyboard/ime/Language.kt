@@ -33,8 +33,10 @@ object Language {
   private var loading: Job? = null
   private var saveJob: Job? = null
   private lateinit var app: Context
+
   /** The version of each history last written to its file. */
   private val savedVersions = HashMap<File, Long>()
+
   /** The active language's history file, matching [engine]. */
   @Volatile
   private var historyFile: File? = null
@@ -90,8 +92,7 @@ object Language {
     }
   }
 
-  private fun read(file: File): UserHistory =
-    (if (file.exists()) UserHistory.parse(file.readText()) else UserHistory()).also { savedVersions[file] = it.version }
+  private fun read(file: File): UserHistory = (if (file.exists()) UserHistory.parse(file.readText()) else UserHistory()).also { savedVersions[file] = it.version }
 
   @Volatile
   private var neural: NeuralLm? = null
