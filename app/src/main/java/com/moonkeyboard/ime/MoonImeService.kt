@@ -2,6 +2,7 @@ package com.moonkeyboard.ime
 
 import android.annotation.SuppressLint
 import android.content.ClipboardManager
+import android.graphics.PorterDuff
 import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.inputmethodservice.InputMethodService
@@ -145,8 +146,11 @@ class MoonImeService :
       ThemeMode.LIGHT -> false
       ThemeMode.DARK -> true
     }
-    val colors = if (dark) KeyboardColors.Dark else KeyboardColors.Light
-    val chipBg = Icon.createWithResource(this, if (dark) R.drawable.inline_chip_background else R.drawable.inline_chip_background_light)
+    val colors = KeyboardColors.chosen(this, dark)
+    // The pill's shape, filled with the keys' own colour (pitch black, accent and wallpaper included)
+    val chipBg = Icon.createWithResource(this, R.drawable.inline_chip_background)
+      .setTint(colors.key.toArgb())
+      .setTintMode(PorterDuff.Mode.SRC_IN)
     val titleStyle = TextViewStyle.Builder()
       .setTextColor(colors.text.toArgb())
       .setTextSize(14f)

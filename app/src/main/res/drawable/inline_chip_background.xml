@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Dark variant of the autofill-chip background, matching KeyboardColors.Dark.key. The light
-     variant lives in inline_chip_background_light.xml and is picked in the service by theme. -->
+<!-- The autofill-chip pill's shape; the service tints it with the keyboard's key colour. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-  <solid android:color="#272B36"/>
-  <stroke android:width="1dp" android:color="#343947"/>
+  <solid android:color="#FFFFFF"/>
   <corners android:radius="18dp"/>
   <padding android:left="10dp" android:top="4dp" android:right="12dp" android:bottom="4dp"/>
 </shape>

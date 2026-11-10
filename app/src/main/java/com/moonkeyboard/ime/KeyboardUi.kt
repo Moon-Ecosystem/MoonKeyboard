@@ -411,15 +411,9 @@ internal fun keyboardColors(): KeyboardColors {
     ThemeMode.LIGHT -> false
     ThemeMode.DARK -> true
   }
-  val wallpaper = Prefs.accent.value == Accent.WALLPAPER && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-  val colors = if (wallpaper) {
-    // Read again when the configuration changes, which is how a new wallpaper's palette arrives
-    LocalConfiguration.current
-    KeyboardColors.dynamic(LocalContext.current, dark)
-  } else {
-    (if (dark) KeyboardColors.Dark else KeyboardColors.Light).withAccent(Prefs.accent.value)
-  }
-  return if (dark && Prefs.pitchBlack.value) colors.pitchBlack(moonKeys = !wallpaper) else colors
+  // Read again when the configuration changes, which is how a new wallpaper's palette arrives
+  LocalConfiguration.current
+  return KeyboardColors.chosen(LocalContext.current, dark)
 }
 
 private fun soundFor(type: KeyType) = when (type) {
