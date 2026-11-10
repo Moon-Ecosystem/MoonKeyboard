@@ -69,7 +69,9 @@ object Layouts {
   /** [layout] with a slightly shorter row of digits on top; the digits leave the letters' hints and popups. */
   fun withNumberRow(layout: Layout): Layout {
     val digits = "1234567890".map { it.toString() }
-    val numbers = Row(digits.map { Key(label = it) }, height = NUMBER_ROW_HEIGHT)
+    // As wide as the widest row: ten digits over QWERTY's ten keys, and over German's eleven too
+    val width = layout.rows.maxOf { row -> row.keys.sumOf { it.width.toDouble() } }.toFloat() / digits.size
+    val numbers = Row(digits.map { Key(label = it, width = width) }, height = NUMBER_ROW_HEIGHT)
     val rows = layout.rows.map { row ->
       row.copy(keys = row.keys.map { k -> if (k.hint in digits) k.copy(hint = null, popup = k.popup - k.hint!!) else k })
     }

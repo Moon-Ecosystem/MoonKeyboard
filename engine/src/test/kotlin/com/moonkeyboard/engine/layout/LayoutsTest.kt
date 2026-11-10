@@ -66,6 +66,14 @@ class LayoutsTest {
   }
 
   @Test
+  fun numberRowSpansAWiderLayout() {
+    // Eleven keys across, as German's top rows are
+    val wide = Layout(listOf(Row((1..11).map { Key(label = ('a' + it).toString()) })))
+    val digits = Layouts.withNumberRow(wide).rows[0].keys
+    assertEquals(11f, digits.sumOf { it.width.toDouble() }.toFloat(), 0.001f)
+  }
+
+  @Test
   fun emojiKeyGoesAfterTheCommaInSpacesRoom() {
     val plain = Layouts.load("qwerty").rows.last().keys
     val keys = Layouts.withEmojiKey(Layouts.load("qwerty")).rows.last().keys
