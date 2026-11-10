@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -318,7 +319,7 @@ fun LookScreen(onBack: () -> Unit) {
 private fun AccentPicker() {
   val c = LocalAppColors.current
   val dark = c.text == AppColors.Dark.text
-  val context = LocalContext.current
+  val resources = LocalResources.current
   val wallpaper = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
   val options = Accent.entries.filter { it != Accent.WALLPAPER || wallpaper }
   Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -327,7 +328,7 @@ private fun AccentPicker() {
     Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
       for (accent in options) {
         val swatch = if (accent == Accent.WALLPAPER && wallpaper) {
-          Color(context.getColor(if (dark) android.R.color.system_accent1_200 else android.R.color.system_accent1_600))
+          Color(resources.getColor(if (dark) android.R.color.system_accent1_200 else android.R.color.system_accent1_600, null))
         } else Color(if (dark) accent.dark else accent.light)
         val chosen = Prefs.accent.value == accent
         val name = stringResource(accent.label)

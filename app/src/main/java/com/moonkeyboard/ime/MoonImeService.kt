@@ -1,5 +1,6 @@
 package com.moonkeyboard.ime
 
+import android.annotation.SuppressLint
 import android.content.ClipboardManager
 import android.graphics.Rect
 import android.graphics.drawable.Icon
@@ -154,6 +155,9 @@ class MoonImeService :
       .setTextColor(colors.muted.toArgb())
       .setTextSize(12f)
       .build()
+
+    // Public API for keyboards, as the autofill sample keyboard uses it; the restriction is mislabelled
+    @SuppressLint("RestrictedApi")
     val chipStyle = ViewStyle.Builder()
       .setBackground(chipBg)
       .build()

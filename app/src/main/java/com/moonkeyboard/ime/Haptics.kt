@@ -22,13 +22,12 @@ object Haptics {
     val strength = Prefs.hapticStrength.value
     val vibrator = vibrator(view.context)
     val ms = strength * MS_PER_STEP
-    val effect = if (Build.VERSION.SDK_INT >= 26) VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE) else null
     if (Build.VERSION.SDK_INT >= 33) {
       // Android 13 files a short buzz with no stated use under touch feedback, which is muted while
       // touch vibration is off system-wide; the user turned vibration on here, so it goes as media
-      vibrator.vibrate(effect!!, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_MEDIA))
-    } else if (effect != null) {
-      vibrator.vibrate(effect)
+      vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE), VibrationAttributes.createForUsage(VibrationAttributes.USAGE_MEDIA))
+    } else if (Build.VERSION.SDK_INT >= 26) {
+      vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
     } else {
       @Suppress("DEPRECATION")
       vibrator.vibrate(ms)
