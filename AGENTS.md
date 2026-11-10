@@ -54,7 +54,12 @@ Use the Gradle wrapper with JDK 17 or newer and an Android SDK that has platform
 ./gradlew :engine:test           # typing engine unit tests (includes accuracy floors)
 ./gradlew :app:assembleRelease   # signed release APK
 ./gradlew :app:assembleDebug     # debug APK
+./gradlew spotlessCheck          # ktlint over every .kt and .gradle.kts file; spotlessApply fixes it
+./gradlew lint                   # Android Lint; must pass with no errors
 ```
+
+- ktlint runs through Spotless; its settings are in the root `build.gradle.kts` (`editorConfigOverride`), not `.editorconfig`, which Spotless ignores for ktlint. Indents are 2 spaces, and the rules that would rewrite the code's own style (short `if`/`else` without braces, comments right under the line above, one-line enums, several statements or arguments to a line) are off. Run `spotlessApply` before committing.
+- Keep `lint` free of errors. Suppress a false alarm with `@SuppressLint` and a one-line reason, as the autofill chip background does.
 
 On this machine the JDK, SDK and Gradle home live in `~/.cache/mangareader-build`, so pass them in:
 
@@ -117,6 +122,10 @@ English (with Hinglish) is built in (`assets/dict/`, with a `manifest.json`); ot
 - **Naming:** never name other keyboards (Gboard and the like) in code, comments, identifiers or strings. Describe the behaviour instead.
 - **Engine first:** decoding, suggestion and learning logic belongs in `engine`, with a unit test. `EnglishTest` keeps accuracy floors for taps and glides over held-out sentences; a change must not lower them.
 - **Settings:** add a `Pref` in `Prefs.kt`, read it where needed (Compose recomposes on change), and add a row to the matching screen in `AppScreens.kt`. Keep subtitles to one short line.
+- **Theming:** the keyboard, the settings app and anything handed to the system all take their colours from the same settings.
+  - Use `keyboardColors()` in Compose, or `KeyboardColors.chosen(context, dark)` outside it (the autofill chip style in `MoonImeService`), so pitch black, the accent and Material You are included. Never pick `KeyboardColors.Dark`/`Light` directly.
+  - Ask `darkTheme()` whether the theme is dark. Never guess it from a colour: pitch black and the wallpaper change the colours.
+  - In the settings app, use `LocalAppColors` and read resources through Compose (`stringResource`, `LocalResources`), not `LocalContext`, so they follow a configuration change.
 - **Layouts** are JSON in `engine/src/main/resources/layouts/`; `Layouts.withNumberRow`, `withEmojiKey` and `wideSpace` transform them at runtime. Keep row widths consistent (letter rows are 10 units).
 - **IME window:** it covers the whole screen so the floating keyboard can go anywhere; `onComputeInsets` sets the touchable region to the keyboard. Some devices under-report the navigation-bar inset, hence the extra bottom padding.
 - **Enter key:** `InputController.enterAction` decides between newline and the field's editor action (search, send, go, done...); the drawn icon follows it. `IME_ACTION_UNSPECIFIED` on a single-line field still performs the action.
