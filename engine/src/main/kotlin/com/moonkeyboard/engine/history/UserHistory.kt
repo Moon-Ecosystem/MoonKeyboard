@@ -15,8 +15,10 @@ class UserHistory {
   private val pairs = HashMap<String, HashMap<String, Int>>()
   private val triples = HashMap<String, HashMap<String, Int>>()
   private val blocked = HashSet<String>()
+
   /** The user's text shortcuts ("omw" → "on my way"), keyed by the shortcut in lower case. */
   private val shortcuts = LinkedHashMap<String, String>()
+
   /** Email addresses typed in email fields (or added by hand), keyed in lower case, with how often each was used. */
   private val emails = HashMap<String, Int>()
   private var total = 0

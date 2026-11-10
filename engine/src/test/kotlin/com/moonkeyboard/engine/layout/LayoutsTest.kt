@@ -125,6 +125,5 @@ class LayoutsTest {
     assertEquals(plain.sumOf { it.width.toDouble() }, keys.sumOf { it.width.toDouble() }, 0.001)
   }
 
-  private fun geometry(layout: Layout) =
-    KeyboardGeometry.compute(layout, width = 390f, keyHeight = 46f, hGap = 6f, vGap = 10f, sidePadding = 4f)
+  private fun geometry(layout: Layout) = KeyboardGeometry.compute(layout, width = 390f, keyHeight = 46f, hGap = 6f, vGap = 10f, sidePadding = 4f)
 }

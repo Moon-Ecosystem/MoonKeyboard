@@ -43,12 +43,10 @@ data class PackManifest(
   val nounCapitals: Boolean = false,
 ) {
   /** The decoder's settings for this language. */
-  fun decoderConfig(base: DecoderConfig = DecoderConfig()): DecoderConfig =
-    base.copy(digraphs = digraphs.mapKeys { it.key.single() })
+  fun decoderConfig(base: DecoderConfig = DecoderConfig()): DecoderConfig = base.copy(digraphs = digraphs.mapKeys { it.key.single() })
 
   /** The engine's settings for this language. */
-  fun engineConfig(base: EngineConfig = EngineConfig()): EngineConfig =
-    if (nounCapitals) base.copy(nounCapitals = true) else base
+  fun engineConfig(base: EngineConfig = EngineConfig()): EngineConfig = if (nounCapitals) base.copy(nounCapitals = true) else base
 }
 
 class PackException(message: String) : Exception(message)
@@ -67,6 +65,7 @@ object Packs {
   private val ID = Regex("[a-z]{2,3}(-[a-z0-9]{2,8})?")
   private val FILE_NAME = Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
   private const val MAX_FILES = 32
+
   // A dictionary and a model run to tens of MB; nothing honest comes near this
   private const val MAX_BYTES = 300L shl 20
   private const val ALGORITHM = "SHA256withECDSA"
@@ -130,8 +129,7 @@ object Packs {
   }
 
   /** The manifest of the pack installed in [dir], or null when there isn't a readable one. */
-  fun installed(dir: File): PackManifest? =
-    File(dir, MANIFEST).takeIf { it.isFile }?.let { runCatching { parseManifest(it.readBytes()) }.getOrNull() }
+  fun installed(dir: File): PackManifest? = File(dir, MANIFEST).takeIf { it.isFile }?.let { runCatching { parseManifest(it.readBytes()) }.getOrNull() }
 
   fun generateKeyPair(): KeyPair = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
 
@@ -149,8 +147,7 @@ object Packs {
     sign()
   }
 
-  private fun verify(data: ByteArray, signature: ByteArray, key: PublicKey): Boolean =
-    runCatching { Signature.getInstance(ALGORITHM).run { initVerify(key); update(data); verify(signature) } }.getOrDefault(false)
+  private fun verify(data: ByteArray, signature: ByteArray, key: PublicKey): Boolean = runCatching { Signature.getInstance(ALGORITHM).run { initVerify(key); update(data); verify(signature) } }.getOrDefault(false)
 
   private fun check(manifest: PackManifest) {
     if (!ID.matches(manifest.id)) throw PackException("Bad pack id '${manifest.id}'")

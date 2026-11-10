@@ -22,10 +22,10 @@ import android.view.inputmethod.InlineSuggestion
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import androidx.annotation.RequiresApi
-import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.core.view.inputmethod.EditorInfoCompat
 import androidx.core.view.inputmethod.InputConnectionCompat
 import androidx.core.view.inputmethod.InputContentInfoCompat
@@ -107,13 +107,17 @@ class InputController(private val host: KeyboardHost) {
     private set
   var suggestions by mutableStateOf(Suggestions.EMPTY)
     private set
+
   /** What fills the keyboard: the keys, or one of the toolbar's panels. */
   var panel by mutableStateOf(Panel.KEYS)
+
   /** The toolbar is showing in place of the suggestions. */
   var toolbarOpen by mutableStateOf(false)
+
   /** Emoji search is open: the keys type into this query instead of the app. */
   var emojiQuery by mutableStateOf<String?>(null)
     private set
+
   /** Text the copied-item pill just pasted: the strip offers to undo it, then to redo it, until the user moves on. */
   var undo by mutableStateOf<EditUndo?>(null)
     private set
@@ -163,6 +167,7 @@ class InputController(private val host: KeyboardHost) {
    */
   var inlineChips by mutableStateOf<List<View>>(emptyList())
     private set
+
   @RequiresApi(Build.VERSION_CODES.R)
   fun setInlineSuggestions(suggestions: List<InlineSuggestion>) {
     releaseInlineChips()
@@ -233,9 +238,11 @@ class InputController(private val host: KeyboardHost) {
 
   private val composing = StringBuilder()
   private val touches = ArrayList<Touch>()
+
   // State, so the strip redraws when a restart swaps a text field for a number one
   private var field by mutableStateOf(FieldFlags.NONE)
   private var inputClass = -1
+
   /** The selection as the app last reported it (or we last set it): the fixed end and the moving end. */
   private var selAnchor = -1
   private var selCursor = -1
@@ -243,12 +250,16 @@ class InputController(private val host: KeyboardHost) {
 
   /** Last committed word was a suggestion followed by our own space. */
   private var autoSpaced = false
+
   /** The previous key was space, so a second one may become ". ". */
   private var lastWasSpace = false
+
   /** An autocorrection the next backspace undoes. */
   private var revert: Revert? = null
+
   /** The composing word came from a glide: it is already decoded, so never autocorrect it again. */
   private var glided = false
+
   /**
    * A swipe left its word without a space after it. The next letter or swipe adds the space first;
    * punctuation like "." attaches to the word and keeps the space owed; space, backspace, enter
@@ -309,16 +320,16 @@ class InputController(private val host: KeyboardHost) {
     }
   }
 
+  /** Counts fields opened: what's read once per field (the recent-emoji row's order) is read again on it. */
+  var fieldsOpened by mutableStateOf(0)
+    private set
+
   /**
    * A field gained focus. [restarting]: the same field restarted its input (Firefox does this when
    * you tap back into a search box); the open panel stays, but the strip is filled again, since
    * [onFinishInput] emptied it. Chrome restarts when focus moves between a page's boxes too, so a
    * restart into a different kind of field (text to number) is treated as a new field.
    */
-  /** Counts fields opened: what's read once per field (the recent-emoji row's order) is read again on it. */
-  var fieldsOpened by mutableStateOf(0)
-    private set
-
   fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
     fieldsOpened++
     forgetAsk = null
@@ -370,6 +381,7 @@ class InputController(private val host: KeyboardHost) {
 
   /** When a finger was last on the keyboard; selection changes soon after are echoes of our own edits. */
   private var lastTouchMs = 0L
+
   /** A finger still on the keyboard: a held backspace keeps editing with no new touch events. */
   private var fingerDown = false
 
@@ -628,7 +640,7 @@ class InputController(private val host: KeyboardHost) {
     val before = textBefore(ic, 1)
     val atWordStart = composing.isEmpty() && (before.isEmpty() || before[0].isWhitespace())
     // Once offered, it stays and grows while the run goes on, rather than blinking at each word
-    val offer = undo != null || atWordStart && deletedRun.any(Char::isLetterOrDigit)
+    val offer = undo != null || (atWordStart && deletedRun.any(Char::isLetterOrDigit))
     undo = if (offer) EditUndo(deletedRun.toString(), inserted = false) else null
   }
 
@@ -750,8 +762,7 @@ class InputController(private val host: KeyboardHost) {
    * just the one-time code from a message, or the copy itself when it holds no letters (an account
    * number); a message without a clear code would paste as a jumble of its digits.
    */
-  fun copiedTextOffer(text: String): String? =
-    if (!field.number) text else oneTimeCode(text) ?: text.trim().takeIf { t -> t.isNotEmpty() && t.none(Char::isLetter) }
+  fun copiedTextOffer(text: String): String? = if (!field.number) text else oneTimeCode(text) ?: text.trim().takeIf { t -> t.isNotEmpty() && t.none(Char::isLetter) }
 
   /** The app whose field is focused. */
   val targetPackage: String? get() = host.editorInfo.packageName
@@ -770,8 +781,7 @@ class InputController(private val host: KeyboardHost) {
   }
 
   /** Letters follow the shift state; everything else is shown as is. */
-  fun display(text: String): String =
-    if (shift != ShiftState.OFF) text.uppercase(Locale.ROOT) else text
+  fun display(text: String): String = if (shift != ShiftState.OFF) text.uppercase(Locale.ROOT) else text
 
   fun pickSuggestion(index: Int) {
     val word = suggestions.items.getOrNull(index) ?: return
@@ -1198,8 +1208,7 @@ class InputController(private val host: KeyboardHost) {
   }
 
   /** The cursor's absolute offset, or -1 when there's a selection or the editor won't say. */
-  private fun cursorIn(text: ExtractedText?): Int =
-    if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
+  private fun cursorIn(text: ExtractedText?): Int = if (text != null && text.selectionStart == text.selectionEnd && text.selectionStart >= 0) text.startOffset + text.selectionStart else -1
 
   /** Makes [word], just before the cursor at [cursor], the composing word again. */
   private fun pickUp(ic: InputConnection, word: String, cursor: Int) {
@@ -1389,7 +1398,13 @@ class InputController(private val host: KeyboardHost) {
 
   /** What the focused field allows, from its input type. */
   private data class FieldFlags(
-    val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false, val number: Boolean = false, val email: Boolean = false,
+    val suggest: Boolean,
+    val autocorrect: Boolean,
+    val learn: Boolean,
+    val autoCaps: Boolean,
+    val secret: Boolean = false,
+    val number: Boolean = false,
+    val email: Boolean = false,
     /** The kinds of image the field takes (its EditorInfo's content MIME types). */
     val contentTypes: List<String> = emptyList(),
   ) {
@@ -1433,33 +1448,43 @@ class InputController(private val host: KeyboardHost) {
     const val LETTERS = "qwerty"
     const val SYMBOLS = "symbols"
     const val SYMBOLS2 = "symbols2"
+
     // Pads for fields that only take digits; no way to letters, as in AOSP
     const val NUMBER = "number"
     const val PHONE = "phone"
     const val DATETIME = "datetime"
     val PADS = setOf(NUMBER, PHONE, "phone_symbols", DATETIME)
+
     // Longest grapheme we expect (ZWJ emoji sequences run to ~11 chars), with room to spare
     private const val GRAPHEME_LOOKBEHIND = 32
+
     // How far ↑ ↓ look for a line break; past this, a field with none is treated as ending there
     private const val LINE_LOOKAROUND = 10_000
     private const val FORGET_ASK_MS = 4_000L
+
     // Enough for the neural model's 32 words of context
     private const val CONTEXT_CHARS = 200
     private const val RESUME_CHARS = 48
+
     // How far back a backspace slide can select: a long paragraph's worth of words
     private const val SLIDE_LOOKBEHIND = 2_000
+
     // Longer than any address someone types
     private const val EMAIL_LOOKBEHIND = 256
+
     // As in the engine: one saved address from the 4th character, all that match from the 7th
     private const val EMAIL_MIN_LETTERS = 4
     private const val EMAIL_ALL_LETTERS = 7
+
     /** Letters of a stuck mid-word kept as a prefix to look up similar words from. */
     private const val SIMILAR_PREFIX = 5
+
     /** Apps echo our edits back well within this; a cursor move later than it came from elsewhere. */
     private const val ECHO_MS = 500L
     private const val LEARN_AS_WORD = 2
     private const val AUTOCORRECT_TRIGGERS = ".,?!:;)\""
     private const val SPACE_SWAPPING = ".,?!:;)"
+
     // After a swiped word: what attaches to it, and what starts something new after a space
     private const val FOLLOWED_BY_SPACE = ".,?!:;)]}"
     private const val PRECEDED_BY_SPACE = "([{\"&"

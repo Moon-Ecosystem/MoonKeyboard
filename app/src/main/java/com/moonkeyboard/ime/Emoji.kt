@@ -103,12 +103,15 @@ object Emoji {
       var worst = 0
       for (t in terms) {
         val words = e.words.flatMap { it.split(' ', ':', '-') }
-        worst = maxOf(worst, when {
-          words.any { it == t } -> 0
-          words.any { it.startsWith(t) } -> 1
-          e.words.any { t in it } -> 2
-          else -> return null
-        })
+        worst = maxOf(
+          worst,
+          when {
+            words.any { it == t } -> 0
+            words.any { it.startsWith(t) } -> 1
+            e.words.any { t in it } -> 2
+            else -> return null
+          },
+        )
       }
       return worst
     }
@@ -120,7 +123,7 @@ object Emoji {
   }
 
   // Four rows of the panel's grid at its usual eight across
-  private const val MAX_RECENTS = 32
+  const val MAX_RECENTS = 32
   private const val MAX_RESULTS = 40
   private const val MAX_STRIP = 2
   private const val MIN_STRIP_WORD = 3

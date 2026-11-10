@@ -244,8 +244,7 @@ class SuggestionEngine(
     return Suggestions("", items, null, isPrediction = true, debug = neuralDebug(true))
   }
 
-  private fun neuralDebug(used: Boolean): List<String> =
-    listOfNotNull(neural?.takeIf { used }?.let { "neural model: last run %d ms".format(it.lastMillis) })
+  private fun neuralDebug(used: Boolean): List<String> = listOfNotNull(neural?.takeIf { used }?.let { "neural model: last run %d ms".format(it.lastMillis) })
 
   /**
    * For offline comparison with other models: the words this context expects with their log
@@ -297,7 +296,6 @@ class SuggestionEngine(
     return applyCase(pick.word, typed)
   }
 
-  /** Names and acronyms; the "I" family is ordinary English. */
   /**
    * A missed space ("ofthe" → "of the"): the best split of a non-word into two words, scored like any
    * candidate. Only a pair the dictionary has seen side by side can be autocorrected to, and only when it
@@ -324,16 +322,14 @@ class SuggestionEngine(
   }
 
   /** One digit with letters both sides and enough letters around it to tell the word ("b4u" and "w8" aren't slips). */
-  private fun isDigitSlip(typed: String) =
-    typed.count(Char::isDigit) == 1 && typed.first().isLetter() && typed.last().isLetter() && typed.count(Char::isLetter) >= 4
+  private fun isDigitSlip(typed: String) = typed.count(Char::isDigit) == 1 && typed.first().isLetter() && typed.last().isLetter() && typed.count(Char::isLetter) >= 4
 
   /**
    * A name or acronym, which the dictionary over-rates. Where every noun has a capital (German) only
    * an all-capitals word counts: "Haus" is an ordinary word there, "ADH" still an acronym.
    */
-  private fun isProper(word: String) =
-    if (config.nounCapitals) word.length > 1 && word.all { !it.isLetter() || it.isUpperCase() }
-    else word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
+  private fun isProper(word: String) = if (config.nounCapitals) word.length > 1 && word.all { !it.isLetter() || it.isUpperCase() }
+  else word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
 
   /**
    * ln P(word | context), worked out once per request: the built-in model (two-word context
@@ -343,6 +339,7 @@ class SuggestionEngine(
    */
   private inner class Lm(context: WordContext, useNeural: Boolean, private val neuralShare: Float = config.neuralShare) {
     private val nn = if (useNeural) neural?.predict(context.tokens) else null
+
     /** How much this model counts against the touches. */
     val weight = if (nn != null) config.neuralLmWeight else config.lmWeight
     val prevId: Int = when {
@@ -363,6 +360,7 @@ class SuggestionEngine(
     private val trust = if (n1 == 0) 0f else config.userShare * n1 / (n1 + config.userConfidence * history.pairTypes(key1!!))
     private val trust2 = if (n2 == 0) 0.0 else n2 / (n2 + config.userConfidence * history.tripleTypes(key2!!, key1!!).toDouble())
     private val total = history.totalCount()
+
     // Like trust, but for the user's vocabulary as a whole; needs a few hundred words to matter
     private val vocabularyShare = config.userVocabularyShare * total / (total + VOCABULARY_CONFIDENCE)
 
@@ -431,8 +429,10 @@ class SuggestionEngine(
     const val NONE = -1
     const val EMAIL_MIN_LETTERS = 4
     const val EMAIL_ALL_LETTERS = 7
+
     /** Shortest run worth splitting at a missed space ("ofthe"); shorter ones are mostly typos of one word. */
     const val MIN_SPLIT = 5
+
     /** ln P share left for a second word the dictionary never saw after the first: the pair model's backoff. */
     val UNSEEN_PAIR = kotlin.math.ln(0.2f)
 

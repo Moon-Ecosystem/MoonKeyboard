@@ -27,8 +27,6 @@
   <string name="autocorrect_off">No autocorrect</string>
   <string name="vibration">vibration</string>
   <string name="no_vibration">silent</string>
-  <string name="on">On</string>
-  <string name="glide_on_trail">On, trail shown</string>
   <string name="learned_counts">%1$d words, %2$d phrases</string>
   <string name="emoji_suggestions_on">Suggestions while typing</string>
   <string name="emoji_suggestions_off">No suggestions while typing</string>
@@ -125,7 +123,6 @@
   <string name="clipboard">Clipboard</string>
   <string name="emoji">Emoji</string>
   <string name="text_editing">Text editing</string>
-  <string name="one_handed">One-handed mode</string>
   <string name="theme">Theme</string>
   <string name="settings">Settings</string>
   <string name="full_width">Full-width keyboard</string>
@@ -135,6 +132,10 @@
   <string name="split_short">Split landscape</string>
   <string name="keyboard_options">Keyboard options</string>
   <string name="top_bar">Top bar</string>
+  <string name="layout">Layout</string>
+  <string name="suggestions">Suggestions</string>
+  <string name="gestures">Gestures</string>
+  <string name="feedback">Feedback</string>
   <string name="on_the_bar">On the bar</string>
   <string name="more_for_bar">More</string>
   <string name="add_to_bar">Add to the top bar</string>
@@ -188,12 +189,14 @@
   <string name="long_press_symbols_detail">Shows a symbol on each letter key</string>
   <string name="emoji_row">Recent emoji row</string>
   <string name="emoji_row_detail">Your recent emoji above the keys, one tap each</string>
+  <string name="emoji_row_count">Emoji in the row (more than 10 scrolls)</string>
   <string name="key_height">Keyboard height</string>
   <string name="off">Off</string>
   <string name="typing">Typing</string>
   <string name="haptics">Vibrate on key press</string>
   <string name="key_sound">Sound on key press</string>
   <string name="incognito">Incognito</string>
+  <string name="symbols_short">Symbols</string>
   <string name="pitch_black">Pitch black</string>
   <string name="pitch_black_detail">True black in dark mode, for OLED screens</string>
   <string name="accent_colour">Accent colour</string>

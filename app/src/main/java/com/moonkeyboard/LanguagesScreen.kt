@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -67,6 +68,7 @@ private const val MORE_LANGUAGES = "https://github.com/Moon-Ecosystem/MoonKeyboa
 fun LanguagesScreen(onBack: () -> Unit) {
   val c = LocalAppColors.current
   val context = LocalContext.current
+  val resources = LocalResources.current
   val view = LocalView.current
   val scope = rememberCoroutineScope()
   // Bumped after an install or removal, so the list is read again
@@ -87,11 +89,11 @@ fun LanguagesScreen(onBack: () -> Unit) {
       message = withContext(Dispatchers.IO) {
         try {
           val pack = LanguagePacks.install(context, uri)
-          context.getString(R.string.language_installed, pack.name, pack.version)
+          resources.getString(R.string.language_installed, pack.name, pack.version)
         } catch (e: PackException) {
-          context.getString(R.string.language_refused, e.message)
+          resources.getString(R.string.language_refused, e.message)
         } catch (e: Exception) {
-          context.getString(R.string.language_unreadable)
+          resources.getString(R.string.language_unreadable)
         }
       }
       version++
@@ -152,7 +154,7 @@ fun LanguagesScreen(onBack: () -> Unit) {
                   Modifier.size(44.dp).clip(CircleShape).clickable {
                     LanguagePacks.remove(context, id)
                     save(LanguagePacks.all(context).map { (p, o) -> p.manifest.id to o })
-                    message = context.getString(R.string.language_removed, pack.manifest.name)
+                    message = resources.getString(R.string.language_removed, pack.manifest.name)
                     version++
                   },
                   contentAlignment = Alignment.Center,

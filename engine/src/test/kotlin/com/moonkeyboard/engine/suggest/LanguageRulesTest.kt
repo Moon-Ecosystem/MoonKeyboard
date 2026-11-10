@@ -32,8 +32,7 @@ class LanguageRulesTest {
     KeyMap(centers + ('ü' to (p.first + 39f to p.second)), g.keys.minOf { it.width })
   }
 
-  private fun suggest(e: SuggestionEngine, typed: String) =
-    e.suggest(typed, typed.map(keys::touchFor), keys, WordContext("ich", false), allowAutocorrect = true)
+  private fun suggest(e: SuggestionEngine, typed: String) = e.suggest(typed, typed.map(keys::touchFor), keys, WordContext("ich", false), allowAutocorrect = true)
 
   @Test
   fun aLetterWithItsOwnKeyIsMatchedThere() {

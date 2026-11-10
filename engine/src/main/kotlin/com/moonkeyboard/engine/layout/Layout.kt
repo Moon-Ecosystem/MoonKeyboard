@@ -36,14 +36,27 @@ data class Key(
 
 @Serializable
 enum class KeyType {
-  @SerialName("char") CHAR,
-  @SerialName("shift") SHIFT,
-  @SerialName("backspace") BACKSPACE,
-  @SerialName("enter") ENTER,
-  @SerialName("space") SPACE,
-  @SerialName("layer") LAYER,
+  @SerialName("char")
+  CHAR,
+
+  @SerialName("shift")
+  SHIFT,
+
+  @SerialName("backspace")
+  BACKSPACE,
+
+  @SerialName("enter")
+  ENTER,
+
+  @SerialName("space")
+  SPACE,
+
+  @SerialName("layer")
+  LAYER,
+
   /** Opens the emoji panel. */
-  @SerialName("emoji") EMOJI,
+  @SerialName("emoji")
+  EMOJI,
 }
 
 object Layouts {
@@ -95,12 +108,14 @@ object Layouts {
     val rows = layout.rows.mapIndexed { r, row ->
       val forRow = symbols.getOrNull(letterRows.indexOf(r)) ?: return@mapIndexed row
       var letter = 0
-      row.copy(keys = row.keys.map { k ->
-        if (!k.isLetter()) return@map k
-        val symbol = forRow.getOrNull(letter++) ?: return@map k
-        if (k.hint != null) k.copy(popup = listOf(k.hint) + symbol + (k.popup - k.hint - symbol))
-        else k.copy(hint = symbol, popup = listOf(symbol) + (k.popup - symbol))
-      })
+      row.copy(
+        keys = row.keys.map { k ->
+          if (!k.isLetter()) return@map k
+          val symbol = forRow.getOrNull(letter++) ?: return@map k
+          if (k.hint != null) k.copy(popup = listOf(k.hint) + symbol + (k.popup - k.hint - symbol))
+          else k.copy(hint = symbol, popup = listOf(symbol) + (k.popup - symbol))
+        },
+      )
     }
     return Layout(rows)
   }

@@ -20,8 +20,7 @@ class PacksTest {
   private val qwertz = Layouts::class.java.getResourceAsStream("/layouts/qwerty.json")!!.readBytes()
   private val files = mapOf("de.dict" to "dictionary".encodeToByteArray(), "qwertz.json" to qwertz)
 
-  private fun pack(version: Int = 1, key: java.security.PrivateKey = keys.private) =
-    Packs.build(PackManifest(Packs.FORMAT, "de", "Deutsch", version, layout = "qwertz"), files, key)
+  private fun pack(version: Int = 1, key: java.security.PrivateKey = keys.private) = Packs.build(PackManifest(Packs.FORMAT, "de", "Deutsch", version, layout = "qwertz"), files, key)
 
   private fun install(bytes: ByteArray) = Packs.install(ByteArrayInputStream(bytes), tmp.root, keys.public)
 

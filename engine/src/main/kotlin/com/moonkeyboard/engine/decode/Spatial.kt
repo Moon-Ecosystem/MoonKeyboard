@@ -33,8 +33,7 @@ class KeyMap(private val centers: Map<Char, Pair<Float, Float>>, val keyWidth: F
   }
 
   /** A touch in the middle of [c]'s key, or an exact touch if the layout has no such key. */
-  fun touchFor(c: Char): Touch =
-    centers[keyOf(c)]?.let { (x, y) -> Touch(x, y, c) } ?: Touch.exact(c)
+  fun touchFor(c: Char): Touch = centers[keyOf(c)]?.let { (x, y) -> Touch(x, y, c) } ?: Touch.exact(c)
 
   companion object {
     fun from(geometry: KeyboardGeometry): KeyMap {
@@ -107,11 +106,13 @@ class Spatial(val touches: List<Touch>, private val keys: KeyMap?, private val c
 
   private companion object {
     val DEFAULT_LETTERS = ('a'..'z').toList().toCharArray()
+
     /** Characters whose slot is looked up in a table: Latin, Latin-1 and Latin Extended-A. */
     const val TABLE_CHARS = 0x180
 
     private val VOWELS = setOf('a', 'e', 'i', 'o', 'u')
     private val SOFT_PAIRS = setOf('s' to 'c', 'c' to 's', 'z' to 's', 's' to 'z')
+
     /** Classic spelling confusions from the Wikipedia misspellings list: vowel swaps and silent-letter mixups. */
     fun confuses(a: Char, b: Char): Boolean = (a in VOWELS && b in VOWELS) || (a to b) in SOFT_PAIRS
   }

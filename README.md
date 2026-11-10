@@ -56,6 +56,7 @@ You need JDK 17 or newer and an Android SDK with platform 37. The Gradle wrapper
 ./gradlew :engine:test           # typing engine unit tests
 ./gradlew :app:assembleDebug     # debug APK
 ./gradlew :app:assembleRelease   # release APK
+./gradlew spotlessCheck lint     # ktlint and Android Lint (spotlessApply fixes formatting)
 ```
 
 Debug builds of the keyboard UI are noticeably slower; use a release build to judge how it feels.

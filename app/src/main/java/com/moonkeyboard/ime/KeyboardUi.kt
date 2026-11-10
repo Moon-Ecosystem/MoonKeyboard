@@ -1,31 +1,22 @@
 package com.moonkeyboard.ime
 
 import android.content.res.Configuration
-import android.os.SystemClock
 import android.media.AudioManager
 import android.os.Build
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
+import android.os.SystemClock
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.runtime.key
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -33,83 +24,93 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.unit.Density
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.PointMode
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.res.painterResource
-import com.moonkeyboard.R
-import com.moonkeyboard.engine.decode.KeyMap
-import com.moonkeyboard.engine.history.UserHistory
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextGeometricTransform
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextGeometricTransform
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.moonkeyboard.R
+import com.moonkeyboard.engine.decode.KeyMap
+import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.input.ShiftState
 import com.moonkeyboard.engine.layout.KeyBounds
 import com.moonkeyboard.engine.layout.KeyType
 import com.moonkeyboard.engine.layout.KeyboardGeometry
 import com.moonkeyboard.engine.layout.Layout
 import com.moonkeyboard.engine.layout.Layouts
+import kotlin.math.roundToInt
 
 // The design's key: labels are drawn at their sizes for a key this tall, and scale with the real one
 private val KeyHeight = 48.dp
 private val HGap = 6.dp
+
 // Roomy rows: with the larger labels a tighter gap looked cramped
 private val VGap = 15.dp
+
 // Portrait, as AOSP's keyboard: the letters' rows and gaps fill a height set by the screen's width
 // (55% of it, our 4 rows of 48 dp on a 432 dp wide phone), so a number row squeezes the rows instead
 // of adding one, and display or font size settings don't inflate the keys. Capped by the screen's
@@ -117,30 +118,37 @@ private val VGap = 15.dp
 private const val PORTRAIT_WIDTH_SHARE = 0.55f
 private const val MAX_HEIGHT_SHARE = 0.3f
 private val MaxKeyHeight = 60.dp
+
 // A fifth row (numbers) halves the gaps between rows, so the keys keep most of their height
 private const val FIVE_ROW_GAP = 0.5f
 private val SidePadding = 4.dp
 internal val StripHeight = 48.dp
 private val TopPadding = 6.dp
+
 // Some devices under-report the navigation-bar inset for the IME nav strip (gesture nav + a
 // dismiss/switcher icon drawn above it); the extra breathing room keeps the bottom row clear
 private val BottomPadding = 16.dp
 private val KeyRadius = 8.dp
+
 // A long-press hint is centred this far in from the key's top-right corner; the letter drops a little to clear it
 private val HintInset = 9.dp
 private val HintLabelDrop = 2.dp
 private const val ONE_HANDED_SHARE = 0.84f
+
 // The emoji panel's extra height over the keys, as a share of the screen's
 private const val EMOJI_EXTRA_SHARE = 0.05f
+
 // Landscape: everything smaller, and rows closer, so the app keeps about half the screen
 private const val LANDSCAPE_SCALE = 0.8f
 private val LandscapeVGap = 8.dp
 private const val SPLIT_SHARE = 0.28f
 
 private val ShiftIcon = icon("M12 4l8 8h-5v8H9v-8H4z")
+
 // The × sits a little left of the box's middle, so it looks centred in the whole shape, point included
 private val BackspaceIcon = icon("M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7zM11 9l6 6M17 9l-6 6")
 private val EnterIcon = icon("M20 5v7a2 2 0 0 1-2 2H5M9 10l-4 4 4 4")
+
 // The handle starts on the lens (radius 7 meets the diagonal at ~16), not inside it
 private val SearchIcon = icon("M16 16l4.5 4.5M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0")
 private val GoIcon = icon("M4 12h16M14 6l6 6-6 6")
@@ -209,7 +217,7 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
             controller.onKeyboardTouch(fingerDown = event.changes.any { it.pressed })
           }
         }
-      }
+      },
   ) {
     val fullWidth = constraints.maxWidth.toFloat()
     val widthPx = if (oneHanded == OneHanded.OFF) fullWidth else (fullWidth * ONE_HANDED_SHARE).roundToInt().toFloat()
@@ -229,6 +237,7 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
         )
         val letterGap = k * gapRatio
         val letterKey = k
+
         // Every layer is as tall as the letters: a layer with fewer rows (symbols next to letters
         // with a number row) spreads them out instead of shrinking the keyboard
         fun keysHeight(l: Layout) = l.rows.sumOf { (k * it.height).toDouble() }.toFloat()
@@ -284,11 +293,13 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
         // Emoji search stands in for the strip, taller: the app above moves up to make room
         if (controller.emojiQuery != null) EmojiSearch(controller, colors)
         // A hairline along the strip's bottom edge, so the bar reads as separate from the keys
-        else Box(Modifier.drawBehind {
-          val y = size.height - 0.5.dp.toPx()
-          // Edge to edge: an inset line lined up with neither the strip's buttons nor the keys
-          drawLine(colors.divider, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
-        }) { Strip(controller, colors) }
+        else Box(
+          Modifier.drawBehind {
+            val y = size.height - 0.5.dp.toPx()
+            // Edge to edge: an inset line lined up with neither the strip's buttons nor the keys
+            drawLine(colors.divider, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+          },
+        ) { Strip(controller, colors) }
         Row {
           if (oneHanded == OneHanded.RIGHT) OneHandedControls(colors, Modifier.weight(1f).height(height))
           Box(Modifier.width(with(density) { widthPx.toDp() }).height(height)) {
@@ -302,7 +313,7 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
                   drawLayer(keys)
                   for (bounds in touches.pressed.values) drawKey(bounds, true, controller, colors, measurer, borders)
                 }
-              }
+              },
             )
             // Its own offscreen layer, where each piece replaces what's under it: fading pieces
             // blended over each other showed their overlaps as a string of dots
@@ -336,6 +347,7 @@ internal val ToolbarItem.icon get() = when (this) {
   ToolbarItem.TEXT_EDIT -> Icons.TextEdit
   ToolbarItem.SPLIT -> Icons.Split
   ToolbarItem.INCOGNITO -> Icons.Incognito
+  ToolbarItem.SYMBOLS -> Icons.Symbols
 }
 
 internal val ToolbarItem.label get() = when (this) {
@@ -346,6 +358,7 @@ internal val ToolbarItem.label get() = when (this) {
   ToolbarItem.TEXT_EDIT -> R.string.text_editing
   ToolbarItem.SPLIT -> R.string.split_short
   ToolbarItem.INCOGNITO -> R.string.incognito
+  ToolbarItem.SYMBOLS -> R.string.symbols_short
 }
 
 /** A setting that is on, shown highlighted. */
@@ -356,6 +369,7 @@ internal fun ToolbarItem.isOn() = when (this) {
   ToolbarItem.ONE_HANDED -> !Prefs.floating.value && Prefs.oneHanded.value != OneHanded.OFF
   ToolbarItem.SPLIT -> Prefs.splitLandscape.value
   ToolbarItem.INCOGNITO -> Prefs.incognito.value
+  ToolbarItem.SYMBOLS -> Prefs.longPressSymbols.value
   else -> false
 }
 
@@ -378,6 +392,10 @@ internal fun ToolbarItem.act(controller: InputController, colors: KeyboardColors
     ToolbarItem.TEXT_EDIT -> controller.panel = Panel.EDIT
     ToolbarItem.SPLIT -> Prefs.splitLandscape.value = !Prefs.splitLandscape.value
     ToolbarItem.INCOGNITO -> Prefs.incognito.value = !Prefs.incognito.value
+    ToolbarItem.SYMBOLS -> {
+      Prefs.longPressSymbols.value = !Prefs.longPressSymbols.value
+      controller.panel = Panel.KEYS
+    }
   }
 }
 
@@ -386,22 +404,20 @@ internal fun flipTheme(colors: KeyboardColors) {
   Prefs.theme.value = if (colors.isDark) ThemeMode.LIGHT else ThemeMode.DARK
 }
 
+/** Whether the theme setting comes out dark; colours can't tell, since pitch black and the wallpaper change them. */
+@Composable
+internal fun darkTheme(): Boolean = when (Prefs.theme.value) {
+  ThemeMode.SYSTEM -> isSystemInDarkTheme()
+  ThemeMode.LIGHT -> false
+  ThemeMode.DARK -> true
+}
+
 @Composable
 internal fun keyboardColors(): KeyboardColors {
-  val dark = when (Prefs.theme.value) {
-    ThemeMode.SYSTEM -> isSystemInDarkTheme()
-    ThemeMode.LIGHT -> false
-    ThemeMode.DARK -> true
-  }
-  val wallpaper = Prefs.accent.value == Accent.WALLPAPER && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-  val colors = if (wallpaper) {
-    // Read again when the configuration changes, which is how a new wallpaper's palette arrives
-    LocalConfiguration.current
-    KeyboardColors.dynamic(LocalContext.current, dark)
-  } else {
-    (if (dark) KeyboardColors.Dark else KeyboardColors.Light).withAccent(Prefs.accent.value)
-  }
-  return if (dark && Prefs.pitchBlack.value) colors.pitchBlack(moonKeys = !wallpaper) else colors
+  val dark = darkTheme()
+  // Read again when the configuration changes, which is how a new wallpaper's palette arrives
+  LocalConfiguration.current
+  return KeyboardColors.chosen(LocalContext.current, dark)
 }
 
 private fun soundFor(type: KeyType) = when (type) {
@@ -425,7 +441,7 @@ private fun OneHandedControls(colors: KeyboardColors, modifier: Modifier) {
 }
 
 internal val EmojiRowHeight = 40.dp
-private const val EMOJI_ROW_COUNT = 10
+
 // Until there are recent ones of the user's own
 private val COMMON_EMOJI = listOf("😂", "❤️", "👍", "😭", "🙏", "😊", "🔥", "😍", "🥺", "✨")
 
@@ -435,20 +451,29 @@ private val COMMON_EMOJI = listOf("😂", "❤️", "👍", "😭", "🙏", "�
  */
 @Composable
 private fun EmojiRow(controller: InputController) {
-  val shown = remember(controller.fieldsOpened) {
+  val count = Prefs.emojiRowCount.value
+  val shown = remember(controller.fieldsOpened, count) {
     val recents = Emoji.recents
-    (recents + COMMON_EMOJI.filter { it !in recents }).take(EMOJI_ROW_COUNT)
+    // Common ones fill the first ten until there are recent ones of the user's own; past that, only recents
+    (recents + COMMON_EMOJI.filter { it !in recents }).take(maxOf(minOf(recents.size, count), Prefs.EMOJI_ROW_FIT))
   }
-  Row(Modifier.fillMaxWidth().height(EmojiRowHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-    for (emoji in shown) {
-      Box(
-        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).clickable {
-          controller.insert(emoji)
-          Emoji.used(emoji)
-        },
-        contentAlignment = Alignment.Center,
-      ) {
-        Text(emoji, fontSize = 22.sp)
+  // Cells stay a tenth of the row wide; more than ten carry on past the edge
+  BoxWithConstraints(Modifier.fillMaxWidth().height(EmojiRowHeight).padding(horizontal = 4.dp)) {
+    val cell = maxWidth / Prefs.EMOJI_ROW_FIT
+    Row(
+      Modifier.fillMaxHeight().then(if (shown.size > Prefs.EMOJI_ROW_FIT) Modifier.horizontalScroll(rememberScrollState(), overscrollEffect = null) else Modifier),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      for (emoji in shown) {
+        Box(
+          Modifier.width(cell).fillMaxHeight().clip(RoundedCornerShape(8.dp)).clickable {
+            controller.insert(emoji)
+            Emoji.used(emoji)
+          },
+          contentAlignment = Alignment.Center,
+        ) {
+          Text(emoji, fontSize = 22.sp)
+        }
       }
     }
   }
@@ -529,23 +554,25 @@ private fun InlineChipStrip(controller: InputController, colors: KeyboardColors,
         horizontalArrangement = Arrangement.spacedBy(InputController.CHIP_GAP_DP.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-      for (view in chips) key(view) {
-        DisposableEffect(view) { onDispose { clip.chips.remove(view) } }
-        // Fade in and slide in slightly from the right
-        val enter = remember(view) { MutableTransitionState(false).apply { targetState = true } }
-        AnimatedVisibility(
-          visibleState = enter,
-          enter = fadeIn(tween(200)) + slideInHorizontally(tween(220)) { it / 3 },
-        ) {
-          AndroidView(
-            factory = { view },
-            modifier = Modifier.onGloballyPositioned { coords ->
-              clip.chips[view] = coords
-              clip.row?.let { clipChip(view, coords, it, clip) }
-            },
-          )
+        for (view in chips) {
+          key(view) {
+            DisposableEffect(view) { onDispose { clip.chips.remove(view) } }
+            // Fade in and slide in slightly from the right
+            val enter = remember(view) { MutableTransitionState(false).apply { targetState = true } }
+            AnimatedVisibility(
+              visibleState = enter,
+              enter = fadeIn(tween(200)) + slideInHorizontally(tween(220)) { it / 3 },
+            ) {
+              AndroidView(
+                factory = { view },
+                modifier = Modifier.onGloballyPositioned { coords ->
+                  clip.chips[view] = coords
+                  clip.row?.let { clipChip(view, coords, it, clip) }
+                },
+              )
+            }
+          }
         }
-      }
       }
     }
     ToolButton(Icons.Clipboard, R.string.clipboard, colors) { controller.panel = Panel.CLIPBOARD }
@@ -618,6 +645,7 @@ private fun ForgetButton(icon: ImageVector, label: String, colors: KeyboardColor
 
 // As in AOSP's strip: the middle slot is 40% of the strip and the sides 30% each, whatever the words
 private const val CENTER_SHARE = 0.4f
+
 // A word too wide for its slot is first squeezed, down to this much of its width, and only then cut in the middle
 private const val MIN_TEXT_SCALE = 0.7f
 private val SlotPadding = 6.dp
@@ -733,7 +761,7 @@ private fun DrawScope.drawKey(
   val radius = CornerRadius(KeyRadius.toPx())
   // Borderless keeps the space bar, enter and the bottom-row layer switch (?123/ABC) filled so they stay easy to find
   val bottomRow = bounds.bottom >= this@drawKey.size.height - BottomPadding.toPx() - 1f
-  if (borders || isPressed || key.type == KeyType.SPACE || key.type == KeyType.ENTER || key.type == KeyType.LAYER && bottomRow) {
+  if (borders || isPressed || key.type == KeyType.SPACE || key.type == KeyType.ENTER || (key.type == KeyType.LAYER && bottomRow)) {
     if (!isPressed && (borders || key.type == KeyType.SPACE)) drawRoundRect(colors.shadow, topLeft + Offset(0f, 1.dp.toPx()), size, radius)
     drawRoundRect(fill, topLeft, size, radius)
   }
@@ -754,7 +782,7 @@ private fun DrawScope.drawKey(
     KeyType.LAYER -> drawLabel(measurer, key.label, center, TextStyle(color = colors.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold))
     KeyType.CHAR -> {
       // Pads write a key's letters beside it (2 ABC), with the digits in one column, as a dial pad does
-      if (controller.layerId in InputController.PADS && (key.hint != null || controller.layerId == InputController.PHONE && key.label[0].isDigit())) {
+      if (controller.layerId in InputController.PADS && (key.hint != null || (controller.layerId == InputController.PHONE && key.label[0].isDigit()))) {
         val main = measurer.measure(key.label, TextStyle(color = colors.text, fontSize = 27.sp))
         val x = bounds.left + bounds.width * 0.36f - main.size.width / 2
         drawText(main, topLeft = Offset(x, bounds.centerY - main.size.height / 2))
@@ -784,19 +812,26 @@ private fun DrawScope.drawKey(
 private fun DrawScope.drawPopup(popup: Popup, controller: InputController, colors: KeyboardColors, measurer: TextMeasurer) {
   val pad = 4.dp.toPx()
   val topLeft = Offset(popup.left - pad, popup.top - pad)
-  val size = Size(popup.cellWidth * popup.items.size + 2 * pad, popup.cellHeight + 2 * pad)
+  val size = Size(popup.cellWidth * popup.columns + 2 * pad, popup.cellHeight * popup.rows + 2 * pad)
   drawRoundRect(Color.Black.copy(alpha = 0.18f), topLeft + Offset(0f, 3.dp.toPx()), size, CornerRadius(12.dp.toPx()))
   drawRoundRect(colors.popup, topLeft, size, CornerRadius(12.dp.toPx()))
   popup.items.forEachIndexed { i, item ->
-    val left = popup.left + i * popup.cellWidth
+    val left = popup.left + (i % popup.columns) * popup.cellWidth
+    val top = popup.top + (i / popup.columns) * popup.cellHeight
     val selected = i == popup.selected
     if (selected) {
-      drawRoundRect(colors.accent, Offset(left, popup.top), Size(popup.cellWidth, popup.cellHeight), CornerRadius(KeyRadius.toPx()))
+      drawRoundRect(colors.accent, Offset(left, top), Size(popup.cellWidth, popup.cellHeight), CornerRadius(KeyRadius.toPx()))
     }
-    val center = Offset(left + popup.cellWidth / 2, popup.top + popup.cellHeight / 2)
-    // Language names stay as written, smaller; letters follow shift
-    val label = if (popup.languages != null) item else controller.display(item)
-    drawLabel(measurer, label, center, TextStyle(color = if (selected) colors.onAccent else colors.text, fontSize = if (popup.languages != null) 17.sp else 24.sp))
+    val center = Offset(left + popup.cellWidth / 2, top + popup.cellHeight / 2)
+    val color = if (selected) colors.onAccent else colors.text
+    if (popup.languages != null) {
+      // Language names stay as written, smaller, and shrink further rather than run into the next one
+      val style = TextStyle(color = color, fontSize = 17.sp)
+      val fit = popup.cellWidth * 0.9f / measurer.measure(item, style).size.width
+      drawLabel(measurer, item, center, if (fit < 1f) style.copy(fontSize = 17.sp * fit) else style)
+    } else {
+      drawLabel(measurer, controller.display(item), center, TextStyle(color = color, fontSize = 24.sp))
+    }
   }
 }
 

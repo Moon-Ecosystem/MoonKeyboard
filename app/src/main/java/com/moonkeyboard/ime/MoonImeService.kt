@@ -1,6 +1,8 @@
 package com.moonkeyboard.ime
 
+import android.annotation.SuppressLint
 import android.content.ClipboardManager
+import android.graphics.PorterDuff
 import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.inputmethodservice.InputMethodService
@@ -9,19 +11,18 @@ import android.os.Bundle
 import android.util.Size
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InlineSuggestionsRequest
+import android.view.inputmethod.InlineSuggestionsResponse
+import android.widget.inline.InlinePresentationSpec
 import androidx.annotation.RequiresApi
 import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.common.TextViewStyle
 import androidx.autofill.inline.common.ViewStyle
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.view.updateLayoutParams
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InlineSuggestionsRequest
-import android.view.inputmethod.InlineSuggestionsResponse
-import android.widget.inline.InlinePresentationSpec
-import com.moonkeyboard.R
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -30,12 +31,16 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.moonkeyboard.R
 
 /**
  * The keyboard itself. An InputMethodService has no lifecycle owner of its own, so it provides one
  * for Compose to attach to.
  */
-class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner {
+class MoonImeService :
+  InputMethodService(),
+  LifecycleOwner,
+  SavedStateRegistryOwner {
   private val lifecycleRegistry = LifecycleRegistry(this)
   private val savedStateController = SavedStateRegistryController.create(this)
   private lateinit var controller: InputController
@@ -141,8 +146,11 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
       ThemeMode.LIGHT -> false
       ThemeMode.DARK -> true
     }
-    val colors = if (dark) KeyboardColors.Dark else KeyboardColors.Light
-    val chipBg = Icon.createWithResource(this, if (dark) R.drawable.inline_chip_background else R.drawable.inline_chip_background_light)
+    val colors = KeyboardColors.chosen(this, dark)
+    // The pill's shape, filled with the keys' own colour (pitch black, accent and wallpaper included)
+    val chipBg = Icon.createWithResource(this, R.drawable.inline_chip_background)
+      .setTint(colors.key.toArgb())
+      .setTintMode(PorterDuff.Mode.SRC_IN)
     val titleStyle = TextViewStyle.Builder()
       .setTextColor(colors.text.toArgb())
       .setTextSize(14f)
@@ -151,6 +159,9 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
       .setTextColor(colors.muted.toArgb())
       .setTextSize(12f)
       .build()
+
+    // Public API for keyboards, as the autofill sample keyboard uses it; the restriction is mislabelled
+    @SuppressLint("RestrictedApi")
     val chipStyle = ViewStyle.Builder()
       .setBackground(chipBg)
       .build()
@@ -160,7 +171,7 @@ class MoonImeService : InputMethodService(), LifecycleOwner, SavedStateRegistryO
           .setChipStyle(chipStyle)
           .setTitleStyle(titleStyle)
           .setSubtitleStyle(subtitleStyle)
-          .build()
+          .build(),
       )
       .build()
     val minSize = Size((60 * density).toInt(), (36 * density).toInt())

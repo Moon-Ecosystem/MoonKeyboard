@@ -45,10 +45,9 @@ fun main(args: Array<String>) {
 private class Entry(val variants: MutableList<String>, val words: List<String>)
 
 /** CLDR's `<annotation cp="😂">face | joy | laugh | tear</annotation>` lines, keyed by emoji without U+FE0F. */
-private fun readKeywords(file: File): Map<String, List<String>> =
-  Regex("""<annotation cp="([^"]+)">([^<]+)</annotation>""").findAll(file.readText()).associate { m ->
-    m.groupValues[1].replace(VS16, "") to m.groupValues[2].split('|').map { it.trim() }.filter { it.isNotEmpty() }
-  }
+private fun readKeywords(file: File): Map<String, List<String>> = Regex("""<annotation cp="([^"]+)">([^<]+)</annotation>""").findAll(file.readText()).associate { m ->
+  m.groupValues[1].replace(VS16, "") to m.groupValues[2].split('|').map { it.trim() }.filter { it.isNotEmpty() }
+}
 
 private val SKIN_TONES = 0x1F3FB..0x1F3FF
 private const val VS16 = "️"

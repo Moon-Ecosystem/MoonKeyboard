@@ -10,6 +10,7 @@ class NeuralLmTest {
   private val vocab = listOf("<pad>", "<unk>", "<s>", "you", "the", "soon")
   private var calls = 0
   private var lastInput = LongArray(0)
+
   // Scores: specials high (must never be offered), then "soon" > "you" > "the"
   private val lm = NeuralLm(vocab) { ids ->
     calls++

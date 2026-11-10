@@ -129,8 +129,7 @@ class GlideDecoder(private val lexicon: Lexicon, val config: GlideConfig = Glide
   }
 
   /** Turns with none of the word's letters at them: a word that can't explain a zig-zag isn't it. */
-  private fun unexplainedTurns(turns: List<Turn>, ax: FloatArray, ay: FloatArray, n: Int, kw: Float): Int =
-    turns.count { t -> (0 until n).none { hypot(ax[it] - t.x, ay[it] - t.y) <= config.explainRadius * kw } }
+  private fun unexplainedTurns(turns: List<Turn>, ax: FloatArray, ay: FloatArray, n: Int, kw: Float): Int = turns.count { t -> (0 until n).none { hypot(ax[it] - t.x, ay[it] - t.y) <= config.explainRadius * kw } }
 
   /** Cost of a word the trie doesn't hold (the user's own words), or null if the path can't spell it. */
   fun cost(word: String, path: List<TracePoint>, keys: KeyMap): Float? {

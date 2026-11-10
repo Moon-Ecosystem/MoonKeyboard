@@ -1,14 +1,14 @@
 package com.moonkeyboard.ime
 
 import android.os.SystemClock
+import android.view.KeyEvent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import android.view.KeyEvent
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerId
@@ -27,9 +27,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/** [languages]: a space-bar popup's language ids, one per item (null for the system's keyboard list). */
-class Popup(val items: List<String>, val left: Float, val top: Float, val cellWidth: Float, val cellHeight: Float, val languages: List<String?>? = null) {
+/**
+ * [languages]: a space-bar popup's language ids, one per item (null for the system's keyboard list).
+ * Items fill [columns] cells a row, from the top row down.
+ */
+class Popup(val items: List<String>, val left: Float, val top: Float, val cellWidth: Float, val cellHeight: Float, val languages: List<String?>? = null, val columns: Int = items.size) {
   var selected by mutableIntStateOf(0)
+  val rows: Int get() = (items.size + columns - 1) / columns
+
+  /** The item under [x], [y]; a finger above or below the popup picks from its nearest row. */
+  fun indexAt(x: Float, y: Float): Int {
+    val column = ((x - left) / cellWidth).toInt().coerceIn(0, columns - 1)
+    val row = ((y - top) / cellHeight).toInt().coerceIn(0, rows - 1)
+    return (row * columns + column).coerceIn(0, items.lastIndex)
+  }
 }
 
 /** A glide trail sample and when the finger passed it ([SystemClock.uptimeMillis]); it fades by age. */
@@ -58,8 +69,10 @@ class TouchTracker(
   val pressed = mutableStateMapOf<PointerId, KeyBounds>()
   var popup by mutableStateOf<Popup?>(null)
     private set
+
   /** The glide's samples still visible, oldest first; they outlive the glide while they fade. */
   val trail = ArrayDeque<TrailPoint>()
+
   /** Changes every frame while the trail is on screen, so it redraws as it fades. */
   var trailTick by mutableLongStateOf(0L)
     private set
@@ -67,13 +80,16 @@ class TouchTracker(
 
   private var popupOwner: PointerId? = null
   private val holds = HashMap<PointerId, Job>()
+
   // Where each finger landed: the point the decoder scores, not where it lifted
   private val downAt = HashMap<PointerId, Offset>()
   private val downTime = HashMap<PointerId, Long>()
   private var glideOwner: PointerId? = null
+
   /** The finger sliding along the space bar to move the cursor, and where it last moved it. */
   private var cursorOwner: PointerId? = null
   private var cursorAnchorX = 0f
+
   /** The finger sliding left from backspace to select whole words, and how many it has taken. */
   private var deleteOwner: PointerId? = null
   private var deleteWords = 0
@@ -164,7 +180,7 @@ class TouchTracker(
     val (at, nowMs) = samples.last()
     val p = popup
     if (p != null && popupOwner == id) {
-      p.selected = ((at.x - p.left) / p.cellWidth).toInt().coerceIn(0, p.items.lastIndex)
+      p.selected = p.indexAt(at.x, at.y)
       return
     }
     if (cursorOwner == id || pressed[id]?.key?.type == KeyType.SPACE) {
@@ -355,12 +371,18 @@ class TouchTracker(
   /** The switched-on languages by name, then ⌨ for the system's keyboard list, over the space bar. */
   private fun languagePopup(bounds: KeyBounds): Popup {
     val (packs, next) = controller.languageChoices()
-    val items = packs.map { it.manifest.name } + KEYBOARDS_ITEM
-    // Wide enough for a name like "Deutsch", but all of them must fit across the keyboard
-    val cell = minOf(keyWidth * LANGUAGE_CELL_KEYS, (geometry.width - 2 * sidePadding) / items.size)
-    val total = cell * items.size
+    // "Português (Brasil)" shows as "Português", unless another language shares that name
+    val short = packs.map { it.manifest.name.substringBefore(" (") }
+    val items = packs.mapIndexed { i, p -> if (short.count { it == short[i] } > 1) p.manifest.name else short[i] } + KEYBOARDS_ITEM
+    // Cells wide enough for a name like "Deutsch"; when they don't all fit across, they wrap onto more rows
+    val width = geometry.width - 2 * sidePadding
+    val rows = Math.ceil((items.size * keyWidth * LANGUAGE_CELL_KEYS / width).toDouble()).toInt().coerceAtLeast(1)
+    val columns = (items.size + rows - 1) / rows
+    val cell = minOf(keyWidth * LANGUAGE_CELL_KEYS, width / columns)
+    val total = cell * columns
     val left = (bounds.centerX - total / 2).coerceIn(sidePadding, geometry.width - sidePadding - total)
-    return Popup(items, left, bounds.top - bounds.height - popupGap, cell, bounds.height, packs.map { it.manifest.id } + null)
+    val top = bounds.top - rows * bounds.height - popupGap
+    return Popup(items, left, top, cell, bounds.height, packs.map { it.manifest.id } + null, columns)
       .apply { selected = next }
   }
 
@@ -370,9 +392,11 @@ class TouchTracker(
     const val BACKSPACE_REPEAT_DELAY_MS = 400L
     const val BACKSPACE_REPEAT_MS = 50L
     private const val PREVIEW_INTERVAL_MS = 80L
+
     // In key widths: how far to slide before space becomes a cursor, and the slide per character
     private const val CURSOR_SLOP = 0.5f
     private const val CURSOR_STEP = 0.35f
+
     // Slide per word when deleting from backspace, in key widths
     private const val DELETE_STEP = 0.8f
   }

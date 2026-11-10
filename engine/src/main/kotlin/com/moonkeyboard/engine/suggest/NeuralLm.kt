@@ -64,6 +64,7 @@ class NeuralLm(private val vocab: List<String>, private val run: (LongArray) -> 
   private companion object {
     const val UNKNOWN = 1
     const val FIRST_WORD = 3
+
     /** Words of context; the network was trained on up to 64. */
     const val MAX_CONTEXT = 32
     const val TOP = 30

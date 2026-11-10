@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +25,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
-import kotlin.math.roundToInt
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -47,8 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.moonkeyboard.ime.Icons
 import com.moonkeyboard.ime.Prefs
-import com.moonkeyboard.ime.ThemeMode
+import com.moonkeyboard.ime.darkTheme
 import com.moonkeyboard.ime.keyboardColors
+import kotlin.math.roundToInt
 
 /** The app's palette, from the design canvas; light mirrors it for the light keyboard theme. */
 data class AppColors(
@@ -95,7 +94,6 @@ object AppIcons {
   val Shield = icon("M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z", "M9 12l2 2 4-4")
   val Check = icon("M5 12l5 5 9-10")
   val Typing = icon("M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z", "M7 10h.01M11 10h.01M15 10h.01M8 14h8")
-  val Glide = icon("M4 17c3-9 6-9 8-4s5 5 8-6")
   val Learned = icon("M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2zM8 7h6M8 11h6")
   val TestPad = icon("M4 20l4-4M14 4l6 6-8 8-6-6z")
   val Close = icon("M6 6l12 12M18 6L6 18")
@@ -104,22 +102,17 @@ object AppIcons {
   val DragHandle = icon("M5 9h14M5 15h14")
   val Language = icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M3 12h18", "M12 3c3 3 3 15 0 18c-3-3-3-15 0-18z")
 
-  private fun icon(vararg paths: String): ImageVector =
-    ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
-      for (d in paths) {
-        addPath(PathParser().parsePathString(d).toNodes(), stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
-      }
-    }.build()
+  private fun icon(vararg paths: String): ImageVector = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
+    for (d in paths) {
+      addPath(PathParser().parsePathString(d).toNodes(), stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
+    }
+  }.build()
 }
 
 /** Follows the keyboard's own theme setting, so the app and the keyboard always match. */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-  val dark = when (Prefs.theme.value) {
-    ThemeMode.SYSTEM -> isSystemInDarkTheme()
-    ThemeMode.LIGHT -> false
-    ThemeMode.DARK -> true
-  }
+  val dark = darkTheme()
   // The accent and pitch black come from the keyboard's own colours, so the two can't drift apart
   val keys = keyboardColors()
   var colors = (if (dark) AppColors.Dark else AppColors.Light).copy(accent = keys.accent, onAccent = keys.onAccent)

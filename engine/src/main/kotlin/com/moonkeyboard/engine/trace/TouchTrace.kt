@@ -19,9 +19,8 @@ data class TouchTrace(val points: List<TracePoint>, val typed: String? = null) {
     get() = points.zipWithNext { a, b -> kotlin.math.hypot(b.x - a.x, b.y - a.y) }.sum()
 
   /** Keys the finger crossed, in order, without repeats. The raw input a glide decoder starts from. */
-  fun keysAlong(geometry: KeyboardGeometry): List<String> =
-    points.mapNotNull { geometry.keyAt(it.x, it.y)?.let(::keyName) }
-      .fold(mutableListOf()) { acc, k -> if (acc.lastOrNull() != k) acc += k; acc }
+  fun keysAlong(geometry: KeyboardGeometry): List<String> = points.mapNotNull { geometry.keyAt(it.x, it.y)?.let(::keyName) }
+    .fold(mutableListOf()) { acc, k -> if (acc.lastOrNull() != k) acc += k; acc }
 }
 
 @Serializable
@@ -55,5 +54,4 @@ data class TraceRecording(
 }
 
 /** The label for character keys, the type for function keys (shift, space…). */
-fun keyName(bounds: KeyBounds): String =
-  if (bounds.key.type == KeyType.CHAR) bounds.key.label else bounds.key.type.name.lowercase()
+fun keyName(bounds: KeyBounds): String = if (bounds.key.type == KeyType.CHAR) bounds.key.label else bounds.key.type.name.lowercase()

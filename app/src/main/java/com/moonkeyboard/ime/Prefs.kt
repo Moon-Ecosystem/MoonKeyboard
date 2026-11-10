@@ -25,7 +25,7 @@ enum class ImageExpiry(val days: Int?) { WEEK(7), MONTH(30), NEVER(null) }
 
 /** What the user can put on the toolbar, in the order they choose; options and clipboard are always there. */
 enum class ToolbarItem {
-  EMOJI, THEME, FLOATING, ONE_HANDED, TEXT_EDIT, SPLIT, INCOGNITO;
+  EMOJI, THEME, FLOATING, ONE_HANDED, TEXT_EDIT, SPLIT, INCOGNITO, SYMBOLS;
 
   companion object {
     /** As many as fit beside options, clipboard and the back arrow on a narrow phone. */
@@ -72,42 +72,55 @@ object Prefs {
 
   val theme = Pref("theme", ThemeMode.SYSTEM, ThemeMode::valueOf)
   val accent = Pref("accent", Accent.MOON, Accent::valueOf)
+
   /** Dark theme on a true black background, for OLED screens. */
   val pitchBlack = Pref("pitch_black", false, String::toBoolean)
   val borders = Pref("borders", true, String::toBoolean)
   val numberRow = Pref("number_row", false, String::toBoolean)
+
   /** A symbol on each letter's long press, shown in its corner. */
   val longPressSymbols = Pref("long_press_symbols", false, String::toBoolean)
+
   /** A row of recent emoji above the strip, one tap each. */
   val emojiRow = Pref("emoji_row", false, String::toBoolean)
+
+  /** How many emoji the row holds; past the ten that fit, it scrolls. */
+  val emojiRowCount = Pref("emoji_row_count", EMOJI_ROW_FIT) { it.toInt().coerceIn(EMOJI_ROW_FIT, Emoji.MAX_RECENTS) }
+
   /** A key of its own for emoji beside the comma, instead of holding the comma. */
   val emojiKey = Pref("emoji_key", false, String::toBoolean)
+
   /** The keys' height as a percentage of the size that fits the screen. */
   val keyboardHeight = Pref("keyboard_height", 100) { it.toInt().coerceIn(KEYBOARD_HEIGHT_MIN, KEYBOARD_HEIGHT_MAX) }
   val oneHanded = Pref("one_handed", OneHanded.OFF, OneHanded::valueOf)
+
   /** The side one-handed mode goes back to when switched on from the toolbar. */
   val oneHandedSide = Pref("one_handed_side", OneHanded.RIGHT, OneHanded::valueOf)
   val floating = Pref("floating", false, String::toBoolean)
+
   // Portrait and landscape each keep their own spot: one rarely fits the other
   val floatPortrait = Pref("float_portrait", FloatSpot.UNSET, FloatSpot::parse)
   val floatLandscape = Pref("float_landscape", FloatSpot.UNSET, FloatSpot::parse)
   val splitLandscape = Pref("split_landscape", true, String::toBoolean)
+
   /** Toolbar items as comma-separated names, in the bar's order; use [toolbar] and [setToolbar]. */
   val toolbarItems = Pref("toolbar", "EMOJI,THEME,FLOATING") { it }
 
-  fun toolbar(): List<ToolbarItem> =
-    toolbarItems.value.split(',').mapNotNull { name -> ToolbarItem.entries.find { it.name == name } }.distinct()
+  fun toolbar(): List<ToolbarItem> = toolbarItems.value.split(',').mapNotNull { name -> ToolbarItem.entries.find { it.name == name } }.distinct()
 
   fun setToolbar(items: List<ToolbarItem>) {
     toolbarItems.value = items.joinToString(",")
   }
 
   val haptics = Pref("haptics", true, String::toBoolean)
+
   /** 1 to [Haptics.MAX_STRENGTH]; a 0 saved by the old "system default" step reads as 1. */
   val hapticStrength = Pref("haptic_strength", 2) { it.toInt().coerceAtLeast(1) }
+
   /** How long a key must be held before its popup opens, in milliseconds. */
   val longPressMs = Pref("long_press_ms", 300) { it.toInt().coerceIn(100, 700) }
   val autoCaps = Pref("auto_caps", true, String::toBoolean)
+
   /** Turned on from the toolbar: nothing typed is learned, in any field, until it's turned off. */
   val incognito = Pref("incognito", false, String::toBoolean)
   val sound = Pref("sound", false, String::toBoolean)
@@ -119,16 +132,20 @@ object Prefs {
   val autocorrect = Pref("autocorrect", true, String::toBoolean)
   val blockOffensive = Pref("block_offensive", false, String::toBoolean)
   val hinglish = Pref("hinglish", true, String::toBoolean)
+
   /** The language being typed in, by its pack id. */
   val language = Pref("language", LanguagePacks.BUILT_IN) { it }
+
   /** Languages in switching order, a "-" before one that's switched off ("en,de,-fr"); new packs go on the end. */
   val languages = Pref("languages", LanguagePacks.BUILT_IN) { it }
   val neuralPredictions = Pref("neural_predictions", true, String::toBoolean)
   val emojiSuggestions = Pref("emoji_suggestions", true, String::toBoolean)
+
   /** Offer a new copy in the suggestion strip, once. */
   val offerCopied = Pref("offer_copied", true, String::toBoolean)
   val imageExpiry = Pref("image_expiry", ImageExpiry.WEEK, ImageExpiry::valueOf)
   val emojiRecents = Pref("emoji_recents", "") { it }
+
   /** The last clip the system clipboard held, so reopening the keyboard doesn't re-add a deleted one. */
   val lastClip = Pref("last_clip", "") { it }
   val lastExpiryCheck = Pref("last_expiry_check", 0L, String::toLong)
@@ -147,6 +164,8 @@ object Prefs {
     }
   }
 
+  /** Emoji that fit across the row without scrolling. */
+  const val EMOJI_ROW_FIT = 10
   const val KEYBOARD_HEIGHT_MIN = 80
   const val KEYBOARD_HEIGHT_MAX = 140
 }

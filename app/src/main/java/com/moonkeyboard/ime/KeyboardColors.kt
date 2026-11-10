@@ -69,6 +69,13 @@ data class KeyboardColors(
       return if ((l + 0.05f) / 0.05f >= 1.05f / (l + 0.05f)) Color.Black else Color.White
     }
 
+    /** The colours the settings pick: theme, accent (or the wallpaper's) and pitch black. */
+    fun chosen(context: Context, dark: Boolean): KeyboardColors {
+      val wallpaper = Prefs.accent.value == Accent.WALLPAPER && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+      val colors = if (wallpaper) dynamic(context, dark) else (if (dark) Dark else Light).withAccent(Prefs.accent.value)
+      return if (dark && Prefs.pitchBlack.value) colors.pitchBlack(moonKeys = !wallpaper) else colors
+    }
+
     /** Material You: the system's palette from the wallpaper (Android 12+), in the same roles as ours. */
     @RequiresApi(Build.VERSION_CODES.S)
     fun dynamic(context: Context, dark: Boolean): KeyboardColors {
@@ -119,6 +126,7 @@ data class KeyboardColors(
       popup = Color(0xFFFFFFFF),
       divider = Color(0xFFD3D7E0),
     )
+
     // Dark: letter and function keys closer together so the keys read as one surface, a quieter divider
     val Dark = KeyboardColors(
       background = Color(0xFF111319),

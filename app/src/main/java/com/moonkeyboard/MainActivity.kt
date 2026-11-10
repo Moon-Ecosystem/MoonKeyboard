@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,6 +29,8 @@ import com.moonkeyboard.ime.ClipboardStore
 import com.moonkeyboard.ime.Emoji
 import com.moonkeyboard.ime.Language
 import com.moonkeyboard.ime.Prefs
+import com.moonkeyboard.ime.darkTheme
+import android.graphics.Color as AndroidColor
 
 /** The app: setup until the keyboard is on and selected, then its settings and the test pad. */
 class MainActivity : ComponentActivity() {
@@ -43,6 +47,12 @@ class MainActivity : ComponentActivity() {
     setContent {
       AppTheme {
         val colors = LocalAppColors.current
+        val dark = darkTheme()
+        // The bars' icons follow the app's theme setting, not the phone's dark mode
+        LaunchedEffect(dark) {
+          val bars = if (dark) SystemBarStyle.dark(AndroidColor.TRANSPARENT) else SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+          enableEdgeToEdge(bars, bars)
+        }
         var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
         val home = { screen = Screen.HOME }
         if (screen != Screen.HOME) BackHandler(onBack = home)
@@ -63,13 +73,12 @@ class MainActivity : ComponentActivity() {
               }
               Screen.LOOK -> LookScreen(home)
               Screen.TYPING -> TypingScreen(home)
-              Screen.GLIDE -> GlideScreen(home)
               Screen.EMOJI -> EmojiScreen(home)
               Screen.CLIPBOARD -> ClipboardScreen(home)
               Screen.LANGUAGES -> LanguagesScreen(home)
               Screen.LEARNED -> LearnedScreen(home)
               Screen.SHORTCUTS -> ShortcutsScreen(home)
-              Screen.TEST_PAD -> MaterialTheme(colorScheme = if (colors.text == AppColors.Dark.text) darkColorScheme() else lightColorScheme()) {
+              Screen.TEST_PAD -> MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                 TestPad(onBack = home)
               }
             }
