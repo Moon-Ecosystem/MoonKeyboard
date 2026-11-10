@@ -49,10 +49,16 @@ enum class KeyType {
 object Layouts {
   private val json = Json
 
+  /** A built-in layout. */
   fun load(id: String): Layout {
     val text = Layouts::class.java.getResourceAsStream("/layouts/$id.json")
       ?.use { it.readBytes().decodeToString() }
       ?: error("No layout '$id'")
+    return parse(text, id)
+  }
+
+  /** A layout from its JSON, as a language pack carries one. */
+  fun parse(text: String, id: String): Layout {
     val layout = json.decodeFromString(Layout.serializer(), text)
     require(layout.rows.all { row -> row.keys.all { it.type != KeyType.LAYER || it.layer != null } }) {
       "Layout '$id' has a layer key without a target"
@@ -63,12 +69,43 @@ object Layouts {
   /** [layout] with a slightly shorter row of digits on top; the digits leave the letters' hints and popups. */
   fun withNumberRow(layout: Layout): Layout {
     val digits = "1234567890".map { it.toString() }
-    val numbers = Row(digits.map { Key(label = it) }, height = NUMBER_ROW_HEIGHT)
+    // As wide as the widest row: ten digits over QWERTY's ten keys, and over German's eleven too
+    val width = layout.rows.maxOf { row -> row.keys.sumOf { it.width.toDouble() } }.toFloat() / digits.size
+    val numbers = Row(digits.map { Key(label = it, width = width) }, height = NUMBER_ROW_HEIGHT)
     val rows = layout.rows.map { row ->
       row.copy(keys = row.keys.map { k -> if (k.hint in digits) k.copy(hint = null, popup = k.popup - k.hint!!) else k })
     }
     return Layout(listOf(numbers) + rows)
   }
+
+  /**
+   * [layout] with a symbol on each letter key's long press, shown as its hint: by position, so every
+   * language's layout gets them in the same places. A key that already has a hint (a digit, without the
+   * number row) keeps it and gets the symbol second; accents follow. [currency] goes on the third key
+   * of the middle row.
+   */
+  fun withSymbols(layout: Layout, currency: String): Layout {
+    val symbols = listOf(
+      listOf("%", "\\", "|", "=", "[", "]", "<", ">", "{", "}"),
+      listOf("@", "#", currency, "-", "&", "_", "+", "(", ")"),
+      listOf("*", "\"", "'", ":", ";", "!", "?"),
+    )
+    // The letter rows, in order; a number row added on top has no letters
+    val letterRows = layout.rows.withIndex().filter { (_, row) -> row.keys.any { it.isLetter() } }.map { it.index }
+    val rows = layout.rows.mapIndexed { r, row ->
+      val forRow = symbols.getOrNull(letterRows.indexOf(r)) ?: return@mapIndexed row
+      var letter = 0
+      row.copy(keys = row.keys.map { k ->
+        if (!k.isLetter()) return@map k
+        val symbol = forRow.getOrNull(letter++) ?: return@map k
+        if (k.hint != null) k.copy(popup = listOf(k.hint) + symbol + (k.popup - k.hint - symbol))
+        else k.copy(hint = symbol, popup = listOf(symbol) + (k.popup - symbol))
+      })
+    }
+    return Layout(rows)
+  }
+
+  private fun Key.isLetter() = type == KeyType.CHAR && label.singleOrNull()?.isLetter() == true
 
   /**
    * [layout] with an emoji key after the bottom row's comma, the space bar a key narrower to make

@@ -18,11 +18,23 @@ data class Touch(val x: Float, val y: Float, val char: Char) {
 
 /** Centres of the letter keys, the only geometry the tap decoder needs. */
 class KeyMap(private val centers: Map<Char, Pair<Float, Float>>, val keyWidth: Float) {
+  /** The letters with keys of their own, lower case: a–z, plus ä, ö, ü on a German keyboard. */
+  val letters: CharArray = centers.keys.sorted().toCharArray()
+
   fun center(c: Char): Pair<Float, Float>? = centers[c]
+
+  /**
+   * The key [c] is typed with: its own when the layout has one (ä on a German keyboard), otherwise
+   * its base letter's (é is a long press on e).
+   */
+  fun keyOf(c: Char): Char {
+    val l = c.lowercaseChar()
+    return if (l in centers) l else baseChar(c)
+  }
 
   /** A touch in the middle of [c]'s key, or an exact touch if the layout has no such key. */
   fun touchFor(c: Char): Touch =
-    centers[baseChar(c)]?.let { (x, y) -> Touch(x, y, c) } ?: Touch.exact(c)
+    centers[keyOf(c)]?.let { (x, y) -> Touch(x, y, c) } ?: Touch.exact(c)
 
   companion object {
     fun from(geometry: KeyboardGeometry): KeyMap {
@@ -37,6 +49,8 @@ class KeyMap(private val centers: Map<Char, Pair<Float, Float>>, val keyWidth: F
 fun baseChar(c: Char): Char {
   val l = c.lowercaseChar()
   if (l in 'a'..'z' || l == '\'') return l
+  // ß doesn't decompose, but it's typed and glided on the s key
+  if (l == 'ß') return 's'
   return Normalizer.normalize(l.toString(), Normalizer.Form.NFD)[0]
 }
 
@@ -45,16 +59,26 @@ fun baseChar(c: Char): Char {
  * widths, scaled so a tap at the edge of the right key costs about as much as a near miss of the
  * neighbour.
  */
-class Spatial(val touches: List<Touch>, keys: KeyMap?, private val config: DecoderConfig) {
+class Spatial(val touches: List<Touch>, private val keys: KeyMap?, private val config: DecoderConfig) {
   val size: Int get() = touches.size
+
+  /** One slot per key the layout has (a–z when there's no layout), plus the apostrophe. */
+  private val slotKeys: CharArray = (keys?.letters ?: DEFAULT_LETTERS) + '\''
+
+  private fun keyOf(c: Char) = keys?.keyOf(c) ?: baseChar(c)
+
+  // Every character's slot, worked out once: cost() runs for every trie node and touch
+  private val slotTable = IntArray(TABLE_CHARS) { slotKeys.indexOf(keyOf(it.toChar())) }
+
+  private fun slotOf(c: Char) = if (c.code < TABLE_CHARS) slotTable[c.code] else slotKeys.indexOf(keyOf(c))
 
   private val table: Array<FloatArray> = Array(touches.size) { i ->
     val t = touches[i]
-    FloatArray(SLOTS) { slot ->
-      val c = slotChar(slot)
+    FloatArray(slotKeys.size) { slot ->
+      val c = slotKeys[slot]
       val center = keys?.center(c)
       if (!t.hasPosition || center == null || keys == null) {
-        if (baseChar(t.char) == c) 0f else config.maxSubstitution
+        if (keyOf(t.char) == c) 0f else config.maxSubstitution
       } else {
         val dx = (t.x - center.first) / keys.keyWidth
         val dy = (t.y - center.second) / keys.keyWidth
@@ -65,26 +89,26 @@ class Spatial(val touches: List<Touch>, keys: KeyMap?, private val config: Decod
 
   /** Cost of reading touch [i] as the word character [c]. */
   fun cost(i: Int, c: Char): Float {
-    val base = baseChar(c)
     val typed = touches[i].char
+    val slot = slotOf(c)
+    val sameKey = slot >= 0 && slot == slotOf(typed)
+    val base = baseChar(c)
     val typedBase = baseChar(typed)
-    val slot = slotOf(base)
     var cost = if (slot >= 0) table[i][slot] else if (base == typedBase) 0f else config.maxSubstitution
     // Classic spelling confusions: cost no more than a near miss, even when the keys are far apart
     if (base != typedBase && confuses(typedBase, base)) cost = minOf(cost, config.softSubstitution)
+    // The same letter on a key of its own ("schon" typed for "schön" where ö has a key): a skipped
+    // umlaut, however far apart the keys are
+    if (base == typedBase && !sameKey) cost = minOf(cost, config.softSubstitution)
     // Same key, different accent ("cafe" typed, "café" in the dictionary, or the reverse)
-    if (c.lowercaseChar() != typed.lowercaseChar() && base == typedBase) cost += config.accent
+    if (c.lowercaseChar() != typed.lowercaseChar() && sameKey) cost += config.accent
     return cost
   }
 
   private companion object {
-    const val SLOTS = 27
-    fun slotOf(c: Char) = when (c) {
-      in 'a'..'z' -> c - 'a'
-      '\'' -> 26
-      else -> -1
-    }
-    fun slotChar(slot: Int) = if (slot < 26) 'a' + slot else '\''
+    val DEFAULT_LETTERS = ('a'..'z').toList().toCharArray()
+    /** Characters whose slot is looked up in a table: Latin, Latin-1 and Latin Extended-A. */
+    const val TABLE_CHARS = 0x180
 
     private val VOWELS = setOf('a', 'e', 'i', 'o', 'u')
     private val SOFT_PAIRS = setOf('s' to 'c', 'c' to 's', 'z' to 's', 's' to 'z')
@@ -108,6 +132,10 @@ data class DecoderConfig(
   /** Inserting an apostrophe the user skipped ("dont" → "don't") is nearly free. */
   val apostropheInsert: Float = 0.3f,
   val accent: Float = 0.25f,
+  /** A letter typed as its two-letter spelling ("ss" for ß, "ae" for ä): about an accent's worth, not a typo's. */
+  val digraph: Float = 0.5f,
+  /** The language's two-letter spellings (lower case), from its pack; none for English. */
+  val digraphs: Map<Char, String> = emptyMap(),
   val completion: Float = 1.0f,
   val completionsPerPrefix: Int = 6,
   val baseLimit: Float = 1.5f,

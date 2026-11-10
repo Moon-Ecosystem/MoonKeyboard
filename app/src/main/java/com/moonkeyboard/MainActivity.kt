@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
               Screen.GLIDE -> GlideScreen(home)
               Screen.EMOJI -> EmojiScreen(home)
               Screen.CLIPBOARD -> ClipboardScreen(home)
+              Screen.LANGUAGES -> LanguagesScreen(home)
               Screen.LEARNED -> LearnedScreen(home)
               Screen.SHORTCUTS -> ShortcutsScreen(home)
               Screen.TEST_PAD -> MaterialTheme(colorScheme = if (colors.text == AppColors.Dark.text) darkColorScheme() else lightColorScheme()) {

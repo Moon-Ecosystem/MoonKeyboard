@@ -43,6 +43,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,6 +75,7 @@ import com.moonkeyboard.ime.ImageExpiry
 import com.moonkeyboard.ime.InputController
 import com.moonkeyboard.ime.KeyboardUi
 import com.moonkeyboard.ime.Language
+import com.moonkeyboard.ime.LanguagePacks
 import com.moonkeyboard.ime.OneHanded
 import com.moonkeyboard.ime.Prefs
 import com.moonkeyboard.ime.ThemeMode
@@ -88,7 +93,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 
-enum class Screen { HOME, LOOK, TYPING, GLIDE, EMOJI, CLIPBOARD, LEARNED, SHORTCUTS, TEST_PAD }
+enum class Screen { HOME, LOOK, TYPING, GLIDE, EMOJI, CLIPBOARD, LANGUAGES, LEARNED, SHORTCUTS, TEST_PAD }
 
 /** A screen's scrolling body under its top bar. */
 @Composable
@@ -213,9 +218,13 @@ fun HomeScreen(open: (Screen) -> Unit) {
     }
 
     Card {
+      val context = LocalContext.current
+      val languages = remember(Prefs.languages.value) { LanguagePacks.all(context).filter { it.second }.joinToString(", ") { it.first.manifest.name } }
+      NavRow(AppIcons.Language, R.string.languages, languages) { open(Screen.LANGUAGES) }
+      Divider()
       NavRow(AppIcons.Learned, R.string.learned_words, stringResource(R.string.learned_counts, words, phrases)) { open(Screen.LEARNED) }
       Divider()
-      val shortcutCount = remember(engine) { engine?.history?.shortcuts()?.size ?: 0 }
+      val shortcutCount = remember(engine) { engine?.shared?.shortcuts()?.size ?: 0 }
       NavRow(Icons.TextEdit, R.string.shortcuts, pluralStringResource(R.plurals.shortcut_count, shortcutCount, shortcutCount)) { open(Screen.SHORTCUTS) }
       Divider()
       NavRow(Icons.Emoji, R.string.emoji, stringResource(if (Prefs.emojiSuggestions.value) R.string.emoji_suggestions_on else R.string.emoji_suggestions_off)) { open(Screen.EMOJI) }
@@ -275,7 +284,23 @@ fun LookScreen(onBack: () -> Unit) {
         Divider()
         SwitchRow(R.string.number_row, Prefs.numberRow)
         Divider()
-        SliderRow(R.string.key_height, Prefs.keyboardHeight, Prefs.KEYBOARD_HEIGHT_MIN..Prefs.KEYBOARD_HEIGHT_MAX, "${Prefs.keyboardHeight.value}%", step = 5)
+        SwitchRow(R.string.long_press_symbols, Prefs.longPressSymbols, stringResource(R.string.long_press_symbols_detail))
+        Divider()
+        SwitchRow(R.string.emoji_row, Prefs.emojiRow, stringResource(R.string.emoji_row_detail))
+        Divider()
+        // The preview below grows with the height and shrinks this list: keep the slider in view while it's dragged
+        val slider = remember { BringIntoViewRequester() }
+        var shownHeight by remember { mutableIntStateOf(Prefs.keyboardHeight.value) }
+        LaunchedEffect(Prefs.keyboardHeight.value) {
+          if (Prefs.keyboardHeight.value == shownHeight) return@LaunchedEffect
+          shownHeight = Prefs.keyboardHeight.value
+          // Once the preview has been laid out at its new height
+          withFrameMillis { }
+          slider.bringIntoView()
+        }
+        Box(Modifier.bringIntoViewRequester(slider)) {
+          SliderRow(R.string.key_height, Prefs.keyboardHeight, Prefs.KEYBOARD_HEIGHT_MIN..Prefs.KEYBOARD_HEIGHT_MAX, "${Prefs.keyboardHeight.value}%", step = 5)
+        }
         Divider()
         LabelRow(R.string.one_handed_short) { Segmented(Prefs.oneHanded, OneHanded.entries, listOf(R.string.off, R.string.left, R.string.right), compact = true) }
         Divider()
@@ -626,7 +651,9 @@ fun LearnedScreen(onBack: () -> Unit) {
   val words = remember(history, version) { history?.learnedWords().orEmpty() }
   val phrases = remember(history, version) { history?.learnedPhrases().orEmpty() }
   val blocked = remember(history, version) { history?.blockedWords().orEmpty() }
-  val emails = remember(history, version) { history?.emails().orEmpty() }
+  // Addresses are kept once for every language
+  val shared = engine?.shared
+  val emails = remember(shared, version) { shared?.emails().orEmpty() }
   val shown = remember(words, phrases, blocked, emails, query) {
     val q = query.trim().lowercase()
     fun hit(s: String) = q.isEmpty() || q in s.lowercase()
@@ -671,7 +698,7 @@ fun LearnedScreen(onBack: () -> Unit) {
           Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(if (isEmail) R.string.add_email_detail else R.string.add_word_detail, candidate), Modifier.weight(1f), color = c.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Box(Modifier.height(36.dp).clip(RoundedCornerShape(18.dp)).background(c.accent).clickable {
-              if (isEmail) history?.recordEmail(candidate) else engine?.addWord(candidate)
+              if (isEmail) shared?.recordEmail(candidate) else engine?.addWord(candidate)
               queryState.clearText()
               changed()
             }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
@@ -698,7 +725,7 @@ fun LearnedScreen(onBack: () -> Unit) {
               }
             }
             is Learned.Email -> LearnedRow(item.address, pluralStringResource(R.plurals.email_used, item.count, item.count), stringResource(R.string.forget_item, item.address), divider = false) {
-              history?.removeEmail(item.address)
+              shared?.removeEmail(item.address)
               changed()
             }
             is Learned.Blocked -> Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -731,7 +758,8 @@ fun LearnedScreen(onBack: () -> Unit) {
 fun ShortcutsScreen(onBack: () -> Unit) {
   val c = LocalAppColors.current
   val engine by Language.ready.collectAsState()
-  val history = engine?.history
+  // Shortcuts are kept once for every language
+  val history = engine?.shared
   var version by remember { mutableIntStateOf(0) }
   val list = remember(history, version) { history?.shortcuts().orEmpty() }
   val keyState = rememberTextFieldState()

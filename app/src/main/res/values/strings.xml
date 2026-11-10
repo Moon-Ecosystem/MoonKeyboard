@@ -3,7 +3,6 @@
   <!-- The home header's name, its first word in the accent colour -->
   <string name="app_name_first">Moon</string>
   <string name="app_name_rest">Keyboard</string>
-  <string name="subtype_en_us">English (US)</string>
   <string name="forget_word">Don\'t suggest this word</string>
   <string name="welcome_pitch">A fast keyboard with glide typing and smart suggestions. It works fully offline, so nothing you type leaves your phone.</string>
   <string name="welcome_privacy">The app has no internet permission. Learned words and your clipboard stay on this phone.</string>
@@ -185,6 +184,10 @@
   <string name="theme_dark">Dark</string>
   <string name="key_borders">Key borders</string>
   <string name="number_row">Number row</string>
+  <string name="long_press_symbols">Long-press for symbols</string>
+  <string name="long_press_symbols_detail">Shows a symbol on each letter key</string>
+  <string name="emoji_row">Recent emoji row</string>
+  <string name="emoji_row_detail">Your recent emoji above the keys, one tap each</string>
   <string name="key_height">Keyboard height</string>
   <string name="off">Off</string>
   <string name="typing">Typing</string>
@@ -218,6 +221,20 @@
   <string name="expiry_month">1 month</string>
   <string name="expiry_never">Never</string>
   <string name="clipboard_storage">%1$d items, %2$s</string>
+  <string name="languages">Languages</string>
+  <string name="languages_explain">Hold the space bar to switch between the languages switched on here, in this order. Each language learns your words on its own.</string>
+  <string name="language_built_in">Built in, with Hinglish</string>
+  <string name="language_version">Version %d</string>
+  <string name="remove_language">Remove %s</string>
+  <string name="language_installed">%1$s (version %2$d) is installed.</string>
+  <string name="language_refused">Not installed. %s.</string>
+  <string name="language_unreadable">Not installed: the file couldn\'t be read.</string>
+  <string name="language_removed">%s is removed. Its learned words are kept for if you add it again.</string>
+  <string name="import_language">Add a language from a file</string>
+  <string name="import_language_detail">A .mkpack file you downloaded</string>
+  <string name="more_languages">Get more languages</string>
+  <string name="more_languages_detail">Opens the list of language packs in your browser</string>
+  <string name="languages_privacy">The keyboard never downloads anything itself. It only adds packs signed by Moon Keyboard, and checks every file in them first.</string>
   <string name="learned_words">Learned words</string>
   <string name="delete_learned_words">Delete all learned words</string>
 </resources>

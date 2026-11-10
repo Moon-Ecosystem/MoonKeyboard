@@ -69,6 +69,8 @@ data class EngineConfig(
   val neuralLmWeight: Float = 0.5f,
   /** The neural model also scores the words offered while typing (and so autocorrect), not only the next-word predictions. */
   val neuralWhileTyping: Boolean = true,
+  /** Nouns are written with a capital (German): "haus" is corrected to "Haus", which elsewhere is left alone. */
+  val nounCapitals: Boolean = false,
   /** Cost of a missed space against the touches, like one wrong key: a split must beat close one-word fixes. */
   val missedSpaceCost: Float = 2.5f,
 )
@@ -81,6 +83,8 @@ class SuggestionEngine(
   glideConfig: GlideConfig = GlideConfig(),
   /** Blended with the dictionary's word model when set; null leaves the dictionary alone. */
   @Volatile var neural: NeuralLm? = null,
+  /** Saved email addresses and shortcuts, the same in every language; [history] holds this language's words. */
+  val shared: UserHistory = history,
 ) {
   private val decoder = TapDecoder(lexicon, decoderConfig)
   private val glideDecoder = GlideDecoder(lexicon, glideConfig)
@@ -142,13 +146,13 @@ class SuggestionEngine(
     missedSpace(typed, lm)?.let { best.putIfAbsent(it.word, it) }
     val ranked = best.values.asSequence().filter { allowCompletions || !it.completion }.sortedByDescending { it.score }.toList()
     // A shortcut is offered, never forced: it takes the middle slot, and space keeps what was typed
-    val expansion = history.shortcut(typed)?.let { applyCase(it, typed) }
+    val expansion = shared.shortcut(typed)?.let { applyCase(it, typed) }
     // Saved addresses starting with the word: from the 4th letter one takes the right-hand slot, never the
     // middle ("rish" offers rishabh@gmail.com; fewer letters match too many ordinary words). From the
     // 7th the user is clearly typing an address, so the matches take the strip and autocorrect stands back.
     val emails = when {
-      typed.length >= EMAIL_ALL_LETTERS -> history.emailsStartingWith(typed, 3)
-      typed.length >= EMAIL_MIN_LETTERS -> history.emailsStartingWith(typed, 1)
+      typed.length >= EMAIL_ALL_LETTERS -> shared.emailsStartingWith(typed, 3)
+      typed.length >= EMAIL_MIN_LETTERS -> shared.emailsStartingWith(typed, 1)
       else -> emptyList()
     }
     val emailsLead = emails.isNotEmpty() && typed.length >= EMAIL_ALL_LETTERS
@@ -278,7 +282,10 @@ class SuggestionEngine(
     // Completions are suggestions, not corrections: only whole-word candidates compete here
     val words = ranked.filter { !it.completion }
     val pick = words.firstOrNull() ?: return null
-    if (pick.word.equals(typed, ignoreCase = true)) return null
+    if (pick.word.equals(typed, ignoreCase = true)) {
+      // Only the capital differs: a noun typed in lower case gets it where nouns are capitalised
+      return if (config.nounCapitals && pick.word[0].isUpperCase() && typed[0].isLowerCase()) pick.word else null
+    }
     if (isValid(typed)) {
       // A real word is replaced only by something far more likely here ("tour" → "your")
       val typedScore = words.firstOrNull { it.word.equals(typed, ignoreCase = true) }?.score ?: return null
@@ -320,7 +327,13 @@ class SuggestionEngine(
   private fun isDigitSlip(typed: String) =
     typed.count(Char::isDigit) == 1 && typed.first().isLetter() && typed.last().isLetter() && typed.count(Char::isLetter) >= 4
 
-  private fun isProper(word: String) = word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
+  /**
+   * A name or acronym, which the dictionary over-rates. Where every noun has a capital (German) only
+   * an all-capitals word counts: "Haus" is an ordinary word there, "ADH" still an acronym.
+   */
+  private fun isProper(word: String) =
+    if (config.nounCapitals) word.length > 1 && word.all { !it.isLetter() || it.isUpperCase() }
+    else word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
 
   /**
    * ln P(word | context), worked out once per request: the built-in model (two-word context

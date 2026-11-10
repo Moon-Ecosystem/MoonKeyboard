@@ -7,7 +7,9 @@ import java.util.zip.GZIPInputStream
 import kotlin.math.ln
 
 /**
- * Builds the English + Hinglish language pack:
+ * Builds a language's dictionary: the built-in English + Hinglish one, or another language's for
+ * its pack (see the MoonKeyboard-Languages repo for each language's inputs and command):
+ *   --noun-capitals      true for a language that capitalises every noun (German): keeps them in the counts
  *   --words              AOSP LatinIME `.combined(.gz)` word list (words, frequencies, fixed corrections)
  *   --sentences          Tatoeba sentences TSV (id, lang, text) for word-pair counts
  *   --hinglish           L3Cube-HingCorpus lines (one tweet per line, .gz ok): Hinglish words and pairs
@@ -27,6 +29,7 @@ fun main(args: Array<String>) {
   val sentences = opts["sentences"]?.let(::File)
   val hinglish = opts["hinglish"]?.let(::File)
   val out = File(opts["out"] ?: usage())
+  nounCapitals = opts["noun-capitals"] == "true"
 
   val builder = LexiconBuilder()
   readAospWordList(words, builder)
@@ -336,12 +339,21 @@ private fun lookup(builder: LexiconBuilder, token: String): Int? =
 
 /**
  * Tatoeba's example sentences are full of "Tom" and "Mary"; left in, every prediction is a name.
- * Capitalised dictionary words other than the "I" family are treated as names and dropped.
+ * Capitalised dictionary words other than the "I" family are treated as names and dropped; in a
+ * language that capitalises every noun (--noun-capitals true) that would drop the nouns, so there
+ * only Tatoeba's stock names go.
  */
 private fun isName(builder: LexiconBuilder, id: Int): Boolean {
   val word = builder.word(id)
+  if (nounCapitals) return word in STOCK_NAMES
   return word[0].isUpperCase() && word != "I" && !word.startsWith("I'")
 }
+
+/** Set by --noun-capitals: the language capitalises every noun (German). */
+private var nounCapitals = false
+
+/** The names Tatoeba's sentences use over and over, in every language. */
+private val STOCK_NAMES = setOf("Tom", "Mary", "Maria", "John", "Ken", "Jim", "Mike", "Bill", "Jane", "Lisa", "Jack", "Bob", "Alice")
 
 private fun addTriples(builder: LexiconBuilder, triples: LongCounter, contextTotals: LongCounter) {
   val byContext = HashMap<Long, MutableList<Pair<Int, Int>>>()

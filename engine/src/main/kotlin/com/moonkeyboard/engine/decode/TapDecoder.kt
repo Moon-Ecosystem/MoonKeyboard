@@ -83,6 +83,12 @@ class TapDecoder(private val lexicon: Lexicon, val config: DecoderConfig = Decod
         val swap = prevPrev[j - 2] + config.transpose + sp.cost(j - 1, prevChar) + sp.cost(j - 2, c)
         if (swap < v) v = swap
       }
+      // A letter spelled out in two ("strasse" for "straße", "schoen" for "schön")
+      val pair = if (config.digraphs.isEmpty()) null else config.digraphs[c.lowercaseChar()]
+      if (pair != null && j >= 2) {
+        val spelled = prev[j - 2] + config.digraph + sp.cost(j - 2, pair[0]) + sp.cost(j - 1, pair[1])
+        if (spelled < v) v = spelled
+      }
       out[j] = v
       if (v < min) min = v
     }

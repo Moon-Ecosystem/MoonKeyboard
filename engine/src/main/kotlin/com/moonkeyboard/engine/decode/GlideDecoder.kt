@@ -31,8 +31,9 @@ class GlideDecoder(private val lexicon: Lexicon, val config: GlideConfig = Glide
     if (path.size < 2) return
     val pts = resample(path.map { it.x to it.y }, config.samples)
     val kw = keys.keyWidth
-    val near = Array(SLOTS) { slot ->
-      val c = keys.center('a' + slot) ?: return@Array IntArray(0)
+    // Per letter key (keys.letters, sorted): the path points near it
+    val near = Array(keys.letters.size) { slot ->
+      val c = keys.center(keys.letters[slot])!!
       pts.indices.filter { dist(pts[it], c) <= config.nearRadius * kw }.toIntArray()
     }
     val turns = turns(pts)
@@ -44,14 +45,15 @@ class GlideDecoder(private val lexicon: Lexicon, val config: GlideConfig = Glide
     fun walk(node: Int, index: Int, depth: Int, count: Int, shortfall: Float) {
       if (depth >= MAX_DEPTH || emitted >= config.maxCandidates) return
       for (child in lexicon.firstChild[node] until lexicon.firstChild[node + 1]) {
-        val base = baseChar(lexicon.nodeChar[child])
+        val base = keys.keyOf(lexicon.nodeChar[child])
         // Apostrophes have no key on the letters layer: they ride along for free
         if (base == '\'') {
           if (depth > 0) walk(child, index, depth + 1, count, shortfall)
           continue
         }
-        if (base !in 'a'..'z') continue
-        val center = keys.center(base) ?: continue
+        val slot = keys.letters.binarySearch(base)
+        if (slot < 0) continue
+        val center = keys.center(base)!!
         var j: Int
         var missed = 0f
         var ax = center.first
@@ -61,7 +63,7 @@ class GlideDecoder(private val lexicon: Lexicon, val config: GlideConfig = Glide
           j = 0
         } else {
           // Earliest point near this key: leaves the most path for the letters still to come
-          j = firstAtLeast(near[base - 'a'], index) ?: -1
+          j = firstAtLeast(near[slot], index) ?: -1
           if (j < 0) {
             val turn = turns.firstOrNull { it.index >= index && reachAhead(it, center, kw) >= 0f } ?: continue
             missed = reachAhead(turn, center, kw)
@@ -132,7 +134,7 @@ class GlideDecoder(private val lexicon: Lexicon, val config: GlideConfig = Glide
 
   /** Cost of a word the trie doesn't hold (the user's own words), or null if the path can't spell it. */
   fun cost(word: String, path: List<TracePoint>, keys: KeyMap): Float? {
-    val letters = word.map(::baseChar).filter { it in 'a'..'z' }
+    val letters = word.map(keys::keyOf).filter { keys.center(it) != null }
     if (letters.size < 2 || path.size < 2) return null
     val pts = resample(path.map { it.x to it.y }, config.samples)
     val first = keys.center(letters.first()) ?: return null
@@ -164,7 +166,6 @@ class GlideDecoder(private val lexicon: Lexicon, val config: GlideConfig = Glide
   }
 
   private companion object {
-    const val SLOTS = 26
     const val MAX_DEPTH = 24
   }
 }
@@ -197,7 +198,7 @@ data class GlideConfig(
  */
 fun trimOffLetters(path: List<TracePoint>, keys: KeyMap, reach: Float): List<TracePoint> {
   val limit = reach * keys.keyWidth
-  fun nearLetter(p: TracePoint) = ('a'..'z').any { c -> keys.center(c)?.let { hypot(p.x - it.first, p.y - it.second) <= limit } == true }
+  fun nearLetter(p: TracePoint) = keys.letters.any { c -> keys.center(c)!!.let { hypot(p.x - it.first, p.y - it.second) <= limit } }
   var end = path.size
   while (end > 1 && !nearLetter(path[end - 1])) end--
   return if (end == path.size) path else path.subList(0, end)

@@ -66,6 +66,33 @@ class LayoutsTest {
   }
 
   @Test
+  fun symbolsGoOnTheLettersLongPressByPosition() {
+    val plain = Layouts.withSymbols(Layouts.load("qwerty"), "₹")
+    val key = { l: Layout, label: String -> l.rows.flatMap { it.keys }.first { it.label == label } }
+    // Without the number row the top row keeps its digit, and the symbol comes second
+    assertEquals(listOf("1", "%"), key(plain, "q").popup)
+    assertEquals("1", key(plain, "q").hint)
+    // Elsewhere the symbol is the hint and comes first, before the accents
+    assertEquals("@", key(plain, "a").hint)
+    assertEquals(listOf("@", "à"), key(plain, "a").popup.take(2))
+    assertEquals("₹", key(plain, "d").hint)
+    assertEquals("?", key(plain, "m").hint)
+    // With the number row, the symbols take the digits' place
+    val numbers = Layouts.withSymbols(Layouts.withNumberRow(Layouts.load("qwerty")), "$")
+    assertEquals("%", key(numbers, "q").hint)
+    assertEquals("1", numbers.rows[0].keys[0].label)
+    assertEquals(null, numbers.rows[0].keys[0].hint)
+  }
+
+  @Test
+  fun numberRowSpansAWiderLayout() {
+    // Eleven keys across, as German's top rows are
+    val wide = Layout(listOf(Row((1..11).map { Key(label = ('a' + it).toString()) })))
+    val digits = Layouts.withNumberRow(wide).rows[0].keys
+    assertEquals(11f, digits.sumOf { it.width.toDouble() }.toFloat(), 0.001f)
+  }
+
+  @Test
   fun emojiKeyGoesAfterTheCommaInSpacesRoom() {
     val plain = Layouts.load("qwerty").rows.last().keys
     val keys = Layouts.withEmojiKey(Layouts.load("qwerty")).rows.last().keys

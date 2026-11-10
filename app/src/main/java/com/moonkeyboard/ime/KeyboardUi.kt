@@ -126,6 +126,9 @@ private val TopPadding = 6.dp
 // dismiss/switcher icon drawn above it); the extra breathing room keeps the bottom row clear
 private val BottomPadding = 16.dp
 private val KeyRadius = 8.dp
+// A long-press hint is centred this far in from the key's top-right corner; the letter drops a little to clear it
+private val HintInset = 9.dp
+private val HintLabelDrop = 2.dp
 private const val ONE_HANDED_SHARE = 0.84f
 // The emoji panel's extra height over the keys, as a share of the screen's
 private const val EMOJI_EXTRA_SHARE = 0.05f
@@ -260,19 +263,24 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
     }
     if (recorder != null) SideEffect { recorder.attach(controller.layerId, geometry) }
     val height = with(density) { geometry.height.toDp() } + BottomPadding
-    val panelModifier = Modifier.fillMaxWidth().height(StripHeight + height)
+    // The recent-emoji row sits over the strip; the panels count it too, so opening one doesn't change the height
+    val emojiRow = Prefs.emojiRow.value && controller.emojiQuery == null
+    val rows = StripHeight + if (emojiRow) EmojiRowHeight else 0.dp
+    val panelModifier = Modifier.fillMaxWidth().height(rows + height)
 
     when (controller.panel) {
       Panel.CLIPBOARD -> ClipboardPanel(controller, colors, panelModifier)
       // Taller than the keys, so emoji can be big: the app above moves up to make room, by a share of
       // the screen so it stays in proportion (not in landscape or floating, with little room to spare)
       Panel.EMOJI -> {
-        val extra = if (docked) with(density) { (screen.heightPixels * EMOJI_EXTRA_SHARE).toDp() } else 0.dp
-        EmojiPanel(controller, colors, Modifier.fillMaxWidth().height(StripHeight + height + extra))
+        val extra = if (docked) with(density) { (screen.heightPixels * EMOJI_EXTRA_SHARE * heightScale).toDp() } else 0.dp
+        // The same gap at the bottom as the keys, so its bottom bar clears the navigation strip's icons
+        EmojiPanel(controller, colors, Modifier.fillMaxWidth().height(rows + height + extra).padding(bottom = BottomPadding))
       }
       Panel.EDIT -> EditPanel(controller, colors, panelModifier)
       Panel.OPTIONS -> OptionsPanel(controller, colors, panelModifier)
       Panel.KEYS -> Column {
+        if (emojiRow) EmojiRow(controller)
         // Emoji search stands in for the strip, taller: the app above moves up to make room
         if (controller.emojiQuery != null) EmojiSearch(controller, colors)
         // A hairline along the strip's bottom edge, so the bar reads as separate from the keys
@@ -342,6 +350,8 @@ internal val ToolbarItem.label get() = when (this) {
 
 /** A setting that is on, shown highlighted. */
 internal fun ToolbarItem.isOn() = when (this) {
+  // Highlighted while its long press has the recent-emoji row showing
+  ToolbarItem.EMOJI -> Prefs.emojiRow.value
   ToolbarItem.FLOATING -> Prefs.floating.value
   ToolbarItem.ONE_HANDED -> !Prefs.floating.value && Prefs.oneHanded.value != OneHanded.OFF
   ToolbarItem.SPLIT -> Prefs.splitLandscape.value
@@ -410,6 +420,36 @@ private fun OneHandedControls(colors: KeyboardColors, modifier: Modifier) {
       val side = if (Prefs.oneHanded.value == OneHanded.LEFT) OneHanded.RIGHT else OneHanded.LEFT
       Prefs.oneHanded.value = side
       Prefs.oneHandedSide.value = side
+    }
+  }
+}
+
+internal val EmojiRowHeight = 40.dp
+private const val EMOJI_ROW_COUNT = 10
+// Until there are recent ones of the user's own
+private val COMMON_EMOJI = listOf("😂", "❤️", "👍", "😭", "🙏", "😊", "🔥", "😍", "🥺", "✨")
+
+/**
+ * The recent emoji, one tap each, above the strip. Their order is read once per field: re-sorting as
+ * each one is used would move them under the finger.
+ */
+@Composable
+private fun EmojiRow(controller: InputController) {
+  val shown = remember(controller.fieldsOpened) {
+    val recents = Emoji.recents
+    (recents + COMMON_EMOJI.filter { it !in recents }).take(EMOJI_ROW_COUNT)
+  }
+  Row(Modifier.fillMaxWidth().height(EmojiRowHeight).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    for (emoji in shown) {
+      Box(
+        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).clickable {
+          controller.insert(emoji)
+          Emoji.used(emoji)
+        },
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(emoji, fontSize = 22.sp)
+      }
     }
   }
 }
@@ -522,7 +562,9 @@ private fun Toolbar(controller: InputController, colors: KeyboardColors) {
     else Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_launcher_cat_mono), null, Modifier.size(42.dp), tint = colors.muted) }
     // The user's picks; everything is also in the options panel, which is always here
     for (item in Prefs.toolbar().filter { it.isEnabled() }) {
-      ToolButton(item.icon, item.label, colors, active = item.isOn()) { item.act(controller, colors) }
+      // Holding emoji shows or hides the recent-emoji row (also in Look)
+      val longPress = if (item == ToolbarItem.EMOJI) ({ Prefs.emojiRow.value = !Prefs.emojiRow.value }) else null
+      ToolButton(item.icon, item.label, colors, active = item.isOn(), onLongClick = longPress) { item.act(controller, colors) }
     }
     ToolButton(Icons.Settings, R.string.keyboard_options, colors) { controller.panel = Panel.OPTIONS }
     // Last, where the suggestion strip has it too, so it doesn't move when the toolbar opens
@@ -654,10 +696,13 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
 
 /** A 44 dp round icon button for the strip, toolbar and panels. */
 @Composable
-internal fun ToolButton(icon: ImageVector, label: Int, colors: KeyboardColors, active: Boolean = false, onClick: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+internal fun ToolButton(icon: ImageVector, label: Int, colors: KeyboardColors, active: Boolean = false, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
   val view = LocalView.current
   Box(
-    Modifier.size(44.dp).clip(CircleShape).background(if (active) colors.special else Color.Transparent).clickable {
+    Modifier.size(44.dp).clip(CircleShape).background(if (active) colors.special else Color.Transparent).combinedClickable(
+      onLongClick = onLongClick?.let { action -> { Haptics.tap(view); action() } },
+    ) {
       Haptics.tap(view)
       onClick()
     },
@@ -719,14 +764,18 @@ private fun DrawScope.drawKey(
         }
         return
       }
-      drawLabel(measurer, controller.display(key.label), center, TextStyle(color = colors.text, fontSize = if (functional) 25.sp else 27.sp))
+      // A key with a hint draws its letter a little smaller and lower, so it keeps clear of the corner
+      val hinted = key.hint != null
+      val labelCenter = if (hinted) center + Offset(0f, HintLabelDrop.toPx()) else center
+      drawLabel(measurer, controller.display(key.label), labelCenter, TextStyle(color = colors.text, fontSize = if (functional) 25.sp else if (hinted) 25.sp else 27.sp))
+      // The corner spot every hint is centred in, whatever its glyph's shape ("_" sits low, "^" high)
+      val corner = Offset(bounds.right - HintInset.toPx(), bounds.top + HintInset.toPx())
       // Hint that holding this key opens emoji search
       if (key.longPress == "emoji") {
-        drawIcon(SmileIcon, Offset(bounds.right - 9.dp.toPx(), bounds.top + 9.dp.toPx()), 11.dp.toPx(), colors.hint, strokeWidth = 2.2f)
+        drawIcon(SmileIcon, corner, 11.dp.toPx(), colors.hint, strokeWidth = 2.2f)
       }
       key.hint?.let { hint ->
-        val layout = measurer.measure(hint, TextStyle(color = colors.hint, fontSize = 11.sp, fontWeight = FontWeight.Medium))
-        drawText(layout, topLeft = Offset(bounds.right - 5.dp.toPx() - layout.size.width, bounds.top + 2.dp.toPx()))
+        drawLabel(measurer, hint, corner, TextStyle(color = colors.hint, fontSize = 11.sp, fontWeight = FontWeight.Medium))
       }
     }
   }
@@ -745,7 +794,9 @@ private fun DrawScope.drawPopup(popup: Popup, controller: InputController, color
       drawRoundRect(colors.accent, Offset(left, popup.top), Size(popup.cellWidth, popup.cellHeight), CornerRadius(KeyRadius.toPx()))
     }
     val center = Offset(left + popup.cellWidth / 2, popup.top + popup.cellHeight / 2)
-    drawLabel(measurer, controller.display(item), center, TextStyle(color = if (selected) colors.onAccent else colors.text, fontSize = 24.sp))
+    // Language names stay as written, smaller; letters follow shift
+    val label = if (popup.languages != null) item else controller.display(item)
+    drawLabel(measurer, label, center, TextStyle(color = if (selected) colors.onAccent else colors.text, fontSize = if (popup.languages != null) 17.sp else 24.sp))
   }
 }
 

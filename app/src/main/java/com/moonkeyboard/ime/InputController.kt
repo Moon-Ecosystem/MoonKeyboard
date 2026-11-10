@@ -20,6 +20,7 @@ import android.view.inputmethod.ExtractedText
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InlineSuggestion
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
@@ -263,9 +264,41 @@ class InputController(private val host: KeyboardHost) {
   fun layoutFor(id: String): Layout {
     val numbers = id == LETTERS && Prefs.numberRow.value
     val emoji = id == LETTERS && Prefs.emojiKey.value
-    return layouts.getOrPut(id + (if (numbers) "+numbers" else "") + (if (emoji) "+emoji" else "")) {
-      Layouts.load(id).let { if (numbers) Layouts.withNumberRow(it) else it }.let { if (emoji) Layouts.withEmojiKey(it) else it }
+    val symbols = id == LETTERS && Prefs.longPressSymbols.value
+    // The letters come from the active language's pack (QWERTZ for German); the other layers are shared
+    val pack = if (id == LETTERS) Language.pack else null
+    val key = id + (pack?.let { "@" + it.manifest.id } ?: "") + (if (numbers) "+numbers" else "") + (if (emoji) "+emoji" else "") + (if (symbols) "+symbols" else "")
+    return layouts.getOrPut(key) {
+      (pack?.layout(pack.manifest.layout) ?: Layouts.load(id))
+        .let { if (numbers) Layouts.withNumberRow(it) else it }
+        .let { if (symbols) Layouts.withSymbols(it, localCurrency()) else it }
+        .let { if (emoji) Layouts.withEmojiKey(it) else it }
     }
+  }
+
+  /** The region's currency sign (₹ in India, € in the euro area), or $ when it has no one-character sign. */
+  private fun localCurrency(): String = runCatching {
+    val locale = Locale.getDefault()
+    java.util.Currency.getInstance(locale).getSymbol(locale).takeIf { it.length == 1 }
+  }.getOrNull() ?: "$"
+
+  /** The languages a long press on space offers, switched-on ones in order, and the one to land on. */
+  fun languageChoices(): Pair<List<PackFiles>, Int> {
+    val on = LanguagePacks.all(host.context).filter { it.second }.map { it.first }
+    val active = on.indexOfFirst { it.manifest.id == Language.pack?.manifest?.id }
+    // A quick hold and lift goes to the next language
+    return on to if (on.isEmpty()) 0 else (active + 1) % on.size
+  }
+
+  /** Types on in language [id], or with null opens the system's list of keyboards. */
+  fun switchLanguage(id: String?) {
+    finishWord()
+    if (id == null) {
+      host.context.getSystemService(InputMethodManager::class.java).showInputMethodPicker()
+      return
+    }
+    Language.switchTo(id)
+    suggestions = Suggestions.EMPTY
   }
 
   init {
@@ -282,11 +315,17 @@ class InputController(private val host: KeyboardHost) {
    * [onFinishInput] emptied it. Chrome restarts when focus moves between a page's boxes too, so a
    * restart into a different kind of field (text to number) is treated as a new field.
    */
+  /** Counts fields opened: what's read once per field (the recent-emoji row's order) is read again on it. */
+  var fieldsOpened by mutableStateOf(0)
+    private set
+
   fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
+    fieldsOpened++
     forgetAsk = null
     dropUndo()
     midWord = null
     field = FieldFlags.from(info).let { if (Prefs.autocorrect.value) it else it.copy(autocorrect = false) }
+      .copy(contentTypes = EditorInfoCompat.getContentMimeTypes(info).toList())
     val kind = info.inputType and InputType.TYPE_MASK_CLASS
     val sameKind = kind == inputClass
     inputClass = kind
@@ -429,7 +468,7 @@ class InputController(private val host: KeyboardHost) {
     // Leaving an email field: keep the address typed there, for the next email field
     if (field.email && !Prefs.incognito.value) {
       host.inputConnection?.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString()?.trim()?.let { address ->
-        Language.engine?.history?.let { h ->
+        Language.engine?.shared?.let { h ->
           if (UserHistory.isEmail(address)) {
             h.recordEmail(address)
             Language.historyChanged()
@@ -501,7 +540,11 @@ class InputController(private val host: KeyboardHost) {
     }
     when (key.type) {
       KeyType.CHAR -> typeText(display(key.label), x, y)
-      KeyType.SPACE -> space()
+      KeyType.SPACE -> {
+        space()
+        // A space ends what the symbols were for ("3 pm", "a & b"): back to the letters
+        if (layerId == SYMBOLS || layerId == SYMBOLS2) layerId = LETTERS
+      }
       KeyType.BACKSPACE -> deleted(backspace())
       KeyType.ENTER -> enter()
       KeyType.SHIFT -> {
@@ -713,9 +756,11 @@ class InputController(private val host: KeyboardHost) {
   /** The app whose field is focused. */
   val targetPackage: String? get() = host.editorInfo.packageName
 
-  /** The field takes images of [mime] (apps list what they accept in their EditorInfo). */
-  fun acceptsContent(mime: String): Boolean =
-    EditorInfoCompat.getContentMimeTypes(host.editorInfo).any { ClipDescription.compareMimeTypes(mime, it) }
+  /**
+   * The field takes images of [mime] (apps list what they accept in their EditorInfo). Read from [field],
+   * which Compose watches, so the strip offers a copied image as soon as a field that takes it opens.
+   */
+  fun acceptsContent(mime: String): Boolean = field.contentTypes.any { ClipDescription.compareMimeTypes(mime, it) }
 
   fun commitContent(uri: Uri, mime: String, label: String): Boolean {
     val ic = host.inputConnection ?: return false
@@ -1200,7 +1245,7 @@ class InputController(private val host: KeyboardHost) {
    * empty field), most used first. False when none match, so the usual strip shows instead.
    */
   private fun showEmails(ic: InputConnection): Boolean {
-    val history = Language.engine?.history ?: return false
+    val history = Language.engine?.shared ?: return false
     val prefix = (ic.getTextBeforeCursor(EMAIL_LOOKBEHIND, 0) ?: "").toString().takeLastWhile { !it.isWhitespace() }
     val matches = when {
       field.email -> history.emailsStartingWith(prefix)
@@ -1230,7 +1275,7 @@ class InputController(private val host: KeyboardHost) {
       // A sentence ending on an address ("mail rishabh@gmail.com.") leaves its full stop out
       .trimEnd('.', ',', ';', ':', '!', '?', ')', '"', '\'')
     if (!UserHistory.isEmail(token)) return
-    Language.engine?.history?.recordEmail(token) ?: return
+    Language.engine?.shared?.recordEmail(token) ?: return
     Language.historyChanged()
   }
 
@@ -1300,7 +1345,7 @@ class InputController(private val host: KeyboardHost) {
     if (!field.learn || Prefs.incognito.value) return
     // A picked address counts as one more use of it, not a word
     if (UserHistory.isEmail(word)) {
-      Language.engine?.history?.recordEmail(word)
+      Language.engine?.shared?.recordEmail(word)
       Language.historyChanged()
       return
     }
@@ -1343,7 +1388,11 @@ class InputController(private val host: KeyboardHost) {
   }
 
   /** What the focused field allows, from its input type. */
-  private data class FieldFlags(val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false, val number: Boolean = false, val email: Boolean = false) {
+  private data class FieldFlags(
+    val suggest: Boolean, val autocorrect: Boolean, val learn: Boolean, val autoCaps: Boolean, val secret: Boolean = false, val number: Boolean = false, val email: Boolean = false,
+    /** The kinds of image the field takes (its EditorInfo's content MIME types). */
+    val contentTypes: List<String> = emptyList(),
+  ) {
     companion object {
       val NONE = FieldFlags(suggest = false, autocorrect = false, learn = false, autoCaps = false)
 
@@ -1383,6 +1432,7 @@ class InputController(private val host: KeyboardHost) {
     const val CHIP_GAP_DP = 6f
     const val LETTERS = "qwerty"
     const val SYMBOLS = "symbols"
+    const val SYMBOLS2 = "symbols2"
     // Pads for fields that only take digits; no way to letters, as in AOSP
     const val NUMBER = "number"
     const val PHONE = "phone"

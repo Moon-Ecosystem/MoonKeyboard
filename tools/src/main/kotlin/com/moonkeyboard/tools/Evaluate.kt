@@ -7,6 +7,7 @@ import com.moonkeyboard.engine.eval.TypingSimulator
 import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.layout.KeyboardGeometry
 import com.moonkeyboard.engine.layout.Layouts
+import com.moonkeyboard.engine.pack.Packs
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
@@ -19,6 +20,7 @@ import java.io.File
 /**
  * Accuracy on held-out sentences with simulated typists, and (optionally) on a flat typo→correct list:
  *   --dict <en.dict> --eval <sentences.txt> [--offset 0] [--limit 600] [--errors 25] [--grid true] [--hinglish false]
+ *   any of these with --pack <a pack's source folder> to type with its layout and language rules
  *   --dict <en.dict> --typos <pairs.tsv> [--errors 25]
  *   --dict <a.dict> --compare <b.dict> --eval <sentences.txt> [--limit 600]   next-word prediction, paired, with McNemar's test
  *   --dict <en.dict> --neural <dir> --eval <sentences.txt>   everything without, with (next word only) and with the neural model
@@ -29,11 +31,16 @@ fun main(args: Array<String>) {
   val lexicon = Lexicon.read(File(opts.getValue("dict")).readBytes())
   // --hinglish false measures the pack the way it types with Hinglish turned off
   lexicon.hinglish = opts["hinglish"] != "false"
-  val geometry = KeyboardGeometry.compute(Layouts.load("qwerty"), 390f, 46f, 6f, 10f, 4f)
+  // --pack <a pack's source folder>: its layout and language rules (MoonKeyboard-Languages' <id>/pack)
+  val pack = opts["pack"]?.let { File(it) }
+  val manifest = pack?.let { Packs.parseManifest(File(it, "pack.json").readBytes()) }
+  val layout = if (pack != null && manifest != null) Layouts.parse(File(pack, "${manifest.layout}.json").readText(), manifest.layout) else Layouts.load("qwerty")
+  val geometry = KeyboardGeometry.compute(layout, 390f, 46f, 6f, 10f, 4f)
+  val base = manifest?.let { Setup(engine = it.engineConfig(), decoder = it.decoderConfig()) } ?: Setup()
   val errors = opts["errors"]?.toInt() ?: 25
 
   opts["typos"]?.let { path ->
-    print(typosReport(lexicon, File(path).readLines().filter { it.isNotBlank() }, geometry, Setup(), errors))
+    print(typosReport(lexicon, File(path).readLines().filter { it.isNotBlank() }, geometry, base, errors))
     return
   }
   // --offset skips the sentences the grid tuned on, to check the result on unseen ones
@@ -43,12 +50,12 @@ fun main(args: Array<String>) {
   // --compare <other.dict>: the --dict one is A, this one B
   opts["compare"]?.let { other ->
     val b = Lexicon.read(File(other).readBytes()).also { it.hinglish = lexicon.hinglish }
-    print(compareReport(lexicon, b, sentences, geometry, Setup()))
+    print(compareReport(lexicon, b, sentences, geometry, base))
     return
   }
   // --hits <file>: each word's next-word result, to pair with another model's on the same words
   opts["hits"]?.let { path ->
-    File(path).writeText(hitsReport(lexicon, sentences, geometry, Setup()))
+    File(path).writeText(hitsReport(lexicon, sentences, geometry, base))
     return
   }
   // --lm-dump <file>: the 3-gram's view at each word, for blending with another model offline
@@ -85,7 +92,7 @@ fun main(args: Array<String>) {
     grid(lexicon, sentences, geometry)
     return
   }
-  println(report(lexicon, sentences, geometry, Setup(), errors).summary)
+  println(report(lexicon, sentences, geometry, base, errors).summary)
 }
 
 /**
