@@ -3,7 +3,6 @@
   <!-- The home header's name, its first word in the accent colour -->
   <string name="app_name_first">Moon</string>
   <string name="app_name_rest">Keyboard</string>
-  <string name="subtype_en_us">English (US)</string>
   <string name="forget_word">Don\'t suggest this word</string>
   <string name="welcome_pitch">A fast keyboard with glide typing and smart suggestions. It works fully offline, so nothing you type leaves your phone.</string>
   <string name="welcome_privacy">The app has no internet permission. Learned words and your clipboard stay on this phone.</string>
