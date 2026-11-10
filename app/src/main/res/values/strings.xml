@@ -184,6 +184,10 @@
   <string name="theme_dark">Dark</string>
   <string name="key_borders">Key borders</string>
   <string name="number_row">Number row</string>
+  <string name="long_press_symbols">Long-press for symbols</string>
+  <string name="long_press_symbols_detail">Shows a symbol on each letter key</string>
+  <string name="emoji_row">Recent emoji row</string>
+  <string name="emoji_row_detail">Your recent emoji above the keys, one tap each</string>
   <string name="key_height">Keyboard height</string>
   <string name="off">Off</string>
   <string name="typing">Typing</string>

@@ -76,6 +76,10 @@ object Prefs {
   val pitchBlack = Pref("pitch_black", false, String::toBoolean)
   val borders = Pref("borders", true, String::toBoolean)
   val numberRow = Pref("number_row", false, String::toBoolean)
+  /** A symbol on each letter's long press, shown in its corner. */
+  val longPressSymbols = Pref("long_press_symbols", false, String::toBoolean)
+  /** A row of recent emoji above the strip, one tap each. */
+  val emojiRow = Pref("emoji_row", false, String::toBoolean)
   /** A key of its own for emoji beside the comma, instead of holding the comma. */
   val emojiKey = Pref("emoji_key", false, String::toBoolean)
   /** The keys' height as a percentage of the size that fits the screen. */

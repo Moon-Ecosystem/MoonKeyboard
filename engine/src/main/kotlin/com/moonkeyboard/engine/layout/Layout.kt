@@ -79,6 +79,35 @@ object Layouts {
   }
 
   /**
+   * [layout] with a symbol on each letter key's long press, shown as its hint: by position, so every
+   * language's layout gets them in the same places. A key that already has a hint (a digit, without the
+   * number row) keeps it and gets the symbol second; accents follow. [currency] goes on the third key
+   * of the middle row.
+   */
+  fun withSymbols(layout: Layout, currency: String): Layout {
+    val symbols = listOf(
+      listOf("%", "\\", "|", "=", "[", "]", "<", ">", "{", "}"),
+      listOf("@", "#", currency, "-", "&", "_", "+", "(", ")"),
+      listOf("*", "\"", "'", ":", ";", "!", "?"),
+    )
+    // The letter rows, in order; a number row added on top has no letters
+    val letterRows = layout.rows.withIndex().filter { (_, row) -> row.keys.any { it.isLetter() } }.map { it.index }
+    val rows = layout.rows.mapIndexed { r, row ->
+      val forRow = symbols.getOrNull(letterRows.indexOf(r)) ?: return@mapIndexed row
+      var letter = 0
+      row.copy(keys = row.keys.map { k ->
+        if (!k.isLetter()) return@map k
+        val symbol = forRow.getOrNull(letter++) ?: return@map k
+        if (k.hint != null) k.copy(popup = listOf(k.hint) + symbol + (k.popup - k.hint - symbol))
+        else k.copy(hint = symbol, popup = listOf(symbol) + (k.popup - symbol))
+      })
+    }
+    return Layout(rows)
+  }
+
+  private fun Key.isLetter() = type == KeyType.CHAR && label.singleOrNull()?.isLetter() == true
+
+  /**
    * [layout] with an emoji key after the bottom row's comma, the space bar a key narrower to make
    * room; the comma no longer opens emoji on a long press.
    */

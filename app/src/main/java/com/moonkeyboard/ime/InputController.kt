@@ -264,13 +264,23 @@ class InputController(private val host: KeyboardHost) {
   fun layoutFor(id: String): Layout {
     val numbers = id == LETTERS && Prefs.numberRow.value
     val emoji = id == LETTERS && Prefs.emojiKey.value
+    val symbols = id == LETTERS && Prefs.longPressSymbols.value
     // The letters come from the active language's pack (QWERTZ for German); the other layers are shared
     val pack = if (id == LETTERS) Language.pack else null
-    return layouts.getOrPut(id + (pack?.let { "@" + it.manifest.id } ?: "") + (if (numbers) "+numbers" else "") + (if (emoji) "+emoji" else "")) {
+    val key = id + (pack?.let { "@" + it.manifest.id } ?: "") + (if (numbers) "+numbers" else "") + (if (emoji) "+emoji" else "") + (if (symbols) "+symbols" else "")
+    return layouts.getOrPut(key) {
       (pack?.layout(pack.manifest.layout) ?: Layouts.load(id))
-        .let { if (numbers) Layouts.withNumberRow(it) else it }.let { if (emoji) Layouts.withEmojiKey(it) else it }
+        .let { if (numbers) Layouts.withNumberRow(it) else it }
+        .let { if (symbols) Layouts.withSymbols(it, localCurrency()) else it }
+        .let { if (emoji) Layouts.withEmojiKey(it) else it }
     }
   }
+
+  /** The region's currency sign (₹ in India, € in the euro area), or $ when it has no one-character sign. */
+  private fun localCurrency(): String = runCatching {
+    val locale = Locale.getDefault()
+    java.util.Currency.getInstance(locale).getSymbol(locale).takeIf { it.length == 1 }
+  }.getOrNull() ?: "$"
 
   /** The languages a long press on space offers, switched-on ones in order, and the one to land on. */
   fun languageChoices(): Pair<List<PackFiles>, Int> {
@@ -305,7 +315,12 @@ class InputController(private val host: KeyboardHost) {
    * [onFinishInput] emptied it. Chrome restarts when focus moves between a page's boxes too, so a
    * restart into a different kind of field (text to number) is treated as a new field.
    */
+  /** Counts fields opened: what's read once per field (the recent-emoji row's order) is read again on it. */
+  var fieldsOpened by mutableStateOf(0)
+    private set
+
   fun onStartInput(info: EditorInfo, restarting: Boolean = false) {
+    fieldsOpened++
     forgetAsk = null
     dropUndo()
     midWord = null
@@ -525,7 +540,11 @@ class InputController(private val host: KeyboardHost) {
     }
     when (key.type) {
       KeyType.CHAR -> typeText(display(key.label), x, y)
-      KeyType.SPACE -> space()
+      KeyType.SPACE -> {
+        space()
+        // A space ends what the symbols were for ("3 pm", "a & b"): back to the letters
+        if (layerId == SYMBOLS || layerId == SYMBOLS2) layerId = LETTERS
+      }
       KeyType.BACKSPACE -> deleted(backspace())
       KeyType.ENTER -> enter()
       KeyType.SHIFT -> {
@@ -1413,6 +1432,7 @@ class InputController(private val host: KeyboardHost) {
     const val CHIP_GAP_DP = 6f
     const val LETTERS = "qwerty"
     const val SYMBOLS = "symbols"
+    const val SYMBOLS2 = "symbols2"
     // Pads for fields that only take digits; no way to letters, as in AOSP
     const val NUMBER = "number"
     const val PHONE = "phone"

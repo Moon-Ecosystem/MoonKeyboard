@@ -284,6 +284,10 @@ fun LookScreen(onBack: () -> Unit) {
         Divider()
         SwitchRow(R.string.number_row, Prefs.numberRow)
         Divider()
+        SwitchRow(R.string.long_press_symbols, Prefs.longPressSymbols, stringResource(R.string.long_press_symbols_detail))
+        Divider()
+        SwitchRow(R.string.emoji_row, Prefs.emojiRow, stringResource(R.string.emoji_row_detail))
+        Divider()
         // The preview below grows with the height and shrinks this list: keep the slider in view while it's dragged
         val slider = remember { BringIntoViewRequester() }
         var shownHeight by remember { mutableIntStateOf(Prefs.keyboardHeight.value) }
