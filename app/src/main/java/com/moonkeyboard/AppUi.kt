@@ -102,6 +102,7 @@ object AppIcons {
   val Add = icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M8 12h8M12 8v8")
   val Remove = icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M8 12h8")
   val DragHandle = icon("M5 9h14M5 15h14")
+  val Language = icon("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z", "M3 12h18", "M12 3c3 3 3 15 0 18c-3-3-3-15 0-18z")
 
   private fun icon(vararg paths: String): ImageVector =
     ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {

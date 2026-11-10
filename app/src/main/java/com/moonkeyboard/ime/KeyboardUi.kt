@@ -745,7 +745,9 @@ private fun DrawScope.drawPopup(popup: Popup, controller: InputController, color
       drawRoundRect(colors.accent, Offset(left, popup.top), Size(popup.cellWidth, popup.cellHeight), CornerRadius(KeyRadius.toPx()))
     }
     val center = Offset(left + popup.cellWidth / 2, popup.top + popup.cellHeight / 2)
-    drawLabel(measurer, controller.display(item), center, TextStyle(color = if (selected) colors.onAccent else colors.text, fontSize = 24.sp))
+    // Language names stay as written, smaller; letters follow shift
+    val label = if (popup.languages != null) item else controller.display(item)
+    drawLabel(measurer, label, center, TextStyle(color = if (selected) colors.onAccent else colors.text, fontSize = if (popup.languages != null) 17.sp else 24.sp))
   }
 }
 

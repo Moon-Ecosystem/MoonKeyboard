@@ -83,6 +83,8 @@ class SuggestionEngine(
   glideConfig: GlideConfig = GlideConfig(),
   /** Blended with the dictionary's word model when set; null leaves the dictionary alone. */
   @Volatile var neural: NeuralLm? = null,
+  /** Saved email addresses and shortcuts, the same in every language; [history] holds this language's words. */
+  val shared: UserHistory = history,
 ) {
   private val decoder = TapDecoder(lexicon, decoderConfig)
   private val glideDecoder = GlideDecoder(lexicon, glideConfig)
@@ -144,13 +146,13 @@ class SuggestionEngine(
     missedSpace(typed, lm)?.let { best.putIfAbsent(it.word, it) }
     val ranked = best.values.asSequence().filter { allowCompletions || !it.completion }.sortedByDescending { it.score }.toList()
     // A shortcut is offered, never forced: it takes the middle slot, and space keeps what was typed
-    val expansion = history.shortcut(typed)?.let { applyCase(it, typed) }
+    val expansion = shared.shortcut(typed)?.let { applyCase(it, typed) }
     // Saved addresses starting with the word: from the 4th letter one takes the right-hand slot, never the
     // middle ("rish" offers rishabh@gmail.com; fewer letters match too many ordinary words). From the
     // 7th the user is clearly typing an address, so the matches take the strip and autocorrect stands back.
     val emails = when {
-      typed.length >= EMAIL_ALL_LETTERS -> history.emailsStartingWith(typed, 3)
-      typed.length >= EMAIL_MIN_LETTERS -> history.emailsStartingWith(typed, 1)
+      typed.length >= EMAIL_ALL_LETTERS -> shared.emailsStartingWith(typed, 3)
+      typed.length >= EMAIL_MIN_LETTERS -> shared.emailsStartingWith(typed, 1)
       else -> emptyList()
     }
     val emailsLead = emails.isNotEmpty() && typed.length >= EMAIL_ALL_LETTERS

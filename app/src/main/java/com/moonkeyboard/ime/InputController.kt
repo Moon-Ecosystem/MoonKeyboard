@@ -20,6 +20,7 @@ import android.view.inputmethod.ExtractedText
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InlineSuggestion
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.getValue
@@ -263,9 +264,31 @@ class InputController(private val host: KeyboardHost) {
   fun layoutFor(id: String): Layout {
     val numbers = id == LETTERS && Prefs.numberRow.value
     val emoji = id == LETTERS && Prefs.emojiKey.value
-    return layouts.getOrPut(id + (if (numbers) "+numbers" else "") + (if (emoji) "+emoji" else "")) {
-      Layouts.load(id).let { if (numbers) Layouts.withNumberRow(it) else it }.let { if (emoji) Layouts.withEmojiKey(it) else it }
+    // The letters come from the active language's pack (QWERTZ for German); the other layers are shared
+    val pack = if (id == LETTERS) Language.pack else null
+    return layouts.getOrPut(id + (pack?.let { "@" + it.manifest.id } ?: "") + (if (numbers) "+numbers" else "") + (if (emoji) "+emoji" else "")) {
+      (pack?.layout(pack.manifest.layout) ?: Layouts.load(id))
+        .let { if (numbers) Layouts.withNumberRow(it) else it }.let { if (emoji) Layouts.withEmojiKey(it) else it }
     }
+  }
+
+  /** The languages a long press on space offers, switched-on ones in order, and the one to land on. */
+  fun languageChoices(): Pair<List<PackFiles>, Int> {
+    val on = LanguagePacks.all(host.context).filter { it.second }.map { it.first }
+    val active = on.indexOfFirst { it.manifest.id == Language.pack?.manifest?.id }
+    // A quick hold and lift goes to the next language
+    return on to if (on.isEmpty()) 0 else (active + 1) % on.size
+  }
+
+  /** Types on in language [id], or with null opens the system's list of keyboards. */
+  fun switchLanguage(id: String?) {
+    finishWord()
+    if (id == null) {
+      host.context.getSystemService(InputMethodManager::class.java).showInputMethodPicker()
+      return
+    }
+    Language.switchTo(id)
+    suggestions = Suggestions.EMPTY
   }
 
   init {
@@ -429,7 +452,7 @@ class InputController(private val host: KeyboardHost) {
     // Leaving an email field: keep the address typed there, for the next email field
     if (field.email && !Prefs.incognito.value) {
       host.inputConnection?.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString()?.trim()?.let { address ->
-        Language.engine?.history?.let { h ->
+        Language.engine?.shared?.let { h ->
           if (UserHistory.isEmail(address)) {
             h.recordEmail(address)
             Language.historyChanged()
@@ -1200,7 +1223,7 @@ class InputController(private val host: KeyboardHost) {
    * empty field), most used first. False when none match, so the usual strip shows instead.
    */
   private fun showEmails(ic: InputConnection): Boolean {
-    val history = Language.engine?.history ?: return false
+    val history = Language.engine?.shared ?: return false
     val prefix = (ic.getTextBeforeCursor(EMAIL_LOOKBEHIND, 0) ?: "").toString().takeLastWhile { !it.isWhitespace() }
     val matches = when {
       field.email -> history.emailsStartingWith(prefix)
@@ -1230,7 +1253,7 @@ class InputController(private val host: KeyboardHost) {
       // A sentence ending on an address ("mail rishabh@gmail.com.") leaves its full stop out
       .trimEnd('.', ',', ';', ':', '!', '?', ')', '"', '\'')
     if (!UserHistory.isEmail(token)) return
-    Language.engine?.history?.recordEmail(token) ?: return
+    Language.engine?.shared?.recordEmail(token) ?: return
     Language.historyChanged()
   }
 
@@ -1300,7 +1323,7 @@ class InputController(private val host: KeyboardHost) {
     if (!field.learn || Prefs.incognito.value) return
     // A picked address counts as one more use of it, not a word
     if (UserHistory.isEmail(word)) {
-      Language.engine?.history?.recordEmail(word)
+      Language.engine?.shared?.recordEmail(word)
       Language.historyChanged()
       return
     }

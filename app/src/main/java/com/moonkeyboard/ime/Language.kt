@@ -4,6 +4,9 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.moonkeyboard.engine.dict.Lexicon
 import com.moonkeyboard.engine.history.UserHistory
 import com.moonkeyboard.engine.suggest.NeuralLm
@@ -12,22 +15,29 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * The English pack plus the user's history, loaded once per process and shared by the keyboard
- * service and the test pad. Suggestions are simply absent until loading finishes.
+ * The active language's pack and the user's history, loaded once per process and shared by the
+ * keyboard service and the test pad. One language is loaded at a time; suggestions are simply
+ * absent until it has loaded, after starting or switching.
  */
 object Language {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private var loading: Job? = null
   private var saveJob: Job? = null
-  private var savedVersion = 0L
-  private lateinit var historyFile: File
+  private lateinit var app: Context
+  /** The version of each history last written to its file. */
+  private val savedVersions = HashMap<File, Long>()
+  /** The active language's history file, matching [engine]. */
+  @Volatile
+  private var historyFile: File? = null
 
   private val loaded = MutableStateFlow<SuggestionEngine?>(null)
 
@@ -36,26 +46,52 @@ object Language {
 
   val engine: SuggestionEngine? get() = loaded.value
 
+  /** The active language's pack; Compose state, so the keys and the space bar follow it. */
+  var pack by mutableStateOf<PackFiles?>(null)
+    private set
+
   @Synchronized
   fun load(context: Context) {
-    if (loading != null) return
-    val app = context.applicationContext
-    // shortcut: always the built-in English pack until languages can be switched
-    val pack = LanguagePacks.builtIn(app)
-    historyFile = LanguagePacks.historyFile(app, pack.manifest.id)
+    if (::app.isInitialized) return
+    app = context.applicationContext
+    switchTo(Prefs.language.value)
+  }
+
+  /** Makes [id] the active language (English when it isn't installed), loading its pack and learned words. */
+  @Synchronized
+  fun switchTo(id: String) {
+    val next = LanguagePacks.find(app, id) ?: LanguagePacks.builtIn(app)
+    if (next.manifest.id == pack?.manifest?.id) return
+    pack = next
+    Prefs.language.value = next.manifest.id
+    val old = engine
+    val oldFile = historyFile
+    loaded.value = null
+    historyFile = null
+    neural = null
+    val previous = loading
     loading = scope.launch {
-      val lexicon = Lexicon.read(pack.open(pack.dictionary)!!.use { it.readBytes() })
-      val history = if (historyFile.exists()) UserHistory.parse(historyFile.readText()) else UserHistory()
-      savedVersion = history.version
+      previous?.cancelAndJoin()
+      if (old != null && oldFile != null) save(old, oldFile)
+      // English's history also holds the emails and shortcuts every language shares
+      val shared = old?.shared ?: read(LanguagePacks.historyFile(app, LanguagePacks.BUILT_IN))
+      val file = LanguagePacks.historyFile(app, next.manifest.id)
+      val history = if (next.manifest.id == LanguagePacks.BUILT_IN) shared else read(file)
+      val lexicon = Lexicon.read(next.open(next.dictionary)!!.use { it.readBytes() })
       lexicon.blockOffensive = Prefs.blockOffensive.value
       lexicon.hinglish = Prefs.hinglish.value
-      loaded.value = SuggestionEngine(lexicon, history, pack.manifest.engineConfig(), pack.manifest.decoderConfig())
+      ensureActive()
+      historyFile = file
+      loaded.value = SuggestionEngine(lexicon, history, next.manifest.engineConfig(), next.manifest.decoderConfig(), shared = shared)
       // After the dictionary, so typing works from it alone while this loads; without it (a failed
-      // load), suggestions simply stay dictionary-only
-      neural = runCatching { loadNeural(pack) }.getOrNull()
+      // load, or a pack without a model), suggestions simply stay dictionary-only
+      neural = runCatching { loadNeural(next) }.getOrNull()
       applyNeural()
     }
   }
+
+  private fun read(file: File): UserHistory =
+    (if (file.exists()) UserHistory.parse(file.readText()) else UserHistory()).also { savedVersions[file] = it.version }
 
   @Volatile
   private var neural: NeuralLm? = null
@@ -87,23 +123,33 @@ object Language {
     saveJob?.cancel()
     saveJob = scope.launch {
       delay(SAVE_DELAY_MS)
-      save()
+      saveActive()
     }
   }
 
   fun flush() {
-    scope.launch { save() }
+    scope.launch { saveActive() }
   }
 
+  private fun saveActive() {
+    val e = engine ?: return
+    save(e, historyFile ?: return)
+  }
+
+  /** Writes [e]'s learned words to [file], and the shared emails and shortcuts to English's file. */
   @Synchronized
-  private fun save() {
-    val history = engine?.history ?: return
+  private fun save(e: SuggestionEngine, file: File) {
+    write(e.history, file)
+    if (e.shared !== e.history) write(e.shared, LanguagePacks.historyFile(app, LanguagePacks.BUILT_IN))
+  }
+
+  private fun write(history: UserHistory, file: File) {
     val version = history.version
-    if (version == savedVersion) return
+    if (version == savedVersions[file]) return
     // Write then rename, so a crash mid-write can't lose what was already saved
-    val tmp = File(historyFile.path + ".tmp")
+    val tmp = File(file.path + ".tmp")
     tmp.writeText(history.serialize())
-    if (tmp.renameTo(historyFile)) savedVersion = version
+    if (tmp.renameTo(file)) savedVersions[file] = version
   }
 
   private const val SAVE_DELAY_MS = 2_000L

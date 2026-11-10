@@ -65,6 +65,29 @@ object LanguagePacks {
       Packs.install(it, packsDir(context), Packs.publicKey(PUBLIC_KEY))
     }
 
+  fun find(context: Context, id: String): PackFiles? =
+    if (id == BUILT_IN) builtIn(context) else installed(context).find { it.manifest.id == id }
+
+  /** Every language, in switching order, and whether it's switched on. */
+  fun all(context: Context): List<Pair<PackFiles, Boolean>> {
+    val order = Prefs.languages.value.split(',').filter { it.isNotEmpty() }
+    val position = order.withIndex().associate { (i, id) -> id.removePrefix("-") to i }
+    return (listOf(builtIn(context)) + installed(context))
+      .sortedBy { position[it.manifest.id] ?: Int.MAX_VALUE }
+      .map { it to ("-" + it.manifest.id !in order) }
+  }
+
+  fun setOrder(languages: List<Pair<String, Boolean>>) {
+    Prefs.languages.value = languages.joinToString(",") { (id, on) -> if (on) id else "-$id" }
+  }
+
+  /** Removes an installed pack; its learned words stay, for when it's installed again. */
+  fun remove(context: Context, id: String) {
+    if (id == BUILT_IN) return
+    File(packsDir(context), id).deleteRecursively()
+    setOrder(all(context).map { (pack, on) -> pack.manifest.id to on })
+  }
+
   /** Each language learns on its own; English keeps the file it always had. */
   fun historyFile(context: Context, id: String) = File(context.filesDir, if (id == BUILT_IN) "history.tsv" else "history-$id.tsv")
 }

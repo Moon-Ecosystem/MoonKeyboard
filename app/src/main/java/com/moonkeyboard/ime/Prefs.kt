@@ -115,6 +115,10 @@ object Prefs {
   val autocorrect = Pref("autocorrect", true, String::toBoolean)
   val blockOffensive = Pref("block_offensive", false, String::toBoolean)
   val hinglish = Pref("hinglish", true, String::toBoolean)
+  /** The language being typed in, by its pack id. */
+  val language = Pref("language", LanguagePacks.BUILT_IN) { it }
+  /** Languages in switching order, a "-" before one that's switched off ("en,de,-fr"); new packs go on the end. */
+  val languages = Pref("languages", LanguagePacks.BUILT_IN) { it }
   val neuralPredictions = Pref("neural_predictions", true, String::toBoolean)
   val emojiSuggestions = Pref("emoji_suggestions", true, String::toBoolean)
   /** Offer a new copy in the suggestion strip, once. */

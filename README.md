@@ -32,6 +32,7 @@ _Requires Android 7.0 (API 24) or higher._
 - **Autocorrect and predictions**, helped by a small on-device neural model. Undo any correction with backspace.
 - **Learns your words** on the device. Add your own words, text shortcuts ("omw" → "on my way") and saved email addresses.
 - **Hinglish** ("kya kar rahe ho") alongside English.
+- **More languages** as packs you add from a file ([MoonKeyboard-Languages](https://github.com/Moon-Ecosystem/MoonKeyboard-Languages)); hold space to switch.
 - **Emoji** with search, and emoji suggestions as you type.
 - **Clipboard** history with pinning, including images.
 - **Password manager** suggestions in the strip (Android 11+).

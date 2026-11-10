@@ -27,7 +27,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-class Popup(val items: List<String>, val left: Float, val top: Float, val cellWidth: Float, val cellHeight: Float) {
+/** [languages]: a space-bar popup's language ids, one per item (null for the system's keyboard list). */
+class Popup(val items: List<String>, val left: Float, val top: Float, val cellWidth: Float, val cellHeight: Float, val languages: List<String?>? = null) {
   var selected by mutableIntStateOf(0)
 }
 
@@ -139,6 +140,12 @@ class TouchTracker(
           }
         }
       }
+      // Holding space offers the languages (and the system's keyboards); sliding first moves the cursor instead
+      key.type == KeyType.SPACE -> holds[id] = scope.launch {
+        delay(Prefs.longPressMs.value.toLong())
+        popup = languagePopup(bounds)
+        popupOwner = id
+      }
       key.longPress != null -> holds[id] = scope.launch {
         delay(Prefs.longPressMs.value.toLong())
         // The hold did its job: lifting the finger mustn't also type the key
@@ -155,17 +162,17 @@ class TouchTracker(
 
   private fun move(id: PointerId, samples: List<Pair<Offset, Long>>) {
     val (at, nowMs) = samples.last()
+    val p = popup
+    if (p != null && popupOwner == id) {
+      p.selected = ((at.x - p.left) / p.cellWidth).toInt().coerceIn(0, p.items.lastIndex)
+      return
+    }
     if (cursorOwner == id || pressed[id]?.key?.type == KeyType.SPACE) {
       if (Prefs.spaceSlide.value) slideCursor(id, at.x)
       return
     }
     if (deleteOwner == id || pressed[id]?.key?.type == KeyType.BACKSPACE) {
       slideDelete(id, at)
-      return
-    }
-    val p = popup
-    if (p != null && popupOwner == id) {
-      p.selected = ((at.x - p.left) / p.cellWidth).toInt().coerceIn(0, p.items.lastIndex)
       return
     }
     if (glideOwner == null && startsGlide(id, at)) {
@@ -200,6 +207,8 @@ class TouchTracker(
       val start = downAt[id]?.x ?: return
       if (kotlin.math.abs(x - start) < keyWidth * CURSOR_SLOP) return
       cursorOwner = id
+      // A slide, not a hold: no language popup
+      holds.remove(id)?.cancel()
       cursorAnchorX = start
     }
     val step = keyWidth * CURSOR_STEP
@@ -286,9 +295,10 @@ class TouchTracker(
       popup = null
       popupOwner = null
       val item = p.items[p.selected]
-      recorder?.up(id, at.x, at.y, nowMs, controller.display(item))
+      recorder?.up(id, at.x, at.y, nowMs, if (p.languages != null) item else controller.display(item))
       // A chosen accent was deliberate: score it as a dead-centre tap on its key
-      controller.commitPopup(item, bounds.centerX, bounds.centerY)
+      if (p.languages != null) controller.switchLanguage(p.languages[p.selected])
+      else controller.commitPopup(item, bounds.centerX, bounds.centerY)
     } else {
       val acts = bounds.key.type != KeyType.SHIFT && bounds.key.type != KeyType.BACKSPACE
       recorder?.up(id, at.x, at.y, nowMs, if (bounds.key.type == KeyType.CHAR) controller.display(bounds.key.label) else keyName(bounds))
@@ -342,7 +352,21 @@ class TouchTracker(
     return Popup(bounds.key.popup, left, bounds.top - bounds.height - popupGap, cell, bounds.height)
   }
 
+  /** The switched-on languages by name, then ⌨ for the system's keyboard list, over the space bar. */
+  private fun languagePopup(bounds: KeyBounds): Popup {
+    val (packs, next) = controller.languageChoices()
+    val items = packs.map { it.manifest.name } + KEYBOARDS_ITEM
+    // Wide enough for a name like "Deutsch", but all of them must fit across the keyboard
+    val cell = minOf(keyWidth * LANGUAGE_CELL_KEYS, (geometry.width - 2 * sidePadding) / items.size)
+    val total = cell * items.size
+    val left = (bounds.centerX - total / 2).coerceIn(sidePadding, geometry.width - sidePadding - total)
+    return Popup(items, left, bounds.top - bounds.height - popupGap, cell, bounds.height, packs.map { it.manifest.id } + null)
+      .apply { selected = next }
+  }
+
   companion object {
+    private const val KEYBOARDS_ITEM = "⌨"
+    private const val LANGUAGE_CELL_KEYS = 2.6f
     const val BACKSPACE_REPEAT_DELAY_MS = 400L
     const val BACKSPACE_REPEAT_MS = 50L
     private const val PREVIEW_INTERVAL_MS = 80L
