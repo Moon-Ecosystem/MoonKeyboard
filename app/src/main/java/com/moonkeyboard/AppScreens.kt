@@ -43,6 +43,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameMillis
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -280,7 +284,19 @@ fun LookScreen(onBack: () -> Unit) {
         Divider()
         SwitchRow(R.string.number_row, Prefs.numberRow)
         Divider()
-        SliderRow(R.string.key_height, Prefs.keyboardHeight, Prefs.KEYBOARD_HEIGHT_MIN..Prefs.KEYBOARD_HEIGHT_MAX, "${Prefs.keyboardHeight.value}%", step = 5)
+        // The preview below grows with the height and shrinks this list: keep the slider in view while it's dragged
+        val slider = remember { BringIntoViewRequester() }
+        var shownHeight by remember { mutableIntStateOf(Prefs.keyboardHeight.value) }
+        LaunchedEffect(Prefs.keyboardHeight.value) {
+          if (Prefs.keyboardHeight.value == shownHeight) return@LaunchedEffect
+          shownHeight = Prefs.keyboardHeight.value
+          // Once the preview has been laid out at its new height
+          withFrameMillis { }
+          slider.bringIntoView()
+        }
+        Box(Modifier.bringIntoViewRequester(slider)) {
+          SliderRow(R.string.key_height, Prefs.keyboardHeight, Prefs.KEYBOARD_HEIGHT_MIN..Prefs.KEYBOARD_HEIGHT_MAX, "${Prefs.keyboardHeight.value}%", step = 5)
+        }
         Divider()
         LabelRow(R.string.one_handed_short) { Segmented(Prefs.oneHanded, OneHanded.entries, listOf(R.string.off, R.string.left, R.string.right), compact = true) }
         Divider()

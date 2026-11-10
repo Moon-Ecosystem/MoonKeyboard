@@ -408,6 +408,8 @@ fun EmojiPanel(controller: InputController, colors: KeyboardColors, modifier: Mo
     derivedStateOf { sections.indexOfLast { it.start <= grid.firstVisibleItemIndex }.coerceAtLeast(0) }
   }
 
+  // The keyboard-height setting only changes the panel's height (set from outside): the emoji, bars and
+  // titles stay their size, so a taller keyboard shows more rows instead of a blown-up panel
   Column(modifier) {
     // Back to the keys, search, then the categories, which scroll sideways when they don't all fit
     val tabs = rememberScrollState()

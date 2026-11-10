@@ -267,8 +267,9 @@ private fun KeyboardContent(controller: InputController, recorder: GestureRecord
       // Taller than the keys, so emoji can be big: the app above moves up to make room, by a share of
       // the screen so it stays in proportion (not in landscape or floating, with little room to spare)
       Panel.EMOJI -> {
-        val extra = if (docked) with(density) { (screen.heightPixels * EMOJI_EXTRA_SHARE).toDp() } else 0.dp
-        EmojiPanel(controller, colors, Modifier.fillMaxWidth().height(StripHeight + height + extra))
+        val extra = if (docked) with(density) { (screen.heightPixels * EMOJI_EXTRA_SHARE * heightScale).toDp() } else 0.dp
+        // The same gap at the bottom as the keys, so its bottom bar clears the navigation strip's icons
+        EmojiPanel(controller, colors, Modifier.fillMaxWidth().height(StripHeight + height + extra).padding(bottom = BottomPadding))
       }
       Panel.EDIT -> EditPanel(controller, colors, panelModifier)
       Panel.OPTIONS -> OptionsPanel(controller, colors, panelModifier)
