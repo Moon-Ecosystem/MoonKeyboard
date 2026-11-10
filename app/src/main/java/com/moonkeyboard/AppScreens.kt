@@ -93,6 +93,7 @@ import com.moonkeyboard.ime.OneHanded
 import com.moonkeyboard.ime.Prefs
 import com.moonkeyboard.ime.ThemeMode
 import com.moonkeyboard.ime.ToolbarItem
+import com.moonkeyboard.ime.darkTheme
 import com.moonkeyboard.ime.icon
 import com.moonkeyboard.ime.label
 
@@ -318,7 +319,7 @@ fun LookScreen(onBack: () -> Unit) {
 @Composable
 private fun AccentPicker() {
   val c = LocalAppColors.current
-  val dark = c.text == AppColors.Dark.text
+  val dark = darkTheme()
   val resources = LocalResources.current
   val wallpaper = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
   val options = Accent.entries.filter { it != Accent.WALLPAPER || wallpaper }

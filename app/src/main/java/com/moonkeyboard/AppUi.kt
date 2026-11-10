@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.moonkeyboard.ime.Icons
 import com.moonkeyboard.ime.Prefs
-import com.moonkeyboard.ime.ThemeMode
+import com.moonkeyboard.ime.darkTheme
 import com.moonkeyboard.ime.keyboardColors
 import kotlin.math.roundToInt
 
@@ -113,11 +112,7 @@ object AppIcons {
 /** Follows the keyboard's own theme setting, so the app and the keyboard always match. */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-  val dark = when (Prefs.theme.value) {
-    ThemeMode.SYSTEM -> isSystemInDarkTheme()
-    ThemeMode.LIGHT -> false
-    ThemeMode.DARK -> true
-  }
+  val dark = darkTheme()
   // The accent and pitch black come from the keyboard's own colours, so the two can't drift apart
   val keys = keyboardColors()
   var colors = (if (dark) AppColors.Dark else AppColors.Light).copy(accent = keys.accent, onAccent = keys.onAccent)

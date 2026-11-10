@@ -404,13 +404,17 @@ internal fun flipTheme(colors: KeyboardColors) {
   Prefs.theme.value = if (colors.isDark) ThemeMode.LIGHT else ThemeMode.DARK
 }
 
+/** Whether the theme setting comes out dark; colours can't tell, since pitch black and the wallpaper change them. */
+@Composable
+internal fun darkTheme(): Boolean = when (Prefs.theme.value) {
+  ThemeMode.SYSTEM -> isSystemInDarkTheme()
+  ThemeMode.LIGHT -> false
+  ThemeMode.DARK -> true
+}
+
 @Composable
 internal fun keyboardColors(): KeyboardColors {
-  val dark = when (Prefs.theme.value) {
-    ThemeMode.SYSTEM -> isSystemInDarkTheme()
-    ThemeMode.LIGHT -> false
-    ThemeMode.DARK -> true
-  }
+  val dark = darkTheme()
   // Read again when the configuration changes, which is how a new wallpaper's palette arrives
   LocalConfiguration.current
   return KeyboardColors.chosen(LocalContext.current, dark)

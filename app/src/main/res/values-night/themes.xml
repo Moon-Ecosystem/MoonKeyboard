@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- In dark mode the app opens on its dark background, not a white flash -->
+  <style name="Theme.Moon" parent="@android:style/Theme.Material.NoActionBar">
+    <item name="android:windowBackground">@color/window_background</item>
+  </style>
+  <color name="window_background">#111319</color>
+</resources>
