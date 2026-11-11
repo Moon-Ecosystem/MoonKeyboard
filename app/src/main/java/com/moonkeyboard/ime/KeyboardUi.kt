@@ -122,7 +122,7 @@ private val MaxKeyHeight = 60.dp
 // A fifth row (numbers) halves the gaps between rows, so the keys keep most of their height
 private const val FIVE_ROW_GAP = 0.5f
 private val SidePadding = 4.dp
-internal val StripHeight = 48.dp
+internal val StripHeight = 46.dp
 private val TopPadding = 6.dp
 
 // Some devices under-report the navigation-bar inset for the IME nav strip (gesture nav + a
@@ -728,7 +728,8 @@ private fun SuggestionStrip(controller: InputController, colors: KeyboardColors)
 internal fun ToolButton(icon: ImageVector, label: Int, colors: KeyboardColors, active: Boolean = false, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
   val view = LocalView.current
   Box(
-    Modifier.size(44.dp).clip(CircleShape).background(if (active) colors.special else Color.Transparent).combinedClickable(
+    // The "on" circle is smaller than the 44 dp touch area, so it doesn't fill the strip's height
+    Modifier.size(44.dp).clip(CircleShape).drawBehind { if (active) drawCircle(colors.special, radius = 18.dp.toPx()) }.combinedClickable(
       onLongClick = onLongClick?.let { action -> { Haptics.tap(view); action() } },
     ) {
       Haptics.tap(view)
