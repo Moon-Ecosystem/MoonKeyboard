@@ -27,7 +27,14 @@
   <string name="autocorrect_off">No autocorrect</string>
   <string name="vibration">vibration</string>
   <string name="no_vibration">silent</string>
-  <string name="learned_counts">%1$d words, %2$d phrases</string>
+  <plurals name="learned_words_count">
+    <item quantity="one">%d word</item>
+    <item quantity="other">%d words</item>
+  </plurals>
+  <plurals name="learned_phrases_count">
+    <item quantity="one">%d phrase</item>
+    <item quantity="other">%d phrases</item>
+  </plurals>
   <string name="emoji_suggestions_on">Suggestions while typing</string>
   <string name="emoji_suggestions_off">No suggestions while typing</string>
   <string name="test_pad_detail">Try it with touch debug info</string>
@@ -116,7 +123,10 @@
   <string name="show_debug">Debug</string>
   <string name="hide_debug">Hide debug</string>
   <string name="touch_paths">Touch paths</string>
-  <string name="copy_traces">Copy %1$d traces</string>
+  <plurals name="copy_traces">
+    <item quantity="one">Copy %d trace</item>
+    <item quantity="other">Copy %d traces</item>
+  </plurals>
 
   <string name="open_toolbar">Open toolbar</string>
   <string name="close_toolbar">Close toolbar</string>
@@ -223,7 +233,10 @@
   <string name="expiry_week">1 week</string>
   <string name="expiry_month">1 month</string>
   <string name="expiry_never">Never</string>
-  <string name="clipboard_storage">%1$d items, %2$s</string>
+  <plurals name="clipboard_storage">
+    <item quantity="one">%1$d item, %2$s</item>
+    <item quantity="other">%1$d items, %2$s</item>
+  </plurals>
   <string name="languages">Languages</string>
   <string name="languages_explain">Hold the space bar to switch between the languages switched on here, in this order. Each language learns your words on its own.</string>
   <string name="language_built_in">Built in, with Hinglish</string>

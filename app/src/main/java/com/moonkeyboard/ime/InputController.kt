@@ -1,5 +1,6 @@
 package com.moonkeyboard.ime
 
+import android.annotation.SuppressLint
 import android.content.ClipDescription
 import android.content.Context
 import android.graphics.Color
@@ -1113,15 +1114,18 @@ class InputController(private val host: KeyboardHost) {
   }
 
   /**
-   * What ENTER does in the focused field: 0 means newline (multi-line field, or the field opts
-   * out), otherwise the editor action to perform. The drawn icon follows this too.
+   * What ENTER does in the focused field: IME_ACTION_NONE means newline (the field opts out, or a
+   * multi-line field names no action), otherwise the editor action to perform. The drawn icon follows this too.
    */
   val enterAction: Int get() {
     val info = host.editorInfo
+    val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
+    if (info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0) return EditorInfo.IME_ACTION_NONE
+    // Multi-line boxes normally opt out above; one that still names an action (a store's search box
+    // marked multi-line) wants it, but with none named, a line break is the safe guess
     val multiLine = info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0
-    val noAction = info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0
-    if (multiLine || noAction) return EditorInfo.IME_ACTION_NONE
-    return info.imeOptions and EditorInfo.IME_MASK_ACTION
+    if (multiLine && action == EditorInfo.IME_ACTION_UNSPECIFIED) return EditorInfo.IME_ACTION_NONE
+    return action
   }
 
   private fun enter() {
@@ -1431,6 +1435,9 @@ class InputController(private val host: KeyboardHost) {
           variation == InputType.TYPE_TEXT_VARIATION_URI ||
           variation == InputType.TYPE_TEXT_VARIATION_FILTER ||
           variation == InputType.TYPE_TEXT_VARIATION_PERSON_NAME
+
+        // A constant copied in at build time: apps on Android 7 never set the bit, so it reads as unset
+        @SuppressLint("InlinedApi")
         val learn = suggest && !noSuggestions && info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING == 0
         val caps = type and (InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_CAP_WORDS or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS) != 0
         val email = variation == InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS || variation == InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS

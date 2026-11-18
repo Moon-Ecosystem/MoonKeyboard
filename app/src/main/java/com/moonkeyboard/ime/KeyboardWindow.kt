@@ -90,7 +90,7 @@ fun KeyboardWindow(controller: InputController, onBounds: (Rect) -> Unit) {
 }
 
 @Composable
-private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
+private fun FloatingKeyboard(controller: InputController, modifier: Modifier) {
   val colors = keyboardColors()
   val density = LocalDensity.current
   val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -131,7 +131,7 @@ private fun FloatingKeyboard(controller: InputController, bounds: Modifier) {
 
     if (dragging) DockTarget(colors, docking, Modifier.align(Alignment.BottomCenter))
     Column(
-      Modifier.offset(spot.x.dp, y.dp).width(spot.width.dp).then(bounds)
+      Modifier.offset(spot.x.dp, y.dp).width(spot.width.dp).then(modifier)
         .shadow(12.dp, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp)).background(colors.background)
         .onSizeChanged { cardHeight = with(density) { it.height.toDp().value } },
     ) {

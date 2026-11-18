@@ -14,7 +14,7 @@
       android:supportsRtl="true"
       android:theme="@style/Theme.Moon">
     <!-- Lets simpleperf/Perfetto profile release builds from adb; grants nothing to other apps -->
-    <profileable android:shell="true" />
+    <profileable android:shell="true" tools:targetApi="29" />
     <activity
         android:name=".MainActivity"
         android:exported="true">

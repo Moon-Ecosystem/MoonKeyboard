@@ -18,8 +18,8 @@ android {
     applicationId = "com.moonkeyboard"
     minSdk = 24
     targetSdk = 36
-    versionCode = 9
-    versionName = "0.9"
+    versionCode = 10
+    versionName = "0.10"
     // ONNX Runtime's native code for 64-bit ARM phones only: each other ABI adds 13–18 MB to the APK
     ndk { abiFilters += listOf("arm64-v8a") }
   }
@@ -39,6 +39,7 @@ android {
     debug { signingConfigs.findByName("upload")?.let { signingConfig = it } }
     release {
       isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfigs.findByName("upload")?.let { signingConfig = it }
     }
@@ -48,6 +49,8 @@ android {
     targetCompatibility = JavaVersion.VERSION_11
   }
   buildFeatures { compose = true }
+  // arm64 only, on purpose (see the ndk filter above)
+  lint { disable += "ChromeOsAbiSupport" }
 }
 
 dependencies {
