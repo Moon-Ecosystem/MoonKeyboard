@@ -19,3 +19,4 @@ debug.keystore
 .codegraph/
 .claude/
 tools/data/
+__pycache__/

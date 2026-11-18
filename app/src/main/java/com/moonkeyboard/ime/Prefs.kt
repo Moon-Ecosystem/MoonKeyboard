@@ -3,6 +3,7 @@ package com.moonkeyboard.ime
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.edit
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
@@ -58,7 +59,7 @@ object Prefs {
       get() = state.value
       set(v) {
         state.value = v
-        sp.edit().putString(key, v.toString()).apply()
+        sp.edit { putString(key, v.toString()) }
       }
 
     init {

@@ -39,6 +39,7 @@ android {
     debug { signingConfigs.findByName("upload")?.let { signingConfig = it } }
     release {
       isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfigs.findByName("upload")?.let { signingConfig = it }
     }
@@ -48,6 +49,8 @@ android {
     targetCompatibility = JavaVersion.VERSION_11
   }
   buildFeatures { compose = true }
+  // arm64 only, on purpose (see the ndk filter above)
+  lint { disable += "ChromeOsAbiSupport" }
 }
 
 dependencies {

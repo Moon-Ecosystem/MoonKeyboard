@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -139,7 +140,7 @@ private fun DebugPanel(recorder: GestureRecorder, controller: InputController, m
         Switch(recorder.showPaths, { recorder.showPaths = it })
         Spacer(Modifier.weight(1f))
         TextButton({ recorder.exportJson()?.let { clipboard.setText(AnnotatedString(it)) } }, enabled = recorder.traces.isNotEmpty()) {
-          Text(stringResource(R.string.copy_traces, recorder.traces.size))
+          Text(pluralStringResource(R.plurals.copy_traces, recorder.traces.size, recorder.traces.size))
         }
       }
       Text("layer ${controller.layerId}  shift ${controller.shift}  board ${geometry?.width?.toInt()}×${geometry?.height?.toInt()} px", style = mono)

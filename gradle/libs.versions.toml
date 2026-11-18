@@ -8,8 +8,9 @@ composeBom = "2026.09.00"
 kotlinxSerialization = "1.12.0"
 profileinstaller = "1.4.1"
 junit = "4.13.2"
+# 1.31.1's native library is about 15 MB bigger in the APK, for nothing this small model uses
 onnxruntime = "1.22.0"
-spotless = "8.10.4"
+spotless = "8.11.0"
 ktlint = "1.8.0"
 
 [libraries]

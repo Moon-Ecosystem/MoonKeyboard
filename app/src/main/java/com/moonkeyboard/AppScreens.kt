@@ -205,7 +205,7 @@ fun HomeScreen(open: (Screen) -> Unit) {
     ).joinToString(", ")
     val emoji = stringResource(if (Prefs.emojiSuggestions.value) R.string.emoji_suggestions_on else R.string.emoji_suggestions_off)
     val clips = ClipboardStore.clips.size
-    val clipDetail = stringResource(R.string.clipboard_storage, clips, Formatter.formatShortFileSize(LocalContext.current, ClipboardStore.storageBytes()))
+    val clipDetail = pluralStringResource(R.plurals.clipboard_storage, clips, clips, Formatter.formatShortFileSize(LocalContext.current, ClipboardStore.storageBytes()))
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
       Tile(Icons.Theme, R.string.look, look) { open(Screen.LOOK) }
       Tile(AppIcons.Typing, R.string.typing, typing) { open(Screen.TYPING) }
@@ -220,7 +220,7 @@ fun HomeScreen(open: (Screen) -> Unit) {
       val languages = remember(Prefs.languages.value) { LanguagePacks.all(context).filter { it.second }.joinToString(", ") { it.first.manifest.name } }
       NavRow(AppIcons.Language, R.string.languages, languages) { open(Screen.LANGUAGES) }
       Divider()
-      NavRow(AppIcons.Learned, R.string.learned_words, stringResource(R.string.learned_counts, words, phrases)) { open(Screen.LEARNED) }
+      NavRow(AppIcons.Learned, R.string.learned_words, pluralStringResource(R.plurals.learned_words_count, words, words) + ", " + pluralStringResource(R.plurals.learned_phrases_count, phrases, phrases)) { open(Screen.LEARNED) }
       Divider()
       val shortcutCount = remember(engine) { engine?.shared?.shortcuts()?.size ?: 0 }
       NavRow(Icons.TextEdit, R.string.shortcuts, pluralStringResource(R.plurals.shortcut_count, shortcutCount, shortcutCount)) { open(Screen.SHORTCUTS) }
@@ -781,7 +781,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
     Column(Modifier.weight(1f).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
       Text(stringResource(R.string.shortcuts_explain), Modifier.padding(horizontal = 4.dp), color = c.muted, fontSize = 13.sp, lineHeight = 19.sp)
       Card {
-        ShortcutField(keyState, stringResource(R.string.shortcut_key))
+        ShortcutField(keyState, stringResource(R.string.shortcut_key), Modifier.fillMaxWidth())
         Divider()
         Row(verticalAlignment = Alignment.CenterVertically) {
           ShortcutField(textState, stringResource(R.string.shortcut_text), Modifier.weight(1f))
@@ -816,7 +816,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun ShortcutField(state: androidx.compose.foundation.text.input.TextFieldState, hint: String, modifier: Modifier = Modifier.fillMaxWidth()) {
+private fun ShortcutField(state: androidx.compose.foundation.text.input.TextFieldState, hint: String, modifier: Modifier = Modifier) {
   val c = LocalAppColors.current
   Box(modifier.height(52.dp).padding(horizontal = 16.dp), contentAlignment = Alignment.CenterStart) {
     if (state.text.isEmpty()) Text(hint, color = c.muted, fontSize = 15.sp)

@@ -3,6 +3,7 @@ package com.moonkeyboard.ime
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import android.annotation.SuppressLint
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,8 @@ import java.io.File
  * keyboard service and the test pad. One language is loaded at a time; suggestions are simply
  * absent until it has loaded, after starting or switching.
  */
+// It holds only the application context, which lives as long as the process anyway
+@SuppressLint("StaticFieldLeak")
 object Language {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private var loading: Job? = null
